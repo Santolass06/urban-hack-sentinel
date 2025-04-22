@@ -1,0 +1,8 @@
+# Ignorar logs e capturas
+logs/
+captures/
+hashcat_ready/
+tmp_scan/
+
+# Ignorar o ficheiro de configuração com credenciais
+config.cfg
