@@ -1,8 +1,64 @@
-# Ignorar logs e capturas
-logs/
-captures/
-hashcat_ready/
-tmp_scan/
+# Virtual environments
+.venv/
+venv/
+env/
 
-# Ignorar o ficheiro de configuração com credenciais
-config.cfg
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyc
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local config (secrets)
+config.env
+*.env
+.env.local
+
+# Logs
+logs/
+*.log
+*.jsonl
+
+# Build artifacts
+*.pcapng
+*.cap
+*.22000
+*.pot
+*.hccapx
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+
+# pytest
+.pytest_cache/
+.tox/
+
+# mypy
+.mypy_cache/
+
+# Sphinx docs
+docs/_build/

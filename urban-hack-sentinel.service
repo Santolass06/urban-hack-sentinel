@@ -1,0 +1,56 @@
+[Unit]
+Description=Urban Hack Sentinel - Wireless Audit Daemon
+Documentation=https://github.com/andresantos/urban-hack-sentinel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+# Configuração
+Environment=CONFIG_FILE=/etc/urban-hack-sentinel/config.env
+EnvironmentFile=-/etc/urban-hack-sentinel/config.env
+
+# Diretórios de trabalho
+WorkingDirectory=/var/lib/urban-hack-sentinel
+RuntimeDirectory=urban-hack-sentinel
+RuntimeDirectoryMode=0755
+StateDirectory=urban-hack-sentinel
+StateDirectoryMode=0755
+LogsDirectory=urban-hack-sentinel
+LogsDirectoryMode=0755
+CacheDirectory=urban-hack-sentinel
+CacheDirectoryMode=0755
+
+# Executável
+ExecStartPre=/bin/bash -c 'iwconfig ${WIFI_IFACE} 2>/dev/null | grep -q "Mode:Monitor" || (ip link set ${WIFI_IFACE} down && iw dev ${WIFI_IFACE} set type monitor && ip link set ${WIFI_IFACE} up && sleep 2)'
+ExecStart=/usr/local/bin/urban-hack-sentinel.sh
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/urban-hack-sentinel /var/log/urban-hack-sentinel
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_DAC_OVERRIDE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=80%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=urban-hack-sentinel
+
+[Install]
+WantedBy=multi-user.target

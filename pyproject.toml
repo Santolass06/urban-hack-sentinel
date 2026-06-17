@@ -1,0 +1,145 @@
+[build-system]
+requires = ["poetry-core>=1.8.0"]
+build-backend = "poetry.core.masonry.api"
+
+[project]
+name = "urban_hs"
+version = "3.0.0"
+description = "Unified wireless/Bluetooth/IoT/Network auditing framework for Raspberry Pi (ARM64)"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "André Santos", email = "andresantos@example.com"}]
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: System :: Monitoring",
+]
+keywords = ["wifi", "bluetooth", "pentesting", "auditing", "raspberry-pi", "wardriving"]
+
+dependencies = [
+    "aiosqlite>=0.20.0",
+    "redis>=5.0.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.3.0",
+    "python-dotenv>=1.0.0",
+    "watchfiles>=0.21.0",
+    "keyring>=24.3.0",
+    "structlog>=24.1.0",
+    "rich>=13.7.0",
+    "textual>=0.52.0",
+    "typer>=0.12.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.29.0",
+    "websockets>=12.0.0",
+    "python-jose>=3.3.0",
+    "passlib>=1.7.4",
+    "python-multipart>=0.0.9",
+    "bleak>=0.22.0",
+    "dbus-fast>=2.8.0",
+    # "pybluez>=0.23",  # Use system package python3-bluez
+    "scapy>=2.5.0",
+    "python-nmap>=0.7.1",
+    "cryptography>=42.0.0",
+    "gpg>=1.17.0",
+    "pyyaml>=6.0.1",
+    "tomli>=2.0.1",
+    "tomli-w>=1.0.0",
+    "prometheus-client>=0.19.0",
+    "psutil>=5.9.0",
+    "jinja2>=3.1.4",
+    "weasyprint>=61.2",
+    "markdown>=3.6",
+    "python-dateutil>=2.9.0",
+    "uuid6>=1.11.0",
+    "orjson>=3.9.0",
+    "tqdm>=4.66.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.1.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.4.0",
+    "mypy>=1.9.0",
+    "pre-commit>=3.7.0",
+    "pytest-mock>=3.12.0",
+]
+docs = [
+    "mkdocs>=1.5.3",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.25.0",
+]
+chroot = [
+    "docker>=7.0.0",
+]
+all = ["dev", "docs", "chroot"]
+
+[project.scripts]
+urban-hs = "urban_hs.cli.main:app"
+urban-hs-server = "urban_hs.ui.api.main:run"
+urban-hs-tui = "urban_hs.ui.tui.app:run"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "DTZ", "T20", "SIM", "RET", "ARG", "PTH", "ERA", "PL", "TRY"]
+ignore = ["S101", "PTH123"]
+# per-file-ignores = { "tests/*" = ["S101"], "src/urban_hs/core/config.py" = ["S101"] }
+# TODO: Fix TOML inline table syntax - using regular table instead
+# [tool.ruff.per-file-ignores]
+# "tests/*" = ["S101"]
+# "src/urban_hs/core/config.py" = ["S101"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = true
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+strict_optional = true
+enable_error_code = ["attr-defined", "return-value", "no-untyped-call", "no-untyped-def"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --tb=short --strict-markers"
+markers = [
+    "unit = \"Unit tests\"",
+    "integration = \"Integration tests (require hardware)\"",
+    "slow = \"Slow tests\"",
+    "hardware = \"Tests requiring physical hardware\"",
+]
+
+[tool.coverage.run]
+source = ["src/urban_hs"]
+omit = ["tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+show_missing = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["urban_hs*"]
