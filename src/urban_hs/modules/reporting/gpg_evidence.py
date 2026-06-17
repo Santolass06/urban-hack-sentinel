@@ -255,8 +255,13 @@ class GPGSigner:
                 )
             
             if signature:
-                with open(output_path, 'w' if format == SignatureFormat.DETACHED_ASCII else 'wb') as f:
-                    f.write(str(signature))
+                # Write binary data for binary format, string for ASCII
+                if format == SignatureFormat.DETACHED_BINARY:
+                    with open(output_path, 'wb') as f:
+                        f.write(signature.data)  # signature.data is bytes
+                else:
+                    with open(output_path, 'w') as f:
+                        f.write(str(signature))
                 
                 logger.info("File signed", input=file_path, output=output_path, format=format.value)
                 return True
@@ -485,7 +490,7 @@ class EvidenceLogger:
             computed = self._compute_entry_hash(entry)
             entry["entry_hash"] = entry_hash  # Restore
             
-            if entry_hash != self._compute_entry_hash(entry):
+            if entry_hash != computed:
                 errors.append(f"Entry {entry.get('id', i)} hash mismatch")
         
         return len(errors) == 0, errors
@@ -518,7 +523,9 @@ class ChainOfCustodyManager:
         self.base_dir = Path(base_dir) / session_id
         self.base_dir.mkdir(parents=True, exist_ok=True)
         
-        self.gpg_signer = gpg_signer or GPGSigner()
+        self.gpg_signer = gpg_signer
+        if gpg_signer is None:
+            logger.warning("No GPG signer provided - artifacts will not be signed")
         self.evidence_log = EvidenceLogger(
             log_dir=str(self.base_dir),
             gpg_signer=self.gpg_signer,

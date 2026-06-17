@@ -419,10 +419,12 @@ class CredentialManager:
         logger.info("Validating credential", target=target_address, service=service)
         
         # Placeholder - actual implementation would use service-specific validation
-        credential.validated = True
-        credential.validated_at = datetime.utcnow()
-        credential.validity_status = "valid"
-        return True
+        # For now, raise NotImplementedError to indicate this needs implementation
+        # rather than silently returning True which creates false positives
+        raise NotImplementedError(
+            f"Credential validation for service '{service}' not implemented. "
+            f"Implement using hydra, sshpass, or service-specific validation."
+        )
     
     async def crack_hashes(
         self,
@@ -431,7 +433,7 @@ class CredentialManager:
         wordlist: Optional[str] = None,
         rules_file: Optional[str] = None,
         attack_mode: int = 0,  # 0 = straight, 3 = brute force
-        extra_args: List[str] = field(default_factory=list),
+        extra_args: Optional[List[str]] = None,
         progress_callback: Optional[Callable[[str], None]] = None,
     ) -> Dict[str, Any]:
         """
@@ -449,6 +451,7 @@ class CredentialManager:
         Returns:
             Dict with cracking results
         """
+        extra_args = extra_args or []
         mode = self.hashcat_modes.get(hash_type)
         if mode is None:
             raise ValueError(f"Unsupported hash type: {hash_type}")

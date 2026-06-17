@@ -48,6 +48,7 @@ mkdir -p "$CHROOT_DIR"
 # Download Alpine minirootfs
 MINIROOTFS="alpine-minirootfs-${ALPINE_VERSION}-${ALPINE_ARCH}.tar.gz"
 MINIROOTFS_URL="${MIRROR}/v${ALPINE_VERSION%.*}/releases/${ALPINE_ARCH}/${MINIROOTFS}"
+SHA256_URL="${MINIROOTFS_URL}.sha256"
 
 log_info "Downloading Alpine minirootfs..."
 cd /tmp
@@ -55,7 +56,16 @@ if [[ ! -f "$MINIROOTFS" ]]; then
     wget -q "$MINIROOTFS_URL" -O "$MINIROOTFS"
 fi
 
-# Verify checksum (optional but recommended)
+# Verify checksum
+log_info "Verifying checksum..."
+if [[ ! -f "$MINIROOTFS.sha256" ]]; then
+    wget -q "$SHA256_URL" -O "$MINIROOTFS.sha256"
+fi
+sha256sum -c "$MINIROOTFS.sha256" || {
+    log_error "Checksum verification failed!"
+    exit 1
+}
+
 log_info "Extracting minirootfs..."
 tar -xzf "$MINIROOTFS" -C "$CHROOT_DIR"
 
@@ -78,13 +88,10 @@ mount -o bind /var/lib/urban-hs/data "$CHROOT_DIR/data"
 mount -o bind /var/lib/urban-hs/artifacts "$CHROOT_DIR/artifacts"
 mount -o bind /var/lib/urban-hs/logs "$CHROOT_DIR/logs"
 
-# Configure Alpine repositories
+# Configure Alpine repositories - use only stable repos for security
 cat > "$CHROOT_DIR/etc/apk/repositories" <<EOF
 ${MIRROR}/v${ALPINE_VERSION%.*}/main
 ${MIRROR}/v${ALPINE_VERSION%.*}/community
-${MIRROR}/edge/main
-${MIRROR}/edge/community
-${MIRROR}/edge/testing
 EOF
 
 # Update and install base packages

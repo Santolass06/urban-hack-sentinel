@@ -9,13 +9,14 @@ Provides:
 """
 
 import asyncio
+import ipaddress
 import json
 import os
+import re
 import socket
 import structlog
 import subprocess
 import tempfile
-import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -140,7 +141,31 @@ class NmapScanner:
         """
         if isinstance(targets, str):
             targets = [targets]
-
+        
+        # Validate targets to prevent argument injection
+        validated_targets = []
+        for target in targets:
+            try:
+                # Validate as IP network (CIDR notation) or IP address
+                ipaddress.ip_network(target, strict=False)
+                validated_targets.append(target)
+            except ValueError:
+                try:
+                    # Try as single IP address
+                    ipaddress.ip_address(target)
+                    validated_targets.append(target)
+                except ValueError:
+                    # Could also be a hostname - basic validation
+                    if re.match(r'^[a-zA-Z0-9.-]+$', target):
+                        validated_targets.append(target)
+                    else:
+                        logger.warning("Skipping invalid target", target=target)
+        
+        targets = validated_targets
+        if not targets:
+            logger.error("No valid targets provided")
+            return []
+        
         cmd = [self.nmap_path]
         
         # Timing template
@@ -542,6 +567,11 @@ class SearchSploitIntegration:
 
     async def get_exploit(self, exploit_id: str, output_dir: str) -> Optional[str]:
         """Download exploit by ID to output directory."""
+        # Validate exploit_id - ExploitDB IDs are integers
+        if not re.match(r'^\d+$', exploit_id):
+            logger.error("Invalid exploit_id format", exploit_id=exploit_id)
+            return None
+        
         try:
             cmd = [self.searchsploit_path, "-m", exploit_id, "-p", output_dir]
             proc = await asyncio.create_subprocess_exec(
@@ -831,27 +861,33 @@ class CameraDiscovery:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             sock.sendto(ws_discovery.encode(), ("239.255.255.250", 3702))
             
-            try:
-                while True:
-                    data, addr = sock.recvfrom(65535)
-                    response = data.decode()
-                    # Parse SOAP response for ONVIF device info
-                    if "onvif" in response.lower() or "device" in response.lower():
-                        import re
-                        # Extract XAddrs for device service
-                        xaddrs_match = re.search(r'<d:XAddrs>([^<]+)</d:XAddrs>', response)
-                        types_match = re.search(r'<d:Types>([^<]+)</d:Types>', response)
-                        cameras.append({
-                            "discovery_method": "onvif_ws_discovery",
-                            "ip": addr[0],
-                            "xaddrs": xaddrs_match.group(1) if xaddrs_match else None,
-                            "types": types_match.group(1) if types_match else None,
-                        })
-            except socket.timeout:
-                pass
-            finally:
-                sock.close()
-                
+            async def recv_responses():
+                responses = []
+                try:
+                    while True:
+                        # Use asyncio.to_thread to avoid blocking event loop
+                        data, addr = await asyncio.to_thread(sock.recvfrom, 65535)
+                        response = data.decode()
+                        # Parse SOAP response for ONVIF device info
+                        if "onvif" in response.lower() or "device" in response.lower():
+                            import re
+                            # Extract XAddrs for device service
+                            xaddrs_match = re.search(r'<d:XAddrs>([^<]+)</d:XAddrs>', response)
+                            types_match = re.search(r'<d:Types>([^<]+)</d:Types>', response)
+                            cameras.append({
+                                "discovery_method": "onvif_ws_discovery",
+                                "ip": addr[0],
+                                "xaddrs": xaddrs_match.group(1) if xaddrs_match else None,
+                                "types": types_match.group(1) if types_match else None,
+                            })
+                except socket.timeout:
+                    pass
+                finally:
+                    sock.close()
+                return cameras
+            
+            await recv_responses()
+            
         except Exception as e:
             logger.warning("ONVIF discovery failed", error=str(e))
         return cameras

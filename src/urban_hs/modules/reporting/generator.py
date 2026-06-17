@@ -193,7 +193,7 @@ class ReportConfig:
     output_dir: str = "/var/lib/urban-hs/reports"
     template_dir: str = "/opt/urban-hs/templates/reports"
     gpg_key_id: Optional[str] = None
-    gpg_passphrase: Optional[str] = None
+    gpg_passphrase_provider: Optional[Callable[[], str]] = None
     include_evidence: bool = True
     include_poc: bool = True
     include_raw_output: bool = False
@@ -204,6 +204,12 @@ class ReportConfig:
     company_logo: Optional[str] = None
     classification: str = "CONFIDENTIAL"
     language: str = "en"
+
+    def get_gpg_passphrase(self) -> Optional[str]:
+        """Get GPG passphrase from provider."""
+        if self.gpg_passphrase_provider:
+            return self.gpg_passphrase_provider()
+        return None
 
 
 class ReportGenerator:
@@ -728,15 +734,16 @@ class ReportGenerator:
             return False
         
         try:
-            gpg = gpg.GPG()
+            import gnupg as gnupg_module
+            gpg_obj = gnupg_module.GPG()
             
             with open(report_path, 'rb') as f:
                 report_data = f.read()
             
-            signature = gpg.sign(
+            signature = gpg_obj.sign(
                 report_data,
                 keyid=self.config.gpg_key_id,
-                passphrase=self.config.gpg_passphrase,
+                passphrase=self.config.get_gpg_passphrase(),
                 detach=True,
                 armor=True,
             )

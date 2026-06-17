@@ -104,12 +104,16 @@ class MsfConfig:
     host: str = "127.0.0.1"
     port: int = 55553
     username: str = "msf"
-    password: str = "msf"
+    password: str = ""
     ssl: bool = True
-    ssl_verify: bool = False
+    ssl_verify: bool = True
     timeout: int = 30
     reconnect_attempts: int = 3
     reconnect_delay: float = 5.0
+    
+    def __post_init__(self):
+        if not self.password:
+            raise ValueError("Metasploit RPC password must be provided (no default for security)")
     
     @property
     def uri(self) -> str:
@@ -186,7 +190,7 @@ class MetasploitRPC:
             # Logout if token exists
             if self._token:
                 try:
-                    await self._call("auth.logout", self._token)
+                    await self._call("auth.logout")
                 except Exception:
                     pass
             
@@ -201,17 +205,16 @@ class MetasploitRPC:
         if not self._session or not self._connected:
             raise RuntimeError("Not connected to Metasploit RPC")
         
-        # Prepare MessagePack request
-        request = {
-            "method": method,
-            "params": list(args),
-        }
+        # Prepare MessagePack request - msgrpc expects array format: [method, token, arg1, arg2, ...]
+        params = [method]
         
         if self._token and method != "auth.login":
-            request["params"].insert(0, self._token)
+            params.append(self._token)
+        
+        params.extend(args)
         
         # Serialize to MessagePack
-        packed = msgpack.packb(request, use_bin_type=True)
+        packed = msgpack.packb(params, use_bin_type=True)
         
         try:
             async with self._session.post(

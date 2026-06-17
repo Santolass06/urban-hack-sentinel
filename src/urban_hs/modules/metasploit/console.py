@@ -226,7 +226,11 @@ class MetasploitConsole:
         opts = options or {}
         opts["RHOSTS"] = target
         for k, v in opts.items():
-            lines.append(f"set {k} {v}")
+            # Sanitize to prevent command injection in resource script
+            v_str = str(v)
+            if '\n' in v_str or '\r' in v_str:
+                raise ValueError(f"Value for option '{k}' contains newline/carriage return")
+            lines.append(f"set {k} {v_str}")
         
         if payload:
             lines.append(f"set PAYLOAD {payload}")
@@ -333,15 +337,15 @@ exit
         )
     
     @staticmethod
-    def template_exploit_chain(exploit: str, target: str, payload: str = "windows/meterpreter/reverse_tcp") -> ResourceScript:
+    def template_exploit_chain(exploit: str, target: str, payload: str = "windows/meterpreter/reverse_tcp", lhost: str = "127.0.0.1", lport: int = 4444) -> ResourceScript:
         """Generate exploit chain resource script."""
         return ResourceScript(
             name=f"exploit_{exploit.replace('/', '_')}_{target.replace('.', '_')}",
             content=f"""use {exploit}
 set RHOSTS {target}
 set PAYLOAD {payload}
-set LHOST 0.0.0.0
-set LPORT 4444
+set LHOST {lhost}
+set LPORT {lport}
 exploit -z
 sessions -l
 exit

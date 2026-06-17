@@ -294,13 +294,13 @@ class UInputInjector:
             logger.error("Mouse click failed", error=str(e))
             return False
     
-    def delay(self, ms: int):
+    async def delay(self, ms: int):
         """Add delay."""
         self._log_event(InjectionEvent(
             event_type="delay",
             delay_ms=ms,
         ))
-        time.sleep(ms / 1000.0)
+        await asyncio.sleep(ms / 1000.0)
     
     def get_events(self) -> List[InjectionEvent]:
         """Get recorded events."""
@@ -488,14 +488,14 @@ class HIDInjector:
             return False
         return self._active_injector.mouse_click(button)
     
-    def delay(self, ms: int):
+    async def delay(self, ms: int):
         """Add delay."""
         if self._active_injector and hasattr(self._active_injector, 'delay'):
-            self._active_injector.delay(ms)
+            await self._active_injector.delay(ms)
         else:
-            time.sleep(ms / 1000.0)
+            await asyncio.sleep(ms / 1000.0)
     
-    def execute_ducky(self, script_path: str, layout: str = "us") -> bool:
+    async def execute_ducky(self, script_path: str, layout: str = "us") -> bool:
         """Execute DuckyScript file."""
         try:
             from urban_hs.modules.hid import DuckyCompiler, load_ducky_file
@@ -511,6 +511,12 @@ class HIDInjector:
             
             # Send reports via active injector
             for report in reports:
+                # Skip DELAY markers (high bit 0x80 set in first byte)
+                if report[0] & 0x80:
+                    delay_ms = ((report[0] & 0x7F) << 8) | report[1]
+                    await asyncio.sleep(delay_ms / 1000.0)
+                    continue
+                
                 # Inject report bytes
                 if hasattr(self._active_injector, '_report') and self._active_injector._report:
                     with open(self._active_injector._report, 'wb') as f:

@@ -627,11 +627,4 @@ __all__ = [
     "SerialConfig",
     "USBGadgetManager",
     "HIDReportDescriptors",
-    "LAYOUT_US",
-    "LAYOUT_GB",
-    "LAYOUT_DE",
-    "LAYOUT_FR",
-    "LAYOUT_ES",
-    "LAYOUT_IT",
-    "LAYOUT_RU",
 ]

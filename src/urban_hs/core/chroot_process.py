@@ -115,15 +115,17 @@ class ChrootProcessManager:
         
         for src, dst in all_binds.items():
             if os.path.exists(src):
-                bind_cmds.extend(["mount", "--bind", src, dst])
+                bind_cmds.append(["mount", "--bind", src, dst])
         
         if bind_cmds:
-            # Run bind mounts first, then command
-            full_cmd = ["sh", "-c", " && ".join([" ".join(b) for b in bind_cmds] + [" ".join(cmd)])]
+            # Run bind mounts first, then command - each as separate command list
+            # Join with " && " for shell execution
+            bind_cmd_strs = [" ".join(b) for b in bind_cmds]
+            cmd_str = " ".join(shlex.quote(c) for c in cmd)
+            full_cmd = " && ".join(bind_cmd_strs + [cmd_str])
+            return ["sh", "-c", full_cmd]
         else:
-            full_cmd = cmd
-        
-        return ["chroot", self.config.chroot_path] + full_cmd
+            return ["chroot", self.config.chroot_path] + cmd
 
     def _build_command(self, cmd: Union[str, List[str]]) -> List[str]:
         """Build full command based on execution mode."""
@@ -134,7 +136,9 @@ class ChrootProcessManager:
         
         # Apply working directory
         if self.config.working_dir != "/":
-            cmd_list = ["cd", self.config.working_dir, "&&"] + cmd_list
+            # Use shell to change directory properly
+            cmd_str = " ".join(shlex.quote(c) for c in cmd_list)
+            cmd_list = ["sh", "-c", f"cd {shlex.quote(self.config.working_dir)} && {cmd_str}"]
         
         # Set environment variables
         env_prefix = []
@@ -238,7 +242,7 @@ class ChrootProcessManager:
                 timed_out=False,
             )
         finally:
-            if proc.pid in self._active_processes:
+            if 'proc' in locals() and proc.pid in self._active_processes:
                 del self._active_processes[proc.pid]
         
         duration_ms = int((time.time() - start_time) * 1000)
@@ -366,15 +370,15 @@ class ChrootManager:
         
         logger.info("Bootstrapping chroot...", path=self.chroot_path)
         
-        # Run bootstrap script
-        script_path = "/home/andresantos/Desktop/Projects/urban-hack-sentinel/scripts/bootstrap_chroot.sh"
-        if not os.path.exists(script_path):
-            logger.error("Bootstrap script not found", path=script_path)
+        # Run bootstrap script - use project-relative path
+        script_path = Path(__file__).parents[4] / "scripts" / "bootstrap_chroot.sh"
+        if not script_path.exists():
+            logger.error("Bootstrap script not found", path=str(script_path))
             return False
         
         # Run as root (required for chroot bootstrap)
         result = await asyncio.create_subprocess_exec(
-            "sudo", script_path,
+            "sudo", str(script_path),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )

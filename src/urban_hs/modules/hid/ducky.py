@@ -137,7 +137,7 @@ class KeyMapper:
         'f': 0x09, 'g': 0x0A, 'h': 0x0B, 'i': 0x0C, 'j': 0x0D,
         'k': 0x0E, 'l': 0x0F, 'm': 0x10, 'n': 0x11, 'o': 0x12,
         'p': 0x13, 'q': 0x14, 'r': 0x15, 's': 0x16, 't': 0x17,
-        'u': 0x18, 'v': 0x19, 'w': 0x19, 'x': 0x1B, 'y': 0x1C, 'z': 0x1D,
+        'u': 0x18, 'v': 0x19, 'w': 0x1A, 'x': 0x1B, 'y': 0x1C, 'z': 0x1D,
         '1': 0x1E, '2': 0x1F, '3': 0x20, '4': 0x21, '5': 0x22,
         '6': 0x23, '7': 0x24, '8': 0x25, '9': 0x26, '0': 0x27,
         'enter': 0x28, 'escape': 0x29, 'backspace': 0x2A, 'tab': 0x2B,
@@ -159,7 +159,7 @@ class KeyMapper:
         'keypad_asterisk': 0x55, 'keypad_minus': 0x56,
         'keypad_plus': 0x57, 'keypad_enter': 0x58,
         'keypad_1': 0x59, 'keypad_2': 0x5A, 'keypad_3': 0x5B,
-        'keypad_4': 0x5B, 'keypad_5': 0x5D, 'keypad_6': 0x5E,
+        'keypad_4': 0x5C, 'keypad_5': 0x5D, 'keypad_6': 0x5E,
         'keypad_7': 0x5F, 'keypad_8': 0x60, 'keypad_9': 0x61,
         'keypad_0': 0x62, 'keypad_period': 0x63,
         'nonus_backslash': 0x64, 'application': 0x65,
@@ -561,24 +561,24 @@ class DuckyCompiler:
     
     def save_compiled(self, script: ParsedScript, output_path: Union[str, Path]):
         """Save compiled script to binary format."""
-        import pickle
-        with open(output_path, 'wb') as f:
-            pickle.dump({
-                'commands': script.commands,
+        import json
+        with open(output_path, 'w') as f:
+            json.dump({
+                'commands': [cmd.__dict__ for cmd in script.commands],
                 'variables': script.variables,
-                'functions': script.functions,
+                'functions': {k: [cmd.__dict__ for cmd in v] for k, v in script.functions.items()},
                 'default_delay': script.default_delay,
             }, f)
     
     def load_compiled(self, input_path: Union[str, Path]) -> ParsedScript:
         """Load compiled script from binary format."""
-        import pickle
-        with open(input_path, 'rb') as f:
-            data = pickle.load(f)
+        import json
+        with open(input_path, 'r') as f:
+            data = json.load(f)
         script = ParsedScript()
-        script.commands = data.get('commands', [])
+        script.commands = [DuckyCommand(**cmd) for cmd in data.get('commands', [])]
         script.variables = data.get('variables', {})
-        script.functions = data.get('functions', {})
+        script.functions = {k: [DuckyCommand(**cmd) for cmd in v] for k, v in data.get('functions', {}).items()}
         script.default_delay = data.get('default_delay', 0)
         return script
 
