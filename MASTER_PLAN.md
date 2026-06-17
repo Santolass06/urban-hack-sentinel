@@ -303,13 +303,15 @@ CREATE INDEX idx_artifacts_session ON artifacts(session_id);
 | S2.1 | **FastPair Scanner (Bleak)** — Scan 0xFE2C UUID, parse advertisement (Model ID, pairing mode, account key filter), event bus publish | 6h | S0.x | ✅ **COMPLETO** |
 | S2.2 | **WhisperPair Vulnerability Tester** — GATT connect → service 0xFE2C → char 0x1234 → send KBP request → parse response (SUCCESS=vuln, 0x0E/0x05=patched) | 8h | S2.1 | ✅ **COMPLETO** |
 | S2.3 | **WhisperPair Exploit Chain** — Multi-strategy: RAW_KBP → RAW_WITH_SEEKER → RETROACTIVE → EXTENDED_RESPONSE; device quirks por Model ID | 10h | S2.2 | 🟡 PARCIAL (estrutura criada) |
-| S2.4 | **BR/EDR Bonding** — BlueZ D-Bus `CreateBond`, `RemoveBond`, monitor `org.bluez.Device1` properties | 6h | S2.3 | ⏳ PENDENTE |
-| S2.5 | **Account Key Write / Flood** — Write 0x04 + random (encrypted com shared secret se disponível), flood loop com delay | 6h | S2.4 | ⏳ PENDENTE |
+| S2.4 | **BR/EDR Bonding** — BlueZ D-Bus `CreateBond`, `RemoveBond`, monitor `org.bluez.Device1` properties | 6h | S2.3 | 🟡 PARCIAL (implementado, precisa dispositivo Fast Pair real) |
+| S2.5 | **Account Key Write / Flood** — Write 0x04 + random (encrypted com shared secret se disponível), flood loop com delay | 6h | S2.4 | 🟡 PARCIAL (estrutura criada, precisa dispositivo Fast Pair) |
 | S2.6 | **HFP Audio Capture** — BlueZ SCO / `pynep` / `pulseaudio` monitor, gravação WAV/M4A, streaming WebSocket | 8h | S2.4 | ⏳ PENDENTE |
 | S2.6 | **Device Quirks DB** — JSON por Model ID: `needsExtendedResponse`, `prefersBrEdrBonding`, `delayBeforeKbp`, `usesRetroactiveFlag` | 4h | S2.3 | ✅ **COMPLETO** (estrutura criada) |
 | S2.7 | **Tests + Mock BlueZ** — Mock `bluetoothctl`/`bleak`, unit tests parser/tester/exploit | 6h | S2.1-2.6 | ⏳ PENDENTE |
 
-**Entregável Sprint 2**: BLE Fast Pair scanner + WhisperPair vuln test + exploit chain completo + HFP audio.
+**Entregável Sprint 2**: ⚠️ **PARCIAL** — Scanner + Tester completos, mas exploit chain precisa dispositivo Fast Pair real para validação completa. 
+
+**Nota**: Dispositivos Fast Pair são acessórios Bluetooth (headphones, speakers, etc.), não APs WiFi. Necessário dispositivo Fast Pair real para validação completa do exploit chain.
 
 ---
 

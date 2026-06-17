@@ -16,6 +16,15 @@ from urban_hs.modules.ble.fastpair import (
     get_device_quirks,
     DEVICE_QUIRKS,
 )
+from urban_hs.modules.ble.exploit_chain import (
+    BlueZBondingManager,
+    BondedDevice,
+    BondingStatus,
+    AccountKeyManager,
+    HFPAudioCapture,
+    WhisperPairFullExploit,
+    BondingStatus,
+)
 
 __all__ = [
     "FastPairScanner",
@@ -30,4 +39,10 @@ __all__ = [
     "ACCOUNT_KEY_UUID",
     "get_device_quirks",
     "DEVICE_QUIRKS",
+    "BlueZBondingManager",
+    "BondedDevice",
+    "BondingStatus",
+    "AccountKeyManager",
+    "HFPAudioCapture",
+    "WhisperPairFullExploit",
 ]

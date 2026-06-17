@@ -24,7 +24,7 @@
 ### 🚀 Advanced Features (Sprint 2-5)
 | Module | Status | Description |
 |--------|--------|-------------|
-| **BLE/Fast Pair** | 🔄 | Fast Pair scanner, WhisperPair (CVE-2025-36911) exploit |
+| **BLE/Fast Pair** | 🟡 | Fast Pair scanner ✅, WhisperPair (CVE-2025-36911) vuln test ✅, exploit chain 🟡 |
 | **Camera Discovery** | 🔄 | ONVIF/RTSP/HTTP, default creds, vuln scanning |
 | **Network Scanner** | 🔄 | Nmap wrapper, OS fingerprint, service enum |
 | **Metasploit RPC** | 🔄 | Module execution, session management |
@@ -178,6 +178,47 @@ hashcat -m 22000 /var/lib/urban-hs/hashes/*.22000 \
 
 ---
 
+## 📱 BLE / Fast Pair Attacks (Sprint 2)
+
+### 1. Fast Pair Scan
+```bash
+# Scan for Fast Pair devices
+urban-hs --ble-scan --interface hci0 --duration 30
+
+# Scan all BLE devices
+urban-hs --ble-scan --interface hci0 --scan-all --duration 30
+```
+
+### 2. WhisperPair Vulnerability Test
+```bash
+# Test single device for CVE-2025-36911
+urban-hs --ble-test --address 8c:90:2d:0f:71:69 --interface hci0
+
+# Test all discovered Fast Pair devices
+urban-hs --ble-test --from-scan --interface hci0
+```
+
+### 3. WhisperPair Exploit Chain (Requires Fast Pair Device)
+```bash
+# Full exploit chain (requires --enable-active-attacks=true)
+urban-hs --ble-exploit --address 8c:90:2d:0f:71:69 \
+    --interface hci0 --audio-duration 60
+```
+
+ ### 4. BLE Wardriving with GPS
+```bash
+# Start GPS + BLE wardriving
+urban-hs --ble-wardrive --interface hci0 --gps /dev/ttyUSB0 --duration 3600
+
+# Export Fast Pair devices to WiGLE
+urban-hs --export ble-wigle --output /tmp/ble_wardrive.csv
+
+# Export to Kismet
+urban-hs --export ble-kismet --output /tmp/ble_wardrive.netxml
+```
+
+---
+
 ## 🔧 API Server + Dashboard
 
 ```bash
@@ -270,10 +311,12 @@ urban_hs/
 │   │   ├── managers.py      # Handshake/Hashcat/GPS/MAC
 │   │   └── plugin.py        # Core integration
 │   │
-│   ├── ble/                 # 🔄 Sprint 2
-│   │   ├── fastpair.py      # Fast Pair scanner
-│   │   ├── whisperpair.py   # CVE-2025-36911 exploit
-│   │   └── audio_hfp.py     # HFP audio capture
+│   ├── ble/                 # 🟡 Sprint 2 - Partial
+│   │   ├── __init__.py      # BLE exports
+│   │   ├── fastpair.py      # Fast Pair scanner + WhisperPair
+│   │   ├── exploit_chain.py # WhisperPair exploit chain (BlueZ bonding, Account Key, HFP)
+│   │   ├── plugin.py        # BLE plugin integration
+│   │   └── fastpair.py      # Fast Pair scanner + WhisperPair
 │   │
 │   ├── network/             # 🔄 Sprint 3
 │   │   ├── scanner.py       # Nmap wrapper
