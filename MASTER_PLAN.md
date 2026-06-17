@@ -371,7 +371,7 @@ Relatórios assinados GPG, evidence chain of custody.
 
 ---
 
-### 📦 SPRINT 5 — HID / USB Gadget / Dashboard (Semanas 10-11) — **🟡 EM ANDAMENTO**
+### 📦 SPRINT 5 — HID / USB Gadget / Dashboard (Semanas 10-11) — **✅ COMPLETO**
 
 | Task ID | Descrição | Esforço | Dependências |
 |---------|-----------|---------|--------------|
