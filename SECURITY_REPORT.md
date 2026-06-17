@@ -42,7 +42,7 @@
 ✅ `.github/workflows/ci.yml` — lint (ruff), mypy strict, pytest Python 3.11/3.12, Trivy, pip-audit, Docker push  
 ✅ `docker/Dockerfile.arm64` — multi-arch ARM64/AMD64, build stage + runtime stage  
 ⚠️ Scheduler — sem persistência de tarefas (`TaskPersistence` placeholder); crash do processo perde schedule  
-⚠️ Plugin system — entry points não registados no `pyproject.toml` para módulos novos; `hot-reload` por testar  
+⚠️ Plugin system — `[project.entry-points]` completamente ausente do `pyproject.toml`; entry point discovery não funciona sem registo (PLUGIN-ENTRY)  
 
 ---
 
@@ -51,7 +51,7 @@
 ✅ WiFiScanner (iw + airodump-ng) · HandshakeAttack · PMKIDAttack · WPSPixieAttack · WPSPinAttack  
 ✅ DeauthAttack · HandshakeManager · MACChanger · GeoMapper (gpsd + WiGLE/Kismet/KML)  
 ✅ `tests/test_wifi_module.py` — cobertura das classes principais  
-⚠️ Testes usam mocks de classe, não `unittest.mock.patch` de subprocessos — `iw` e `airodump-ng` reais não testados  
+⚠️ Testes usam `unittest.mock.patch` + `AsyncMock` para subprocessos — cobertura ainda parcial (Happy path apenas)  
 
 ---
 
@@ -73,8 +73,8 @@
 ✅ NET-01 corrigido — `ipaddress.ip_network()` valida todos os targets  
 ✅ NET-02 corrigido — ONVIF socket → `asyncio.to_thread()`  
 ✅ NET-03 corrigido — `exploit_id` validado com regex  
-⚠️ `camera/enumeration.py` — `test_default_creds()` usa sockets bloqueantes em `async def` (CAM-BLOCK)  
-⚠️ `camera/vuln_check.py` — CVE DB sem CVEs reais carregados por omissão (CAM-CVE)  
+✅ `camera/enumeration.py` — `test_default_creds()` usa `aiohttp` async; sem bloqueio de event loop  
+✅ `camera/vuln_check.py` — `DEFAULT_CVE_DB` tem CVEs reais carregados (CVE-2017-7921, CVE-2021-36260, etc.)  
 ⚠️ RouterSploit retorna `[]` — sem implementação real  
 
 ---
@@ -90,9 +90,9 @@
 ✅ RPT-01/02 corrigidos — passphrase via Callable; name collision resolvida  
 ✅ CRED-02 corrigido — `validate_credential()` levanta `NotImplementedError`  
 ✅ CON-01 corrigido — newline injection em option values bloqueado  
-⚠️ MSF-TOKEN — `_reconnect()` não limpa `self._token`  
+⚠️ MSF-TOKEN — `_reconnect()` não limpa `self._token`; token expirado persiste  
 ⚠️ RPT-04 — `html.write_pdf()` ainda síncrono (linha 650)  
-⚠️ GPG-05 — GPGSigner sem key assina silenciosamente nada  
+⚠️ GPG-05 — GPGSigner sem `key_id` loga erro e retorna `False`; não assina silenciosamente, mas falha sem exceção  
 
 ---
 
@@ -110,7 +110,7 @@
 ✅ HID-02 corrigido — pickle substituído por JSON; sem RCE  
 ✅ HID-04 corrigido — `time.sleep()` → `asyncio.sleep()`  
 ✅ HID-06 corrigido — LAYOUT_* removidos de `__all__`; sem ImportError  
-⚠️ HID-05 — delay markers no path compiled→hidg a verificar  
+⚠️ HID-05 — no formato compilado binário, delay markers (bit 0x80) são *skipped* em vez de `asyncio.sleep`; payloads com `DELAY` não pausam (no formato texto DuckyScript direto, delays funcionam corretamente via `asyncio.sleep`)  
 ⚠️ BTHID-01 **ALTO** — `bt_hid.py` usa `python-dbus` síncrono; bloqueia event loop  
 ⚠️ BTHID-02 — CVE-2023-45866 OTA sem pairing não implementado  
 ⚠️ FRAG-01 — `/home/andresantos/fragattacks` hardcoded  
@@ -881,41 +881,41 @@ Num contexto em que o Pi pode ser confiscado durante uma demonstração, as cred
 
 ## 5. Sumário Executivo de Bugs
 
-### Bugs Activos (verificados no código — commit `3de3b97`)
+### Bugs Activos (verificados linha a linha — commit `3de3b97`)
 
-| ID | Módulo | Ficheiro | Severidade |
-|----|--------|----------|------------|
-| MSF-01 | MSF RPC | `metasploit/rpc.py` | 🟠 ALTO |
-| MSF-TOKEN | MSF RPC | `metasploit/rpc.py` | 🟠 ALTO |
-| MSF-04 | MSF RPC | `metasploit/rpc.py` | 🟡 MÉDIO |
-| CON-02 | MSF Console | `metasploit/console.py` | 🟡 MÉDIO |
-| CON-TIMEOUT | MSF Console | `metasploit/console.py` | 🟡 MÉDIO |
-| CRED-01 | Credential | `credential/manager.py` | 🟠 ALTO |
-| GPG-02 | GPG Evidence | `gpg_evidence.py` | 🟡 MÉDIO |
-| GPG-03 | GPG Evidence | `gpg_evidence.py` | 🟡 MÉDIO |
-| GPG-05 | GPG Evidence | `gpg_evidence.py` | 🟠 ALTO |
-| GPG-FILE | GPG Evidence | `gpg_evidence.py` | 🟠 ALTO |
-| RPT-04 | Report Gen | `reporting/generator.py` | 🟡 MÉDIO |
-| RPT-JSON | Report Gen | `reporting/generator.py` | 🟡 MÉDIO |
-| HID-05 | HID Injector | `hid/injector.py` | 🟠 ALTO |
-| DUCKY-UNICODE | DuckyScript | `hid/ducky.py` | 🟡 MÉDIO |
-| GADGET-PATH | USB Gadget | `hid/gadget.py` | 🟡 MÉDIO |
-| BTHID-01 | BT HID | `modules/bt_hid.py` | 🟠 ALTO |
-| BTHID-02 | BT HID | `modules/bt_hid.py` | 🟡 MÉDIO |
-| MQTT-01 | MQTT | `modules/mqtt.py` | 🟠 ALTO |
-| FRAG-01 | FragAttacks | `wifi/fragattacks.py` | 🟡 MÉDIO |
-| FRAG-02 | FragAttacks | `wifi/fragattacks.py` | 🟡 MÉDIO |
-| SSID-01 | SSID Confusion | `modules/ssid_confusion.py` | 🟡 MÉDIO |
-| ESP32-01 | ESP32 | `modules/esp32.py` | 🟡 MÉDIO |
-| CAM-BLOCK | Camera | `camera/enumeration.py` | 🟡 MÉDIO |
-| CAM-CVE | Camera | `camera/vuln_check.py` | 🟡 MÉDIO |
-| BOOT-03 | Bootstrap | `bootstrap_chroot.sh` | 🟢 BAIXO |
-| RPT-03 | Report Gen | `reporting/generator.py` | 🟢 BAIXO |
-| HID-03 | DuckyScript | `hid/ducky.py` | 🟢 BAIXO |
-| BLE-QUIRKS | Device Quirks | `device_quirks.json` | 🟢 BAIXO |
-| SCHEDULER-PERSIST | Scheduler | `core/scheduler.py` | 🟢 BAIXO |
+| ID | Módulo | Ficheiro | Severidade | Descrição |
+|----|--------|----------|------------|-----------|
+| MSF-01 | MSF RPC | `metasploit/rpc.py` | 🟠 ALTO | Password default `"msf"` + SSL sem verificação por omissão |
+| MSF-TOKEN | MSF RPC | `metasploit/rpc.py` | 🟠 ALTO | `_reconnect()` não limpa `self._token`; token expirado persiste |
+| GPG-FILE | GPG Evidence | `gpg_evidence.py` | 🟠 ALTO | `sign_file()` lê ficheiro inteiro para RAM (OOM em pcaps grandes no Pi) |
+| BTHID-01 | BT HID | `modules/bt_hid.py` | 🟠 ALTO | `import dbus` síncrono; bloqueia event loop durante ligações BT |
+| MQTT-01 | MQTT | `modules/mqtt.py` | 🟠 ALTO | `paho-mqtt` ausente de `pyproject.toml`; import falha em runtime |
+| MSF-04 | MSF RPC | `metasploit/rpc.py` | 🟡 MÉDIO | `ssl_context.verify_mode = CERT_NONE` mesmo quando `ssl=True` |
+| CON-TIMEOUT | MSF Console | `metasploit/console.py` | 🟡 MÉDIO | Ficheiro `.rc` temporário não removido no timeout |
+| GPG-02 | GPG Evidence | `gpg_evidence.py` | 🟡 MÉDIO | `verify_signature()` usa API errada do python-gnupg |
+| GPG-03 | GPG Evidence | `gpg_evidence.py` | 🟡 MÉDIO | Dead code: `entry_data` e `entry_dict` duplicam a mesma informação |
+| RPT-04 | Report Gen | `reporting/generator.py` | 🟡 MÉDIO | `html.write_pdf()` síncrono — bloqueia event loop 5–30s no Pi |
+| RPT-JSON | Report Gen | `reporting/generator.py` | 🟡 MÉDIO | Serialização duplicada em `_generate_json()` |
+| HID-05 | HID Injector | `hid/injector.py` | 🟡 MÉDIO | Delays em formato compilado binário são skipped; pausas de payload ignoradas |
+| DUCKY-UNICODE | DuckyScript | `hid/ducky.py` | 🟡 MÉDIO | Caracteres Unicode fora de ASCII descartados silenciosamente |
+| GADGET-PATH | USB Gadget | `hid/gadget.py` | 🟡 MÉDIO | `instance` embeddido no path configfs sem validação |
+| BTHID-02 | BT HID | `modules/bt_hid.py` | 🟡 MÉDIO | CVE-2023-45866 OTA requer conexão sem autenticação — não implementado |
+| FRAG-01 | FragAttacks | `wifi/fragattacks.py` | 🟡 MÉDIO | `/home/andresantos/fragattacks` hardcoded |
+| FRAG-02 | FragAttacks | `wifi/fragattacks.py` | 🟡 MÉDIO | Tool de Vanhoef requer chipset Cypress; Pi WiFi incompatível |
+| SSID-01 | SSID Confusion | `modules/ssid_confusion.py` | 🟡 MÉDIO | Detector passivo; ataque real não implementado |
+| ESP32-01 | ESP32 | `modules/esp32.py` | 🟡 MÉDIO | Detecção de hardware; 29 comandos HCI do CVE não executados |
+| BOOT-03 | Bootstrap | `bootstrap_chroot.sh` | 🟢 BAIXO | Packages duplicados na lista `apk add` |
+| GPG-05 | GPG Evidence | `gpg_evidence.py` | 🟢 BAIXO | GPGSigner sem `key_id` retorna `False` com log de erro (sem exceção) |
+| CON-02 | MSF Console | `metasploit/console.py` | 🟢 BAIXO | LHOST por defeito `127.0.0.1`; necessário especificar IP do Pi para reverse shells de campo |
+| RPT-03 | Report Gen | `reporting/generator.py` | 🟢 BAIXO | Jinja2 autoescape desativado para Markdown |
+| HID-03 | DuckyScript | `hid/ducky.py` | 🟢 BAIXO | Dead code `text = ' '.join(cmd.args)` nunca usado |
+| BLE-QUIRKS | Device Quirks | `device_quirks.json` | 🟢 BAIXO | Model IDs placeholder (`ABCDEF`, `123456`) — quirks nunca aplicados |
+| SCHEDULER-PERSIST | Scheduler | `core/scheduler.py` | 🟢 BAIXO | Sem persistência de tarefas; schedule perdido no restart |
+| PLUGIN-ENTRY | Plugin System | `pyproject.toml` | 🟢 BAIXO | `[project.entry-points]` ausente; entry point discovery não funciona sem registo |
 
-**Total activo: 29 bugs — 0 críticos · 7 altos · 13 médios · 5 baixos + 4 baixos**
+**Total activo: 27 bugs — 0 críticos · 5 altos · 14 médios · 8 baixos**
+
+*Removidos por verificação directa (falsos positivos): CRED-01, CAM-BLOCK, CAM-CVE — confirmados não existir no código actual*
 
 ---
 
