@@ -12,6 +12,7 @@ from urban_hs.modules.wifi.attacks import (
     WPSPixieAttack,
     WPSPinAttack,
     DeauthAttack,
+    Kr00kAttack,
     AttackResult,
     AttackStatus,
 )
@@ -30,6 +31,7 @@ __all__ = [
     "WPSPixieAttack",
     "WPSPinAttack",
     "DeauthAttack",
+    "Kr00kAttack",
     "AttackResult",
     "AttackStatus",
     "HandshakeManager",
