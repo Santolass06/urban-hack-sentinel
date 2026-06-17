@@ -20,14 +20,14 @@
 
 | Sprint | % Anterior | % Atual | Variação | Gap Crítico Atual |
 |--------|-----------|---------|----------|-------------------|
-| S0 — Foundation | 72% | **90%** | +18% | Scheduler persistência ausente; Redis opcional não documentado |
-| S1 — WiFi | 87% | **92%** | +5% | `test_wifi_module.py` adicionado; cobertura ainda parcial |
-| S2 — BLE | 75% | **82%** | +7% | HFP integrado no pipeline; Model IDs placeholder persistem |
-| S3 — Network/Camera | 52% | **73%** | +21% | `camera/enumeration.py` e `vuln_check.py` adicionados com bugs |
-| S4 — Metasploit/Exploit/Report | 60% | **62%** | +2% | MSF-02 e GPG-04 ainda bloqueantes; nenhum bug crítico resolvido |
-| S5 — HID/Dashboard | 30% | **52%** | +22% | `bt_hid`, `fragattacks`, `ssid_confusion`, `esp32`, `mqtt` adicionados; UI ausente |
+| S0 — Foundation | 72% | **92%** | +20% | Scheduler sem persistência; entry points novos módulos não registados |
+| S1 — WiFi | 87% | **93%** | +6% | Testes com mocks de classe, não de subprocessos reais |
+| S2 — BLE | 75% | **85%** | +10% | Model IDs placeholder; AirDrop harvesting ausente |
+| S3 — Network/Camera | 52% | **82%** | +30% | NET-01/02/03 corrigidos; CAM-BLOCK e CVE DB vazia persistem |
+| S4 — Metasploit/Exploit/Report | 60% | **80%** | +20% | MSF RPC funcional; GPG chain of custody funcional; MSF-TOKEN e RPT-04 por resolver |
+| S5 — HID/Dashboard | 30% | **62%** | +32% | HID funcional (bugs chave corrigidos); UI completamente ausente; BTHID-01/MQTT-01 por resolver |
 | S6 — Polish | 0% | **0%** | — | Não iniciado |
-| **TOTAL** | **~53%** | **~65%** | **+12%** | 43 bugs; 5 críticos por resolver |
+| **TOTAL** | **~53%** | **~74%** | **+21%** | 29 bugs activos; 0 críticos |
 
 ---
 
@@ -65,32 +65,38 @@
 
 ---
 
-#### S3 — Network/Camera (73%)
+#### S3 — Network/Camera (82%)
 
 ✅ NmapScanner · NucleiRunner · SearchSploitIntegration · RouterScanner · CameraDiscovery (mDNS, ONVIF, RTSP)  
 ✅ `camera/enumeration.py` — ONVIF, RTSP, HTTP, credenciais default (`admin:admin`, `admin:1234`, etc.)  
 ✅ `camera/vuln_check.py` — CVE DB em JSON, checkers por protocolo  
-⚠️ `camera/enumeration.py` — `test_default_creds()` usa sockets bloqueantes em `async def`  
-⚠️ `camera/vuln_check.py` — CVE DB sem CVEs reais carregados por omissão; função `load_cve_db()` sem path default  
-⚠️ NET-01 persistente — targets nmap sem validação de IP  
+✅ NET-01 corrigido — `ipaddress.ip_network()` valida todos os targets  
+✅ NET-02 corrigido — ONVIF socket → `asyncio.to_thread()`  
+✅ NET-03 corrigido — `exploit_id` validado com regex  
+⚠️ `camera/enumeration.py` — `test_default_creds()` usa sockets bloqueantes em `async def` (CAM-BLOCK)  
+⚠️ `camera/vuln_check.py` — CVE DB sem CVEs reais carregados por omissão (CAM-CVE)  
 ⚠️ RouterSploit retorna `[]` — sem implementação real  
 
 ---
 
-#### S4 — Metasploit/Exploitation/Reporting (62%)
+#### S4 — Metasploit/Exploitation/Reporting (80%)
 
-✅ ExploitRunner · ChrootProcessManager (estrutura) · CredentialManager (armazenamento)  
-✅ MetasploitRPC (estrutura, 632 linhas) · MetasploitConsole · ReportGenerator · GPGEvidence  
-⚠️ MSF-02 **CRÍTICO** — msgpack format errado, todas as chamadas RPC falham  
-⚠️ GPG-04 **ALTO** — `verify_log()` sempre reporta adulteração  
-⚠️ CHRT-01 **CRÍTICO** — path do developer hardcoded em `chroot_process.py`  
-⚠️ GPG-01 **ALTO** — assinatura binária falha com TypeError  
-⚠️ RPT-02 **ALTO** — name collision quebra segunda chamada a `sign_report()`  
-❌ CRED-02 **CRÍTICO** — `validate_credential()` sempre retorna True sem verificação  
+✅ ExploitRunner · ChrootProcessManager · CredentialManager · MetasploitRPC · MetasploitConsole · ReportGenerator · GPGEvidence  
+✅ MSF-02 corrigido — msgpack array format; RPC funcional  
+✅ MSF-03 corrigido — auth.logout sem double-token  
+✅ GPG-04 corrigido — `verify_log()` usa `entry_copy` sem `entry_hash`; chain of custody funcional  
+✅ GPG-01 corrigido — `signature.data` (bytes) na assinatura binária  
+✅ CHRT-01/02/03/04 corrigidos — path relativo, finally seguro, bind mounts corretos  
+✅ RPT-01/02 corrigidos — passphrase via Callable; name collision resolvida  
+✅ CRED-02 corrigido — `validate_credential()` levanta `NotImplementedError`  
+✅ CON-01 corrigido — newline injection em option values bloqueado  
+⚠️ MSF-TOKEN — `_reconnect()` não limpa `self._token`  
+⚠️ RPT-04 — `html.write_pdf()` ainda síncrono (linha 650)  
+⚠️ GPG-05 — GPGSigner sem key assina silenciosamente nada  
 
 ---
 
-#### S5 — HID/Dashboard (52%)
+#### S5 — HID/Dashboard (62%)
 
 ✅ `hid/ducky.py` — DuckyScript parser v1/v3, 7 layouts de teclado  
 ✅ `hid/injector.py` — HID injection via uinput e USB gadget  
@@ -100,13 +106,15 @@
 ✅ `modules/ssid_confusion.py` — detector CVE-2023-52424  
 ✅ `modules/esp32.py` — detecção de dispositivos ESP32  
 ✅ `modules/mqtt.py` — MQTT attack suite (estrutura)  
-⚠️ HID-01 **ALTO** — keycode 'w' errado (0x19 = 'v'), payloads corrompidos  
-⚠️ HID-02 **CRÍTICO** — pickle deserialization em `load_compiled()` → RCE  
-⚠️ HID-04/05 — `time.sleep()` bloqueante; delay markers enviados como keycodes  
+✅ HID-01 corrigido — keycode `'w'` = `0x1A`; payloads funcionais  
+✅ HID-02 corrigido — pickle substituído por JSON; sem RCE  
+✅ HID-04 corrigido — `time.sleep()` → `asyncio.sleep()`  
+✅ HID-06 corrigido — LAYOUT_* removidos de `__all__`; sem ImportError  
+⚠️ HID-05 — delay markers no path compiled→hidg a verificar  
 ⚠️ BTHID-01 **ALTO** — `bt_hid.py` usa `python-dbus` síncrono; bloqueia event loop  
-⚠️ BTHID-02 — CVE-2023-45866 OTA não implementado (falta unauth BT connection)  
-⚠️ FRAG-01 — `/home/andresantos/fragattacks` hardcoded em `fragattacks.py`  
-⚠️ MQTT-01 **ALTO** — `paho-mqtt` não está em `pyproject.toml`; módulo falha no import  
+⚠️ BTHID-02 — CVE-2023-45866 OTA sem pairing não implementado  
+⚠️ FRAG-01 — `/home/andresantos/fragattacks` hardcoded  
+⚠️ MQTT-01 **ALTO** — `paho-mqtt` ausente de `pyproject.toml`; módulo falha no import  
 ❌ FastAPI backend · React PWA · Textual TUI · Rich CLI — completamente ausentes  
 
 ---
