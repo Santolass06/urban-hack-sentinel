@@ -1,7 +1,7 @@
 # Urban Hack Sentinel v3 — Security, Bug & Sprint Report
-**Versão analisada:** Sprint 0–5 (branch `main`, commit `8b65ad9`) | **Data:** Junho 2026  
+**Versão analisada:** Sprint 0–5 (branch `main`, commit `3de3b97`) | **Data:** Junho 2026  
 **Contexto:** Projeto académico — demonstração de vulnerabilidades em ambiente urbano  
-**Autor da revisão:** Claude Code (claude-sonnet-4-6)
+**Autor da revisão:** Claude Code
 
 ---
 
@@ -10,750 +10,1080 @@
 1. [Completion por Sprint](#1-completion-por-sprint)
 2. [Análise de Qualidade de Implementação por CVE](#2-análise-de-qualidade-de-implementação-por-cve)
 3. [Bugs por Módulo](#3-bugs-por-módulo)
-4. [Avaliação Geral de Arquitetura](#4-avaliação-geral-de-arquitetura)
+4. [Avaliação Geral](#4-avaliação-geral)
 5. [Sumário Executivo de Bugs](#5-sumário-executivo-de-bugs)
+6. [Sugestões Adicionais](#6-sugestões-adicionais)
 
 ---
 
 ## 1. Completion por Sprint
 
-Comparação do estado real do repositório contra o MASTER_PLAN.md.
+| Sprint | % Anterior | % Atual | Variação | Gap Crítico Atual |
+|--------|-----------|---------|----------|-------------------|
+| S0 — Foundation | 72% | **90%** | +18% | Scheduler persistência ausente; Redis opcional não documentado |
+| S1 — WiFi | 87% | **92%** | +5% | `test_wifi_module.py` adicionado; cobertura ainda parcial |
+| S2 — BLE | 75% | **82%** | +7% | HFP integrado no pipeline; Model IDs placeholder persistem |
+| S3 — Network/Camera | 52% | **73%** | +21% | `camera/enumeration.py` e `vuln_check.py` adicionados com bugs |
+| S4 — Metasploit/Exploit/Report | 60% | **62%** | +2% | MSF-02 e GPG-04 ainda bloqueantes; nenhum bug crítico resolvido |
+| S5 — HID/Dashboard | 30% | **52%** | +22% | `bt_hid`, `fragattacks`, `ssid_confusion`, `esp32`, `mqtt` adicionados; UI ausente |
+| S6 — Polish | 0% | **0%** | — | Não iniciado |
+| **TOTAL** | **~53%** | **~65%** | **+12%** | 43 bugs; 5 críticos por resolver |
 
-| Sprint | % | Gap Crítico |
-|--------|---|-------------|
-| S0 — Foundation | **72%** | `core/health.py` ausente; CI/CD ausente; plugin system incompleto |
-| S1 — WiFi | **87%** | Testes WiFi ausentes; apenas BLE tem testes |
-| S2 — BLE | **75%** | HFP não integrado no pipeline; model IDs placeholder no quirks DB |
-| S3 — Network/Camera | **52%** | `camera/enumeration.py` e `camera/vuln_check.py` ausentes; NET-01 crítico |
-| S4 — Metasploit | **~60%** | MSF-02 quebra todo o RPC; GPG-04 quebra chain of custody; CHRT-01 path hardcoded |
-| S5 — HID/Dashboard | **~30%** | HID bugs funcionais graves (keycode errado, delays corrompem payloads); UI ausente |
-| S6 — Polish | **0%** | Não iniciado |
-| **TOTAL** | **~53%** | 36 bugs identificados, 5 críticos |
+---
 
 ### Detalhe por Sprint
 
-#### S0 — Foundation (72%)
+#### S0 — Foundation (90%)
+
 ✅ EventBus · ProcessManager · Config (Pydantic v2) · Storage (SQLite WAL + Redis) · Logger (structlog + rich)  
-❌ `core/health.py` — `/healthz` e `/metrics` Prometheus ausentes → critério de Done S0 não cumprido  
-⚠️ Plugin system — existe apenas para WiFi; sem entry points dinâmicos nem registry global  
-❌ CI/CD GitHub Actions — `.github/workflows/` não existe  
+✅ `core/health.py` — `/healthz`, `/readyz`, métricas Prometheus via `prometheus_client`  
+✅ `core/plugins.py` — entry point discovery, dependency graph, hot-reload, lifecycle management  
+✅ `core/scheduler.py` — interval, cron expressions (`croniter`), one-shot, startup/shutdown triggers  
+✅ `.github/workflows/ci.yml` — lint (ruff), mypy strict, pytest Python 3.11/3.12, Trivy, pip-audit, Docker push  
+✅ `docker/Dockerfile.arm64` — multi-arch ARM64/AMD64, build stage + runtime stage  
+⚠️ Scheduler — sem persistência de tarefas (`TaskPersistence` placeholder); crash do processo perde schedule  
+⚠️ Plugin system — entry points não registados no `pyproject.toml` para módulos novos; `hot-reload` por testar  
 
-#### S1 — WiFi (87%)
-✅ WiFiScanner (iw + airodump-ng backends) · HandshakeAttack · PMKIDAttack · WPSPixieAttack · WPSPinAttack · DeauthAttack · HandshakeManager · MACChanger · GeoMapper (gpsd + WiGLE/Kismet/KML)  
-⚠️ Testes — apenas `tests/test_ble_module.py` existe; sem `test_wifi_module.py`
+---
 
-#### S2 — BLE (75%)
-✅ FastPairScanner · WhisperPairTester · WhisperPairExploit (4 estratégias KBP) · BlueZBondingManager · AccountKeyManager  
-⚠️ HFPAudioCapture — código com `arecord` + bluealsa presente mas `run_full_chain()` não chama `start_capture()` (BLE-01)  
-⚠️ Device quirks JSON — 9 devices mas Model IDs são placeholders fictícios  
+#### S1 — WiFi (92%)
 
-#### S3 — Network/Camera (52%)
-✅ NmapScanner · NucleiRunner · CameraDiscovery (mDNS, UPnP, ONVIF, RTSP, HTTP)  
-⚠️ RouterScanner — Hydra presente; RouterSploit retorna `[]`  
-⚠️ SearchSploitIntegration — presente mas `exploit_id` sem validação (NET-03)  
-❌ `camera/enumeration.py` · `camera/vuln_check.py` — ausentes  
+✅ WiFiScanner (iw + airodump-ng) · HandshakeAttack · PMKIDAttack · WPSPixieAttack · WPSPinAttack  
+✅ DeauthAttack · HandshakeManager · MACChanger · GeoMapper (gpsd + WiGLE/Kismet/KML)  
+✅ `tests/test_wifi_module.py` — cobertura das classes principais  
+⚠️ Testes usam mocks de classe, não `unittest.mock.patch` de subprocessos — `iw` e `airodump-ng` reais não testados  
 
-#### S4 — Metasploit/Exploitation/Reporting (~60%)
-Muito volume em linhas de código mas com bugs que quebram funcionalidade core:  
-⚠️ `bootstrap_chroot.sh` — sem checksum Alpine (BOOT-01); edge repos instáveis (BOOT-02)  
-⚠️ `chroot_process.py` — path hardcoded do developer (CHRT-01); bind mounts logic errada (CHRT-03)  
-⚠️ `metasploit/rpc.py` — msgpack format dict vs array → **todas as chamadas RPC falham** (MSF-02)  
-⚠️ `reporting/gpg_evidence.py` — `verify_log()` sempre reporta adulteração (GPG-04); assinatura binária falha TypeError (GPG-01)  
-✅ ExploitRunner · CredentialManager (estrutura) · ReportGenerator (estrutura)
+---
 
-#### S5 — HID/Dashboard (~30%)
-⚠️ DuckyScript — keycode 'w' errado (HID-01); pickle deserialization CRÍTICO (HID-02)  
-⚠️ HIDInjector — DELAY markers enviados como keycodes reais (HID-05); `time.sleep()` bloqueia event loop (HID-04)  
-⚠️ USBGadgetManager — exporta variáveis LAYOUT_* não definidas → ImportError (HID-06)  
-❌ FastAPI backend · React PWA · Textual TUI · Rich CLI · Plugin Marketplace — ausentes  
+#### S2 — BLE (82%)
+
+✅ FastPairScanner · WhisperPairTester · WhisperPairExploit (4 estratégias KBP)  
+✅ BlueZBondingManager · AccountKeyManager  
+✅ `run_full_chain()` integra `start_capture()` — BLE-01 resolvido  
+⚠️ `device_quirks.json` — 9 dispositivos com Model IDs placeholder (`ABCDEF`, `123456`) — quirks nunca aplicados  
+⚠️ AirDrop harvesting — mencionado no MASTER_PLAN mas sem módulo dedicado  
+
+---
+
+#### S3 — Network/Camera (73%)
+
+✅ NmapScanner · NucleiRunner · SearchSploitIntegration · RouterScanner · CameraDiscovery (mDNS, ONVIF, RTSP)  
+✅ `camera/enumeration.py` — ONVIF, RTSP, HTTP, credenciais default (`admin:admin`, `admin:1234`, etc.)  
+✅ `camera/vuln_check.py` — CVE DB em JSON, checkers por protocolo  
+⚠️ `camera/enumeration.py` — `test_default_creds()` usa sockets bloqueantes em `async def`  
+⚠️ `camera/vuln_check.py` — CVE DB sem CVEs reais carregados por omissão; função `load_cve_db()` sem path default  
+⚠️ NET-01 persistente — targets nmap sem validação de IP  
+⚠️ RouterSploit retorna `[]` — sem implementação real  
+
+---
+
+#### S4 — Metasploit/Exploitation/Reporting (62%)
+
+✅ ExploitRunner · ChrootProcessManager (estrutura) · CredentialManager (armazenamento)  
+✅ MetasploitRPC (estrutura, 632 linhas) · MetasploitConsole · ReportGenerator · GPGEvidence  
+⚠️ MSF-02 **CRÍTICO** — msgpack format errado, todas as chamadas RPC falham  
+⚠️ GPG-04 **ALTO** — `verify_log()` sempre reporta adulteração  
+⚠️ CHRT-01 **CRÍTICO** — path do developer hardcoded em `chroot_process.py`  
+⚠️ GPG-01 **ALTO** — assinatura binária falha com TypeError  
+⚠️ RPT-02 **ALTO** — name collision quebra segunda chamada a `sign_report()`  
+❌ CRED-02 **CRÍTICO** — `validate_credential()` sempre retorna True sem verificação  
+
+---
+
+#### S5 — HID/Dashboard (52%)
+
+✅ `hid/ducky.py` — DuckyScript parser v1/v3, 7 layouts de teclado  
+✅ `hid/injector.py` — HID injection via uinput e USB gadget  
+✅ `hid/gadget.py` — USB gadget configfs management  
+✅ `modules/bt_hid.py` — BlueZ HID Profile D-Bus, CVE-2023-45866 framework  
+✅ `modules/wifi/fragattacks.py` — wrapper FragAttacks de Vanhoef  
+✅ `modules/ssid_confusion.py` — detector CVE-2023-52424  
+✅ `modules/esp32.py` — detecção de dispositivos ESP32  
+✅ `modules/mqtt.py` — MQTT attack suite (estrutura)  
+⚠️ HID-01 **ALTO** — keycode 'w' errado (0x19 = 'v'), payloads corrompidos  
+⚠️ HID-02 **CRÍTICO** — pickle deserialization em `load_compiled()` → RCE  
+⚠️ HID-04/05 — `time.sleep()` bloqueante; delay markers enviados como keycodes  
+⚠️ BTHID-01 **ALTO** — `bt_hid.py` usa `python-dbus` síncrono; bloqueia event loop  
+⚠️ BTHID-02 — CVE-2023-45866 OTA não implementado (falta unauth BT connection)  
+⚠️ FRAG-01 — `/home/andresantos/fragattacks` hardcoded em `fragattacks.py`  
+⚠️ MQTT-01 **ALTO** — `paho-mqtt` não está em `pyproject.toml`; módulo falha no import  
+❌ FastAPI backend · React PWA · Textual TUI · Rich CLI — completamente ausentes  
 
 ---
 
 ## 2. Análise de Qualidade de Implementação por CVE
 
-**Escala de implementação:**
+**Escala:**
 - **ÓTIMA** — funcional, integrado no pipeline, testado
-- **MÉDIO** — presente mas com gaps funcionais ou bugs bloqueantes
-- **FRACO** — estrutura ou referência apenas; sem implementação funcional
+- **MÉDIO** — presente com gaps funcionais ou bugs bloqueantes
+- **FRACO** — estrutura ou referência; sem implementação funcional completa
 - **AUSENTE** — não iniciado
 
 ---
 
 ### 2.1 Bluetooth Low Energy
 
----
-
-#### CVE-2025-36911 — WhisperPair (Fast Pair KBP Authentication Bypass) · **MÉDIO**
-
-O exploit mais diferenciador do projeto, com mais trabalho investido.
+#### CVE-2025-36911 — WhisperPair Fast Pair KBP Bypass · **MÉDIO**
 
 | Componente | Estado | Detalhe |
 |---|---|---|
-| Scanner (UUID 0xFE2C) | ✅ Done | `FastPairScanner` via Bleak; parse model ID, pairing mode, account key filter |
-| Vulnerability tester | ✅ Done | `WhisperPairTester` — GATT connect → KBP request → parse 0x01 (vuln) / 0x0E (patched) |
-| KBP bypass — RAW_KBP | ✅ Done | Strategy 0: KBP sem seeker MAC; fallback mais simples |
-| KBP bypass — RAW_WITH_SEEKER | ✅ Done | Strategy 1: KBP com seeker MAC no payload |
-| KBP bypass — RETROACTIVE | ✅ Done | Strategy 2: usa flag `usesRetroactiveFlag` do quirks DB |
-| KBP bypass — EXTENDED_RESPONSE | ✅ Done | Strategy 3: testa resposta extended response |
-| BR/EDR Bonding | ✅ Done | `BlueZBondingManager` — CreateBond/RemoveBond via D-Bus BlueZ |
-| Account Key Write | ✅ Done | `AccountKeyManager` — AES-ECB (modo correto), GATT write UUID `fe2c1236` |
-| HFP Audio Capture | ⚠️ Parcial | Código `arecord`+bluealsa presente em `HFPAudioCapture`; chamada não integrada em `run_full_chain()` (BLE-01) |
-| Device Quirks DB | ⚠️ Parcial | 9 dispositivos em JSON mas Model IDs são placeholders fictícios (`ABCDEF`, `123456`) — quirks nunca aplicados |
-| Testes | ⚠️ Parcial | 21 testes; falta coverage de account key com shared_secret e de quirks reordering |
+| Scanner UUID 0xFE2C | ✅ | `FastPairScanner` via Bleak; parse model ID e pairing mode |
+| Vulnerability tester | ✅ | `WhisperPairTester` — GATT connect → KBP request → parse 0x01/0x0E |
+| KBP bypass — RAW_KBP | ✅ | Strategy 0: KBP sem seeker MAC |
+| KBP bypass — RAW_WITH_SEEKER | ✅ | Strategy 1: KBP com seeker MAC |
+| KBP bypass — RETROACTIVE | ✅ | Strategy 2: `usesRetroactiveFlag` |
+| KBP bypass — EXTENDED_RESPONSE | ✅ | Strategy 3: extended response |
+| BR/EDR Bonding | ✅ | `BlueZBondingManager` via D-Bus BlueZ |
+| Account Key Write | ✅ | `AccountKeyManager` — AES-ECB GATT write UUID `fe2c1236` |
+| HFP Audio Capture | ✅ | `arecord`+bluealsa integrado em `run_full_chain()` (BLE-01 resolvido) |
+| Device Quirks DB | ⚠️ | 9 dispositivos mas Model IDs fictícios — quirks nunca aplicados |
 
-**O que impede ÓTIMA:** HFP não integrado no pipeline + Model IDs placeholder + CRED-02 (validate sempre True) compromete reporting de credenciais capturadas.
-
----
-
-#### CVE-2023-45866 + CVE-2024-21306 — Bluetooth HID Keystroke Injection · **FRACO**
-
-CVE-2023-45866: Android/Linux aceitam HID connection de dispositivo BT não autenticado.  
-CVE-2024-21306: variante Microsoft — mesma primitiva, diferente stack.
-
-| Componente | Estado | Detalhe |
-|---|---|---|
-| DuckyScript Parser | ⚠️ Parcial | 7 layouts (US/GB/DE/FR/ES/IT/RU); mas keycode 'w'=0x19 (=0x19 de 'v') — HID-01 corrompe payloads |
-| HID Injector (uinput) | ⚠️ Parcial | Funcional para injeção local; DELAY markers enviados como keycodes reais (HID-05) |
-| HID Injector (USB Gadget) | ⚠️ Parcial | USBGadgetManager via configfs; LAYOUT_* ImportError (HID-06) |
-| **BT wireless OTA injection** | ❌ Ausente | O CVE exige envio de HID reports via Bluetooth não autenticado. A implementação usa `uinput` (local) ou USB Gadget — **não implementa o vector OTA que define o CVE**. Falta integração BlueZ HID Profile para connection não autenticada |
-
-**Avaliação:** O módulo HID em si está razoavelmente construído mas explora um vetor diferente do CVE — injeção USB/uinput local vs. injeção BT wireless. Para ser fiel ao CVE, precisaria de `bluetoothctl connect` + registar HID profile via BlueZ `ProfileManager1` sem pairing.
+**O que impede ÓTIMA:** Model IDs placeholder + CRED-02 compromete reporting de credenciais.
 
 ---
 
-#### CVE-2019-9506 — KNOB (Key Negotiation of Bluetooth) · **AUSENTE**
+#### CVE-2023-45866 + CVE-2024-21306 — BT HID Keystroke Injection · **FRACO**
 
-Força a negociação de entropy da chave de sessão BR/EDR para 1 byte, quebrando qualquer criptografia Bluetooth Classic.
+CVE exige envio de HID reports via Bluetooth não autenticado (OTA). Dois módulos endereçam este CVE mas com abordagens diferentes:
+
+**`hid/` — USB/uinput injection (local)**
 
 | Componente | Estado | Detalhe |
 |---|---|---|
-| Link layer entropy negotiation | ❌ Ausente | Requer InternalBlue para manipular PDUs LMP diretamente |
-| Detecção passiva | ❌ Ausente | `BlueZBondingManager` existe mas não instrumenta a negociação de chave |
+| DuckyScript Parser | ⚠️ | 7 layouts; keycode 'w'=0x19 errado (HID-01) |
+| HID Injector uinput | ⚠️ | Funcional localmente; DELAY markers enviados como keycodes (HID-05) |
+| USB Gadget injection | ⚠️ | configfs presente; ImportError em LAYOUT_* (HID-06) |
+| BT OTA injection | ❌ | **Não implementado** — o CVE requer BT wireless |
 
-**Avaliação:** Não implementável sem hardware InternalBlue (CYW20735 dev board ~30€ ou chip Broadcom específico). O MASTER_PLAN reconhece este constraint. Sem HW, zero funcionalidade.
+**`modules/bt_hid.py` — BlueZ HID Profile (OTA attempt)**
+
+| Componente | Estado | Detalhe |
+|---|---|---|
+| BlueZ HID Profile D-Bus | ⚠️ | `BlueZHIDProfile` regista profile, abre L2CAP sockets (PSM 17/19) |
+| Unauthenticated connect | ❌ | Código não força `NoInputNoOutput` capability; sem bypass de pairing |
+| Keystroke send via BT | ⚠️ | `send_keystroke()` escreve para interrupt_fd, mas depende de connection estabelecida |
+| Async correctness | ❌ | Usa `python-dbus` (síncrono) em vez de `dbus-fast`; bloqueia event loop (BTHID-01) |
+
+**Avaliação:** `bt_hid.py` é o vetor correto do CVE mas incompleto — a parte crítica (conectar a um host sem autenticação) não está implementada. O módulo `hid/` ataca um vetor diferente do CVE.
 
 ---
 
-#### CVE-2020-10135 — BIAS (Bluetooth Impersonation Attack) · **AUSENTE**
+#### CVE-2019-9506 — KNOB · **AUSENTE**
 
-Permite impersonation de dispositivo previamente emparelhado sem conhecer a link key, explorando legacy authentication no Bluetooth 5.1 e anteriores.
-
-| Componente | Estado | Detalhe |
-|---|---|---|
-| Secure connection downgrade | ❌ Ausente | |
-| Legacy auth bypass | ❌ Ausente | |
-
-**Avaliação:** Mesma limitação de hardware que KNOB. `BlueZBondingManager` poderia servir de base mas a manipulação da autenticação requer acesso ao link layer que BlueZ não expõe via D-Bus.
+Força entropy de sessão BR/EDR para 1 byte via PDUs LMP. Requer InternalBlue (CYW20735). Zero implementação. Não implementável sem hardware específico.
 
 ---
 
-#### CVE-2023-24023 — BLUFFS (Bluetooth Forward & Future Secrecy Break) · **AUSENTE**
+#### CVE-2020-10135 — BIAS · **AUSENTE**
 
-Permite que um attacker force reuso de session keys derivando-as com entropy controlada, quebrando forward secrecy.
-
-| Componente | Estado | Detalhe |
-|---|---|---|
-| Session key forcing | ❌ Ausente | |
-| Referência no código | ❌ Ausente | Nem sequer referenciado nos ficheiros de código |
-
-**Avaliação:** CVSS 6.8. Tecnicamente o mais recente dos três ataques Bluetooth Classic. Requer InternalBlue + patch específico. Sem qualquer foothold no codebase.
+Impersonation de dispositivo emparelhado via legacy authentication. Mesma limitação de hardware que KNOB. Zero implementação.
 
 ---
 
-#### SweynTooth (12 CVEs: CVE-2019-16336, CVE-2019-17060/61, CVE-2020-10069, et al.) — BLE SoC Vulnerabilities · **AUSENTE**
+#### CVE-2023-24023 — BLUFFS · **AUSENTE**
 
-Afeta SoCs BLE de TI, NXP, Cypress, Dialog, Microchip, ST e Telink. Inclui deadlock, OOB write, crash de link layer.
-
-| Componente | Estado | Detalhe |
-|---|---|---|
-| Auto-detect por advertisement | ❌ Ausente | `FastPairScanner` captura advertisements mas sem lógica de fingerprinting de SoC |
-| Exploit primitives | ❌ Ausente | Requer nRF52840 dongle para raw BLE link layer access |
-
-**Avaliação:** O MASTER_PLAN planeia (S4.13) mas sem implementação. Para um Pi + nRF52840, o projeto sweyntooth-bt existe como referência — wrapping seria de alto impacto académico.
+Reuso de session keys quebrando forward secrecy. Nem sequer referenciado no código. Zero implementação.
 
 ---
 
-#### CVE-2025-27840 — ESP32 Hidden HCI Commands · **AUSENTE**
+#### SweynTooth (12 CVEs) — BLE SoC Vulnerabilities · **AUSENTE**
 
-29 comandos HCI não documentados na ROM do ESP32 permitem leitura de RAM, GPIO e NVRAM via interface BT.
+Afeta TI, NXP, Cypress, Dialog, Microchip. Requer nRF52840 dongle com firmware custom. Zero implementação.
+
+---
+
+#### CVE-2025-27840 — ESP32 Hidden HCI Commands · **FRACO**
+
+29 comandos HCI não documentados permitem leitura de RAM/GPIO/NVRAM via BT.
 
 | Componente | Estado | Detalhe |
 |---|---|---|
-| Detecção de ESP32 via BLE scan | ❌ Ausente | `FastPairScanner` não tem fingerprinting específico de ESP32 |
-| Execução dos 29 comandos HCI | ❌ Ausente | |
+| `modules/esp32.py` | ⚠️ | Scan BLE, fingerprinting por OUI Espressif, classificação de dispositivos |
+| CVE execution | ❌ | Comandos HCI não documentados **não são enviados** — módulo é detector, não exploit |
+| Serial/USB HCI access | ❌ | CVE requer ligação serial ao chip; BLE scanning não é suficiente |
 
-**Avaliação:** CVE publicado em Março 2025. Academicamente muito relevante dado o número de devices IoT urbanos com ESP32. A detecção passiva via BLE (pelo OUI `A4:CF:12` da Espressif) seria simples de adicionar ao `FastPairScanner`.
+**Avaliação:** `esp32.py` tem valor como discovery tool mas não implementa o CVE. Os 29 comandos requerem `hcitool cmd` com opcodes específicos via interface HCI — implementável se o ESP32 tiver BT clássico acessível.
 
 ---
 
 ### 2.2 WiFi
 
----
+#### CVE-2019-15126 — Kr00k · **FRACO**
 
-#### CVE-2019-15126 — Kr00k (WPA2 CCMP Nonce Reuse After Disassociation) · **FRACO**
-
-Chips Broadcom e Cypress usam chave all-zero após disassociação. Dados encriptados decifráveis offline.
+Chips Broadcom/Cypress usam chave all-zero após disassociação.
 
 | Componente | Estado | Detalhe |
 |---|---|---|
-| Deauth para forçar disassociação | ✅ Done | `DeauthAttack` funcional |
-| Captura de frames pós-disassociação | ❌ Ausente | `HandshakeAttack` foca em EAPOL, não em data frames com all-zero key |
-| Detecção automática de HW vulnerável | ❌ Ausente | OUI lookup para Broadcom/Cypress presente no `wifi/scanner.py` (via vendor) mas sem lógica de triagem |
-| Decifração offline | ❌ Ausente | Sem integração com r00kie-kr00kie / hexway |
-
-**Avaliação:** Os pré-requisitos (deauth + scan) existem no WiFi module mas o núcleo do ataque — capturar frames com key nula e decifrar — não está implementado. PoC público disponível (hexway/r00kie-kr00kie); integração seria de esforço médio.
+| Deauth para forçar disassociação | ✅ | `DeauthAttack` funcional |
+| Captura frames pós-disassociação | ❌ | Captura EAPOL, não data frames com key nula |
+| Detecção automática chipset | ❌ | OUI lookup existe mas sem triagem Broadcom/Cypress |
+| Decifração offline | ❌ | Sem integração r00kie-kr00kie / hexway |
 
 ---
 
-#### CVE-2020-24586 / CVE-2020-24587 / CVE-2020-24588 — FragAttacks · **FRACO**
-
-Vulnerabilidades no aggregation e mixed key de fragmentos 802.11. Permitem injection de frames arbitrários em redes WPA2/WPA3.
+#### CVE-2020-24586/87/88 — FragAttacks · **FRACO**
 
 | Componente | Estado | Detalhe |
 |---|---|---|
-| Detecção via NmapScanner VULN_SCAN | ⚠️ Parcial | NSE scripts podem cobrir se nuclei templates disponíveis |
-| Teste de fragmentação | ❌ Ausente | Sem wrapper da ferramenta de Vanhoef (`fragattacks`) |
-| Injection de frames | ❌ Ausente | |
-
-**Avaliação:** Ferramenta pública de Mathy Vanhoef (vanhoefm/fragattacks) seria o wrapper natural. O `ProcessManager` e `ChrootProcessManager` têm a infraestrutura para executar ferramentas externas; falta apenas o módulo `wifi/attacks/fragattacks.py`.
+| `wifi/fragattacks.py` | ⚠️ | Wrapper da tool de Vanhoef; estrutura de chamada presente |
+| Hardcoded path | ❌ | `/home/andresantos/fragattacks` hardcoded — falha em qualquer outra máquina (FRAG-01) |
+| Chipset requirement | ❌ | Ferramenta de Vanhoef requer chipset Cypress específico — Pi WiFi chip não suportado |
+| Exploit real | ❌ | Tool pode detetar mas não injetar frames sem chipset compatível |
 
 ---
 
 #### CVE-2023-52424 — SSID Confusion · **FRACO**
 
-Cliente conecta a rede diferente da pretendida porque o SSID não faz parte do PMK em redes multi-band transitioning.
-
 | Componente | Estado | Detalhe |
 |---|---|---|
-| Detecção de redes em modo transition | ❌ Ausente | `WiFiScanner` lista SSIDs mas sem lógica de downgrade band |
-| Evil Twin setup | ❌ Ausente | Sem módulo `rogue_ap.py` ou `hostapd-mana` wrapper |
-| MITM após downgrade | ❌ Ausente | |
-
-**Avaliação:** Sem ferramenta pública — seria contribuição original de alto valor. Requer segunda interface WiFi (Evil Twin) ou `hostapd-mana`. A deteção passiva de transition mode seria de impacto imediato e mais simples de implementar.
+| `modules/ssid_confusion.py` | ⚠️ | Detector 802.11r, FT networks, neighbor report anomalies |
+| Evil twin setup | ❌ | Sem `hostapd-mana` wrapper ou `rogue_ap.py` |
+| MITM após downgrade | ❌ | Deteção passiva apenas — o ataque em si não existe |
 
 ---
 
 #### WPS Pixie Dust + WPS Common PINs · **ÓTIMA**
 
-| Componente | Estado | Detalhe |
-|---|---|---|
-| `WPSPixieAttack` | ✅ Done | `reaver -K 1`; parse de PIN/PSK; fallback `pixiewps` se M1-M3 capturados |
-| `WPSPinAttack` | ✅ Done | OUI DB para PINs por vendor; `reaver -p`; rate limiting configurável |
-| Relatório de resultado | ✅ Done | `AttackResult` com status/output/credentials |
+| Componente | Estado |
+|---|---|
+| `WPSPixieAttack` — `reaver -K 1`, fallback pixiewps | ✅ |
+| `WPSPinAttack` — OUI DB, rate limiting | ✅ |
+| `AttackResult` com credentials | ✅ |
 
-**Avaliação:** Implementação sólida e completa. O único gap é que depende de `reaver` no sistema ou na chroot Alpine (que o bootstrap instala). Integração com HandshakeManager poderia exportar PINs crackeados para o CredentialManager.
+Pipeline end-to-end funcional. Único gap: integração com CredentialManager para exportar PINs crackeados.
 
 ---
 
-#### WPA2 Handshake Capture + PMKID + Deauth · **ÓTIMA**
+#### WPA2 Handshake + PMKID + Deauth · **ÓTIMA**
 
-| Componente | Estado | Detalhe |
-|---|---|---|
-| `HandshakeAttack` | ✅ Done | `aireplay-ng` deauth → `airodump-ng` capture; validação `aircrack-ng` |
-| `PMKIDAttack` | ✅ Done | `hcxdumptool` captura PMKID; export `.22000` para hashcat |
-| `HandshakeManager` | ✅ Done | Dedup BSSID+ESSID; hashcat integration; WiGLE CSV + Kismet netxml |
-| `MACChanger` | ✅ Done | Profiles apple/samsung/intel/random; persistence |
-| `GeoMapper` | ✅ Done | gpsd TCP 2947; KML + WiGLE CSV + Kismet netxml |
+| Componente | Estado |
+|---|---|
+| `HandshakeAttack` — aireplay-ng + airodump-ng + aircrack-ng | ✅ |
+| `PMKIDAttack` — hcxdumptool + hashcat `.22000` | ✅ |
+| `HandshakeManager` — dedup, hashcat, WiGLE/Kismet | ✅ |
+| `MACChanger` — profiles apple/samsung/intel/random | ✅ |
+| `GeoMapper` — gpsd, KML, WiGLE CSV | ✅ |
 
-**Avaliação:** O módulo WiFi é o mais maduro do projeto. Pipeline end-to-end funcional. A falta de testes unitários (mock `iw`/`airodump-ng`) é o único gap visível.
+Módulo mais maduro do projeto.
 
 ---
 
 ### 2.3 IoT & Protocolos Urbanos
 
+#### MQTT Attack Suite · **FRACO**
+
+| Componente | Estado | Detalhe |
+|---|---|---|
+| `modules/mqtt.py` — estrutura | ⚠️ | Classes definidas, lógica de discovery e brute presente |
+| `paho-mqtt` dep | ❌ | **Não está em `pyproject.toml`** — import falha em runtime (MQTT-01) |
+| Subscribe sem auth | ❌ | Lógica escrita mas inutilizável sem dep |
+| Topic enumeration | ❌ | Idem |
+
 ---
 
 #### TPMS Vehicle Tracking (RTL-SDR 433MHz) · **AUSENTE**
 
-Cada pneu transmite um ID único a 433MHz. Tracking passivo de veículos possível a centenas de metros.
-
-| Componente | Estado | Detalhe |
-|---|---|---|
-| RTL-SDR integration | ❌ Ausente | Sem módulo `rtl_433` wrapper; sem módulo SDR genérico |
-| GPS correlation | ❌ Ausente | `GeoMapper` existe mas sem ligação a TPMS |
-
-**Avaliação:** Alto impacto de demonstração urbana — tracking de um carro num estacionamento é visualmente apelativo. `rtl_433` (software open-source) decodifica automaticamente; integração seria de esforço baixo se o hardware RTL-SDR estiver disponível.
-
----
-
-#### MQTT Attack Suite · **FRACO**
-
-Brokers MQTT sem autenticação são comuns em redes IoT urbanas (contadores inteligentes, sensores de estacionamento, semáforos).
-
-| Componente | Estado | Detalhe |
-|---|---|---|
-| Broker discovery (port 1883) | ⚠️ Parcial | `NmapScanner` deteta port 1883/8883 via scan genérico |
-| Subscribe a topics sem auth | ❌ Ausente | Sem cliente MQTT (`paho-mqtt` não está nas deps) |
-| Enumeração de topics | ❌ Ausente | |
-| Injeção de mensagens | ❌ Ausente | |
-
-**Avaliação:** O `NetworkModule` tem a infraestrutura de discovery mas sem cliente MQTT dedicado. `paho-mqtt` seria simples de adicionar. Enumeração de topics `#` num broker sem auth é de alto impacto e muito demonstrável.
+Tracking passivo de veículos via IDs únicos TPMS. Zero implementação. Sem módulo RTL-SDR.
 
 ---
 
 #### AirDrop Phone Number Harvesting · **FRACO**
 
-Os iPhones transmitem os últimos 3 bytes do SHA256 do número de telefone via AWDL/BLE. Com rainbow tables para o espaço `+351 9XXXXXXXX`, é possível recuperar números.
-
 | Componente | Estado | Detalhe |
 |---|---|---|
-| Captura de BLE advertisements | ✅ Done | `FastPairScanner` captura advertisements; parse de manufacturer data |
-| Detecção de AWDL/AirDrop | ❌ Ausente | Sem filtro para company ID Apple + service UUID AirDrop |
-| SHA256 lookup / rainbow tables | ❌ Ausente | |
-
-**Avaliação:** O `FastPairScanner` poderia ser adaptado para filtrar anúncios AirDrop com poucas linhas. As rainbow tables para números portugueses (~10M números) seriam o componente mais demorado a construir mas pré-computáveis offline.
+| BLE advertisement capture | ✅ | `FastPairScanner` captura advertisements |
+| AWDL/AirDrop filter | ❌ | Sem filtro para company ID Apple + UUID AirDrop |
+| SHA256 rainbow tables | ❌ | Não implementado |
 
 ---
 
-### Resumo de Implementação por CVE
+### Resumo CVE
 
-| CVE / Ataque | Área | Qualidade | Estado Real |
-|---|---|---|---|
-| CVE-2025-36911 WhisperPair | BLE | **MÉDIO** | Pipeline 80% funcional; HFP e quirks por completar |
-| CVE-2023-45866/CVE-2024-21306 HID | BLE/HID | **FRACO** | Módulo HID presente mas ataca vector diferente (USB/uinput vs. BT OTA) |
-| CVE-2019-9506 KNOB | BT Classic | **AUSENTE** | Requer InternalBlue; zero implementação |
-| CVE-2020-10135 BIAS | BT Classic | **AUSENTE** | Requer InternalBlue; zero implementação |
-| CVE-2023-24023 BLUFFS | BT Classic | **AUSENTE** | Nem referenciado no código |
-| SweynTooth (12 CVEs) | BLE SoC | **AUSENTE** | Requer nRF52840; zero implementação |
-| CVE-2025-27840 ESP32 HCI | IoT/BLE | **AUSENTE** | Detecção passiva seria simples; não iniciada |
-| CVE-2019-15126 Kr00k | WiFi | **FRACO** | Deauth existe; captura/decifração Kr00k ausente |
-| CVE-2020-24586/87/88 FragAttacks | WiFi | **FRACO** | Infraestrutura de subprocess disponível; módulo dedicado ausente |
-| CVE-2023-52424 SSID Confusion | WiFi | **FRACO** | Scanner lista SSIDs; sem lógica de downgrade/rogue AP |
-| WPS Pixie Dust | WiFi | **ÓTIMA** | Funcional end-to-end |
-| WPA2 Handshake + PMKID | WiFi | **ÓTIMA** | Funcional end-to-end; pipeline hashcat completo |
-| TPMS Vehicle Tracking | IoT/SDR | **AUSENTE** | Sem RTL-SDR module |
-| MQTT Attack Suite | IoT | **FRACO** | Discovery genérico; sem cliente MQTT |
-| AirDrop Harvesting | BLE/AWDL | **FRACO** | FastPairScanner pode ser adaptado; SHA256 lookup ausente |
+| CVE / Ataque | Qualidade | Variação vs. Anterior |
+|---|---|---|
+| CVE-2025-36911 WhisperPair | **MÉDIO** | → igual (HFP integrado, quirks ainda placeholder) |
+| CVE-2023-45866/21306 BT HID | **FRACO** | → igual (bt_hid.py adicionado mas OTA ausente) |
+| CVE-2019-9506 KNOB | **AUSENTE** | → igual |
+| CVE-2020-10135 BIAS | **AUSENTE** | → igual |
+| CVE-2023-24023 BLUFFS | **AUSENTE** | → igual |
+| SweynTooth (12 CVEs) | **AUSENTE** | → igual |
+| CVE-2025-27840 ESP32 | **FRACO** | ↑ (era AUSENTE; esp32.py adicionado) |
+| CVE-2019-15126 Kr00k | **FRACO** | → igual |
+| CVE-2020-24586/87/88 FragAttacks | **FRACO** | ↑ (era AUSENTE; fragattacks.py adicionado) |
+| CVE-2023-52424 SSID Confusion | **FRACO** | ↑ (era AUSENTE; ssid_confusion.py adicionado) |
+| WPS Pixie Dust | **ÓTIMA** | → igual |
+| WPA2 Handshake + PMKID | **ÓTIMA** | → igual |
+| TPMS Vehicle Tracking | **AUSENTE** | → igual |
+| MQTT Attack Suite | **FRACO** | ↑ (era AUSENTE; mqtt.py adicionado) |
+| AirDrop Harvesting | **FRACO** | → igual |
 
-**CVEs com implementação real (ÓTIMA ou MÉDIO): 3/15 (20%)**
+**CVEs com implementação real (ÓTIMA/MÉDIO): 3/15 (20%)**
 
 ---
 
 ## 3. Bugs por Módulo
 
-### Severidade CRÍTICA
+### 3.1 Severidade CRÍTICA
 
 ---
 
-**MSF-02 · `metasploit/rpc.py:204` — Formato msgpack Errado → Todo o RPC Falha**
+**MSF-02 · `metasploit/rpc.py:~206` — Formato msgpack Errado → Todo o RPC Falha**
 
-O protocolo msgrpc exige um **array**: `[method, token, arg1, ...]`. O código envia um **dict**: `{"method": ..., "params": [...]}`. Todas as chamadas RPC são rejeitadas pelo servidor Metasploit. A integração MSF está completamente não funcional.
+O protocolo msgrpc exige **array**: `[method, token, arg1, ...]`. O código envia **dict** encapsulado. Todas as chamadas RPC são rejeitadas pelo servidor Metasploit. A integração MSF está completamente não funcional.
 
-Fix: `params = [method] + ([self._token] if self._token and method != "auth.login" else []) + list(args); packed = msgpack.packb(params, use_bin_type=True)`
+```python
+# Fix:
+params = [method]
+if self._token and method not in ("auth.login",):
+    params.insert(1, self._token)
+params.extend(args)
+packed = msgpack.packb(params, use_bin_type=True)
+```
 
 ---
 
-**CRED-02 · `credential/manager.py:416` — `validate_credential()` Sempre Retorna True**
+**HID-02 · `hid/ducky.py:~562` — Pickle Deserialization → RCE**
 
-Stub que define `validated=True` e `validity_status="valid"` sem qualquer verificação de rede. Relatórios académicos mostram 100% das credenciais como "válidas" — dados fabricados.
+`save_compiled()` e `load_compiled()` usam `pickle`. `pickle.load()` num ficheiro não confiável permite execução arbitrária de código. Qualquer fonte de ficheiros `.ducky` compilados (USB, API, rede) pode comprometer o Pi.
 
-Fix: Implementar verificação real ou lançar `NotImplementedError`.
+```python
+# Fix: substituir pickle por JSON
+import json
+# save: json.dumps([{"type": cmd.type.value, "keycodes": cmd.keycodes} for cmd in script.commands])
+# load: reconstruir ParsedScript a partir de dicts
+```
 
 ---
 
 **CHRT-01 · `core/chroot_process.py:~370` — Path Hardcoded do Developer**
 
-`ensure_chroot()` referencia `/home/andresantos/Desktop/Projects/urban-hack-sentinel/scripts/...`. Este path nunca existe em deployment — toda a funcionalidade chroot retorna `False` silenciosamente. Expõe PII do developer.
+`ensure_chroot()` referencia `/home/andresantos/Desktop/Projects/urban-hack-sentinel/scripts/...`. Falha silenciosamente em qualquer outro sistema. Expõe PII do developer.
 
-Fix: `script_path = Path(__file__).parents[4] / "scripts" / "bootstrap_chroot.sh"`
-
----
-
-**HID-02 · `hid/ducky.py:562` — Pickle Deserialization → RCE**
-
-`save_compiled()` e `load_compiled()` usam `pickle`. `pickle.load()` num ficheiro não confiável permite execução arbitrária de código. Qualquer fonte de ficheiros `.ducky` compilados (USB, API, rede) pode comprometer o Pi.
-
-Fix: Substituir pickle por JSON com dicts de keycodes inteiros.
+```python
+# Fix:
+script_path = Path(__file__).parents[4] / "scripts" / "bootstrap_chroot.sh"
+```
 
 ---
 
-**NET-01 · `network/__init__.py:193` — Argument Injection no NmapScanner** *(persistente)*
+**CRED-02 · `credential/manager.py:~416` — `validate_credential()` Sempre Retorna True**
 
-`targets` passados diretamente para `cmd.extend(targets)` sem validação. Com `create_subprocess_exec`, permite injeção de flags nmap (ex: um target `"--script malicious"` executa NSE scripts não autorizados).
+Stub que define `validated=True` e `validity_status="valid"` sem qualquer verificação real. Relatórios mostram 100% das credenciais como "válidas" — dados fabricados.
 
-Fix: Validar cada target com `ipaddress.ip_network(t, strict=False)` antes de aceitar.
-
----
-
-### Severidade ALTA
-
----
-
-**BOOT-01 · `bootstrap_chroot.sh:58` — Sem Checksum Alpine Tarball**
-
-`# Verify checksum (optional but recommended)` sem código — tarball extraído sem verificação. MITM entrega rootfs malicioso executado como root.
-
-Fix: `wget -q "${MINIROOTFS_URL}.sha256" && sha256sum -c "${MINIROOTFS}.sha256"`
+```python
+# Fix:
+raise NotImplementedError("validate_credential not yet implemented")
+# ou implementar verificação real por tipo (SSH, HTTP, etc.)
+```
 
 ---
 
-**BOOT-02 · `bootstrap_chroot.sh:85` — Alpine Edge Repos na Chroot**
+**NET-01 · `network/__init__.py:193` — Argument Injection no NmapScanner**
 
-`edge/main`, `edge/community`, `edge/testing` adicionados. Packages rolling e sem assinatura introduzem risco de supply chain.
+`targets` passados diretamente a `cmd.extend(targets)` sem validação. Um target `"--script malicious"` injeta flags nmap arbitrários.
 
-Fix: Usar apenas repos estáveis `v${ALPINE_VERSION%.*}/main` e `/community`.
-
----
-
-**CHRT-02 · `chroot_process.py:240` — NameError no finally Block**
-
-Se `create_subprocess_exec()` lançar exceção, `proc` nunca é atribuído mas o `finally` referencia `proc.pid` → `NameError` engole a exceção original.
-
-Fix: `if 'proc' in locals() and proc.pid in self._active_processes: del self._active_processes[proc.pid]`
-
----
-
-**CHRT-03 · `chroot_process.py:111` — Bind Mounts Construídos Incorretamente**
-
-`bind_cmds` é lista plana de strings; o generator itera sobre strings individuais e o `sh -c` recebe `"mount && --bind && /proc && ..."` — todos os bind mounts falham e o payload nunca corre.
-
-Fix: Construir como lista-de-listas: `bind_cmds.append(["mount", "--bind", src, dst])`
+```python
+# Fix:
+import ipaddress
+validated = []
+for t in targets:
+    try:
+        ipaddress.ip_network(t, strict=False)
+        validated.append(t)
+    except ValueError:
+        logger.warning("invalid_target", target=t)
+```
 
 ---
 
-**CRED-01 · `credential/manager.py:434` — `field(default_factory=list)` em Assinatura de Função**
-
-`field()` é válido apenas em `@dataclass`. Na função, avalia para um objeto `Field` como default — callers que omitem `extra_args` recebem o objeto; `cmd.extend()` lança `TypeError`.
-
-Fix: `extra_args: Optional[List[str]] = None` com `extra_args = extra_args or []` no corpo.
+### 3.2 Severidade ALTA
 
 ---
 
-**MSF-01 · `rpc.py:107,109` — Password Default `"msf"` + SSL Desativado**
+**BTHID-01 · `modules/bt_hid.py:~60` — python-dbus Síncrono em Contexto Async**
 
-`password: str = "msf"` e `ssl_verify: bool = False` por omissão. MITM trivial ao canal RPC.
+`BlueZHIDProfile` usa `import dbus` (python-dbus síncrono GLib). Todas as operações D-Bus bloqueiam o event loop asyncio durante ligações BT, que podem demorar 2-10 segundos. O projeto usa `dbus-fast` noutros módulos — inconsistência.
 
-Fix: Sem default para password (forçar config explícita). `ssl_verify=True` por omissão.
-
----
-
-**MSF-03 · `rpc.py:189,210` — Token Duplicado em `auth.logout`**
-
-`_call("auth.logout", self._token)` prepend o token novamente → servidor recebe `[token, token]` → logout falha e sessão fica aberta no servidor.
-
-Fix: Excluir `"auth.logout"` do prepend: `if method not in ("auth.login", "auth.logout")`.
+```python
+# Fix: migrar para dbus-fast (já é dependência do projeto)
+from dbus_fast.aio import MessageBus
+bus = await MessageBus().connect()
+```
 
 ---
 
-**CON-01 · `metasploit/console.py:227` — Injeção de Comandos via Options**
+**BOOT-01 · `bootstrap_chroot.sh:~58` — Sem Verificação de Integridade do Tarball**
 
-`f"set {k} {v}"` sem sanitização. Um valor com `\n` injeta comandos adicionais no resource script `.rc`.
+`# Verify checksum (optional but recommended)` sem código. Tarball Alpine extraído sem checksum. MITM entrega rootfs malicioso executado como root.
 
-Fix: `if '\n' in str(v) or '\r' in str(v): raise ValueError(...)`
-
----
-
-**RPT-01 · `reporting/generator.py:196` — GPG Passphrase em Campo Plaintext**
-
-`ReportConfig.gpg_passphrase: str` num dataclass serializável. Qualquer serialização (JSON, logs, WebSocket) expõe a passphrase GPG.
-
-Fix: Callable secret provider em vez de campo string.
+```bash
+# Fix:
+wget -q "${MINIROOTFS_URL}.sha256" -O "${MINIROOTFS}.sha256"
+sha256sum -c "${MINIROOTFS}.sha256" || { echo "Checksum mismatch"; exit 1; }
+```
 
 ---
 
-**RPT-02 · `reporting/generator.py:726` — Name Collision Quebra sign_report()**
+**BOOT-02 · `bootstrap_chroot.sh:~85` — Alpine Edge Repos sem Pinning**
 
-`gpg = gpg.GPG()` sobrescreve o alias do módulo. Na segunda chamada, `gpg.GPG()` lança `AttributeError`.
+`edge/testing` adicionado. Packages rolling e sem garantia de estabilidade introduzem risco de supply chain. Uma package maliciosa em `edge/testing` é instalada automaticamente.
 
-Fix: `import gnupg as gnupg_module` → `gnupg_module.GPG()`.
-
----
-
-**GPG-01 · `gpg_evidence.py:258` — Assinatura Binária Falha com TypeError**
-
-Para `DETACHED_BINARY`, abre em modo `'wb'` mas escreve `str(signature)` → `TypeError`. Nenhuma assinatura binária é jamais escrita.
-
-Fix: `f.write(signature.data)` (bytes) para o modo binário.
+```bash
+# Fix: usar apenas repos estáveis
+echo "https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION%.*}/main" > /etc/apk/repositories
+```
 
 ---
 
-**GPG-04 · `gpg_evidence.py:462` — `verify_log()` Sempre Reporta Adulteração**
+**CHRT-02 · `chroot_process.py:~240` — NameError no finally Block**
 
-Hash calculado *incluindo* o campo `entry_hash`, mas o hash original foi calculado *sem* esse campo. Comparação falha sempre — chain of custody inutilizável.
+Se `create_subprocess_exec()` lançar exceção antes de atribuir `proc`, o `finally` que referencia `proc.pid` lança `NameError`, engolindo a exceção original e tornando o debug impossível.
 
-Fix: `entry_hash = entry.pop("entry_hash", ""); computed = _compute_entry_hash(entry); entry["entry_hash"] = entry_hash`
-
----
-
-**GPG-05 · `gpg_evidence.py:521` — GPGSigner Default sem Key → Silenciosamente Não Assina**
-
-`gpg_signer or GPGSigner()` com `key_id=None`. `sign_file()` retorna `False` sem aviso. Todos os artefactos ficam sem assinatura GPG.
-
-Fix: Tornar `gpg_signer` obrigatório ou logar aviso explícito quando `None`.
+```python
+# Fix:
+finally:
+    if 'proc' in locals() and proc is not None:
+        self._active_processes.pop(proc.pid, None)
+```
 
 ---
 
-**HID-01 · `hid/ducky.py:140` — Keycode Errado para 'w' (e Numpad 4)**
+**CHRT-03 · `chroot_process.py:~111` — Bind Mounts Como Lista Plana**
 
-`'v': 0x19` e `'w': 0x19` — colisão. Qualquer payload com `powershell`, `wget`, `whoami`, URLs com `www` produz 'v' em vez de 'w'. `'keypad_4': 0x5B` deve ser `0x5C`.
+`bind_cmds` construído como lista plana de strings: `["mount", "--bind", "/proc", "/chroot/proc", "&&", "mount", ...]`. O `sh -c` recebe tokens individuais — todos os bind mounts falham silenciosamente.
 
-Fix: `'w': 0x1A`, `'keypad_4': 0x5C`.
-
----
-
-**HID-04 · `hid/injector.py:297` — `time.sleep()` Bloqueia o Event Loop**
-
-`delay()` chama `time.sleep()` em contexto async. Payloads DuckyScript com DELAY frequente congelam todas as coroutines.
-
-Fix: `async def delay(ms): await asyncio.sleep(ms / 1000.0)`
-
----
-
-**HID-05 · `hid/injector.py:514` — DELAY Markers Enviados como Keycodes Reais**
-
-`execute_ducky()` escreve todos os reports para `/dev/hidg*` incluindo delay markers (bit 0x80 set). O kernel interpreta-os como keystrokes → garbage characters enviados ao host em vez de pause.
-
-Fix: `if report[0] & 0x80: await asyncio.sleep(delay_ms / 1000)` em vez de escrever para o device.
+```python
+# Fix: lista-de-listas, executar separadamente
+bind_cmds = []
+for src, dst in mounts:
+    bind_cmds.append(["mount", "--bind", str(src), str(dst)])
+for cmd in bind_cmds:
+    await asyncio.create_subprocess_exec(*cmd)
+```
 
 ---
 
-**HID-06 · `hid/gadget.py:630` — Exporta LAYOUT_* Não Definidas → ImportError**
+**CRED-01 · `credential/manager.py:~434` — `field(default_factory=list)` em Assinatura de Função**
 
-`__all__` de `gadget.py` lista `LAYOUT_US`, `LAYOUT_GB`, etc., que não estão definidas nesse ficheiro.
+`field()` é válido apenas em `@dataclass`. Na assinatura de função regular, avalia para um objeto `Field`. Callers que omitem `extra_args` recebem o objeto Field em vez de uma lista; `cmd.extend()` lança `TypeError`.
 
-Fix: Remover essas entradas de `__all__` em `gadget.py`.
-
----
-
-**NET-02 · `network/__init__.py:807` — ONVIF WS-Discovery Socket Bloqueante** *(persistente)*
-
-`_onvif_discovery()` usa `recvfrom` bloqueante (timeout 5s) em `async def`. Bloqueia o event loop durante esse tempo.
-
-Fix: `data, addr = await asyncio.to_thread(sock.recvfrom, 65535)`
+```python
+# Fix:
+async def some_method(self, extra_args: Optional[List[str]] = None) -> ...:
+    extra_args = extra_args or []
+```
 
 ---
 
-**NET-03 · `network/__init__.py:519` — SearchSploit `exploit_id` sem Validação**
+**MSF-01 · `rpc.py:107,109` — Password Default + SSL Desativado**
 
-`exploit_id` passado diretamente ao subprocess. Path traversal: `"../../../etc/passwd"` força download para localização arbitrária.
+`password: str = "msf"` e `ssl_verify: bool = False` por omissão. Qualquer host na rede pode autenticar no daemon Metasploit.
 
-Fix: Validar contra `r"^\d+$"` (IDs ExploitDB são inteiros).
+```python
+# Fix: sem default para password; ssl_verify=True por omissão
+password: str  # obrigatório, sem default
+ssl_verify: bool = True
+```
 
 ---
 
-### Severidade MÉDIA
+**MSF-03 · `rpc.py:~189` — Token Duplicado em auth.logout**
 
-**MSF-04** — SSL CERT_NONE mesmo com `ssl=True` (`rpc.py:148`)  
-**CON-02** — LHOST hardcoded `0.0.0.0` em `template_exploit_chain()` → reverse shells não funcionais (`console.py:343`)  
-**GPG-02** — `verify_signature()` usa API errada do python-gnupg; verificação produz resultados incorretos (`gpg_evidence.py:309`)  
-**GPG-03** — Dead code `entry_data` vs `entry_dict` em `add_entry()` cria confusão de nomes (`gpg_evidence.py:78`)  
-**GPG-06** — `sign_file()` lê ficheiro inteiro para RAM; pcaps grandes causam OOM (`gpg_evidence.py:240`)  
-**CHRT-04** — `["cd", working_dir, "&&"]` prepend em lista exec; `&&` não funciona sem shell (`chroot_process.py:136`)  
-**RPT-04** — `html.write_pdf()` síncrono em `async def`; bloqueia event loop 5-30s num Pi 4 (`generator.py:641`)  
-**BLE-01** — `run_full_chain()` não chama `start_capture()`; HFP reporta sucesso sem gravar (`exploit_chain.py:596`)  
+`_call("auth.logout", self._token)` prepend o token novamente via `_call` → servidor recebe `[token, token]` → logout falha e sessão fica aberta indefinidamente.
 
-### Severidade BAIXA
+```python
+# Fix: excluir auth.logout do prepend automático de token
+if method not in ("auth.login", "auth.logout"):
+    params.insert(1, self._token)
+```
 
-**BOOT-03** — Packages duplicados na lista `apk add` (`bootstrap_chroot.sh:140`)  
-**RPT-03** — Jinja2 autoescape não cobre `.md`; HTML em findings passa direto para Markdown (`generator.py:234`)  
-**HID-03** — Dead code `text = ' '.join(cmd.args)` nunca usado (`ducky.py:423`)  
+---
+
+**MSF-TOKEN · `rpc.py:~221` — Token Inválido Persiste Após Falha de Reconnect**
+
+`_reconnect()` define `self._connected = False` mas não limpa `self._token`. Chamadas subsequentes usam o token expirado e entram em loop infinito de retry.
+
+```python
+# Fix:
+self._connected = False
+self._token = None  # limpar token inválido
+```
+
+---
+
+**CON-01 · `metasploit/console.py:~227` — Injeção de Newline em Options**
+
+`f"set {k} {v}"` sem sanitização. Um valor com `\n` injeta comandos adicionais no resource script `.rc`. Exemplo: `RHOSTS` com valor `"1.2.3.4\nset PAYLOAD windows/meterpreter/reverse_https"`.
+
+```python
+# Fix:
+for k, v in options.items():
+    if '\n' in str(k) or '\r' in str(k) or '\n' in str(v) or '\r' in str(v):
+        raise ValueError(f"Newline in option {k!r}={v!r}")
+```
+
+---
+
+**RPT-01 · `reporting/generator.py:~196` — GPG Passphrase em Campo Plaintext**
+
+`ReportConfig.gpg_passphrase: str` num dataclass. Qualquer serialização (JSON, logs, WebSocket) expõe a passphrase GPG.
+
+```python
+# Fix: usar callable como secret provider
+gpg_passphrase_fn: Optional[Callable[[], str]] = None
+```
+
+---
+
+**RPT-02 · `reporting/generator.py:~726` — Name Collision Quebra sign_report()**
+
+`gpg = gpg.GPG()` sobrescreve o alias do módulo `import gnupg as gpg`. Na segunda chamada a `sign_report()`, `gpg.GPG()` lança `AttributeError: 'GPG' object has no attribute 'GPG'`.
+
+```python
+# Fix:
+import gnupg as gnupg_lib
+gpg_instance = gnupg_lib.GPG(gnupghome=self.config.gpg_home)
+```
+
+---
+
+**GPG-01 · `gpg_evidence.py:~258` — Assinatura Binária Falha com TypeError**
+
+Para `DETACHED_BINARY`, abre em modo `'wb'` mas escreve `str(signature)` (string) → `TypeError: a bytes-like object is required`. Nenhuma assinatura binária é jamais escrita.
+
+```python
+# Fix:
+with open(sig_path, 'wb') as f:
+    f.write(signature.data)  # bytes, não str()
+```
+
+---
+
+**GPG-04 · `gpg_evidence.py:~462` — verify_log() Sempre Reporta Adulteração**
+
+Hash calculado *incluindo* o campo `entry_hash`, mas o hash original foi calculado *sem* esse campo. Comparação falha sempre — chain of custody completamente inutilizável.
+
+```python
+# Fix:
+entry_hash_stored = entry.pop("entry_hash", "")
+computed = _compute_entry_hash(entry)
+entry["entry_hash"] = entry_hash_stored  # restaurar
+if computed != entry_hash_stored:
+    tampering_detected = True
+```
+
+---
+
+**GPG-05 · `gpg_evidence.py:~521` — GPGSigner Default sem Key**
+
+`gpg_signer or GPGSigner()` com `key_id=None`. `sign_file()` retorna `False` sem aviso. Todos os artefactos ficam sem assinatura GPG e sem qualquer notificação.
+
+```python
+# Fix: tornar signer obrigatório ou logar aviso explícito
+if gpg_signer is None:
+    logger.warning("no_gpg_signer", msg="Artifacts will not be signed")
+```
+
+---
+
+**HID-01 · `hid/ducky.py:~140` — Keycode Errado para 'w'**
+
+`'v': 0x19` e `'w': 0x19` — colisão. Qualquer payload com `powershell`, `wget`, `whoami`, `www` produz 'v' em vez de 'w'. Também: `'keypad_4': 0x5B` deve ser `0x5C`.
+
+```python
+# Fix:
+'w': 0x1A,
+'keypad_4': 0x5C,
+```
+
+---
+
+**HID-04 · `hid/injector.py:~297` — time.sleep() Bloqueia Event Loop**
+
+`delay()` usa `time.sleep()` em contexto async. Payloads com `DELAY` frequente congelam todas as coroutines.
+
+```python
+# Fix:
+async def delay(self, ms: int) -> None:
+    await asyncio.sleep(ms / 1000.0)
+```
+
+---
+
+**HID-05 · `hid/injector.py:~514` — DELAY Markers Enviados como Keycodes Reais**
+
+`execute_ducky()` escreve todos os reports para `/dev/hidg*` incluindo markers de delay (bit 0x80 set). O kernel interpreta-os como keycodes — garbage characters enviados ao host.
+
+```python
+# Fix:
+for report in hid_reports:
+    if report[0] & 0x80:
+        delay_ms = ((report[0] & 0x7F) << 8) | report[1]
+        await asyncio.sleep(delay_ms / 1000.0)
+    else:
+        await asyncio.to_thread(dev.write, bytes(report))
+```
+
+---
+
+**HID-06 · `hid/gadget.py:~630` — Exporta LAYOUT_* Não Definidas → ImportError**
+
+`__all__` lista `LAYOUT_US`, `LAYOUT_GB`, etc., que não existem em `gadget.py`. Qualquer `from hid.gadget import LAYOUT_US` lança `ImportError`.
+
+```python
+# Fix: remover LAYOUT_* de __all__ em gadget.py
+# (as layouts estão em ducky.py como KeyboardLayout enum)
+```
+
+---
+
+**MQTT-01 · `modules/mqtt.py:~1` — Dependência paho-mqtt Ausente**
+
+`import paho.mqtt.client as mqtt` no topo do ficheiro. `paho-mqtt` não está em `pyproject.toml`. O import falha imediatamente — o módulo MQTT é completamente não funcional.
+
+```toml
+# Fix: adicionar a pyproject.toml
+[tool.poetry.dependencies]
+paho-mqtt = "^2.0"
+```
+
+---
+
+**NET-02 · `network/__init__.py:~807` — ONVIF WS-Discovery Socket Bloqueante**
+
+`_onvif_discovery()` usa `recvfrom` bloqueante (timeout 5s) em `async def`. Bloqueia o event loop durante esse tempo — Pi perde captures BLE/WiFi enquanto aguarda.
+
+```python
+# Fix:
+data, addr = await asyncio.to_thread(sock.recvfrom, 65535)
+```
+
+---
+
+**NET-03 · `network/__init__.py:~519` — SearchSploit exploit_id sem Validação**
+
+`exploit_id` passado diretamente ao subprocess. Path traversal: `"../../../etc/passwd"` força leitura de ficheiros arbitrários.
+
+```python
+# Fix:
+import re
+if not re.match(r'^\d+$', str(exploit_id)):
+    raise ValueError(f"Invalid exploit_id: {exploit_id!r}")
+```
+
+---
+
+**FRAG-01 · `wifi/fragattacks.py:~30` — Path do Developer Hardcoded**
+
+`"/home/andresantos/fragattacks"` como fallback no `_find_fragattacks()`. Falha em qualquer outra máquina, igual ao CHRT-01.
+
+```python
+# Fix: remover path pessoal, deixar apenas paths standard e PATH lookup
+paths = ["/opt/fragattacks", "/usr/local/bin/fragattacks"]
+```
+
+---
+
+**GPG-FILE · `gpg_evidence.py:~240` — Ficheiro Inteiro em RAM para GPG**
+
+`sign_file()` lê o ficheiro inteiro para memória antes de assinar. pcaps de sessões longas (potencialmente GB) causam OOM no Pi.
+
+```python
+# Fix: passar path diretamente ao GPG, não ler para RAM
+result = gpg.sign_file(open(file_path, 'rb'), keyid=key_id, passphrase=passphrase, detach=True)
+```
+
+---
+
+### 3.3 Severidade MÉDIA
+
+**FRAG-02** — FragAttacks requer chipset Cypress específico; Pi WiFi (Broadcom BCM43455) não suportado pela ferramenta de Vanhoef — wrapper não funciona sem hardware adequado  
+**SSID-01** — `ssid_confusion.py` é detector passivo; o ataque real (Evil Twin + redirect 802.11r) não está implementado  
+**ESP32-01** — `esp32.py` faz fingerprinting de hardware mas não executa os 29 comandos HCI do CVE-2025-27840  
+**BTHID-02** — `bt_hid.py` não força `NoInputNoOutput` capability para bypass de pairing; CVE-2023-45866 requer connection sem autenticação  
+**CON-02** — LHOST hardcoded `0.0.0.0` em `template_exploit_chain()` → reverse shells não funcionais (`console.py:~343`)  
+**CON-TIMEOUT** — `execute_rc_script()` faz `process.kill()` no timeout mas não remove o ficheiro `.rc` temporário → acumulação em `/tmp`  
+**GPG-02** — `verify_signature()` usa API errada do python-gnupg; verificação produz resultados incorretos  
+**GPG-03** — Dead code `entry_data` vs `entry_dict` em `add_entry()` — confusão de nomes  
+**CHRT-04** — `["cd", working_dir, "&&"]` em lista `exec` — `&&` não funciona sem shell; `cd` não muda diretório do subprocess  
+**RPT-04** — `html.write_pdf()` síncrono em `async def`; bloqueia event loop 5-30s num Pi 4  
+**RPT-JSON** — Name collision em `_generate_json()`: `findings: [f.__dict__ for f in ...]` e `serialize_obj()` duplicam serialização → saída inconsistente  
+**DUCKY-UNICODE** — `string_to_keycodes()` descarta silenciosamente caracteres Unicode fora do ASCII básico; payloads com texto internacional incompletos  
+**GADGET-PATH** — `instance` em `add_hid_function()` embeddido directamente no path configfs sem validação; argumento malicioso pode escapar do diretório gadget  
+**CAM-BLOCK** — `camera/enumeration.py::test_default_creds()` usa sockets bloqueantes em `async def`  
+**CAM-CVE** — `camera/vuln_check.py::load_cve_db()` sem path default; CVE DB não carregada por omissão; todos os checks retornam vazio  
+**MSF-04** — `ssl_context.verify_mode = ssl.CERT_NONE` mesmo com `ssl=True` — sem validação de hostname  
+
+---
+
+### 3.4 Severidade BAIXA
+
+**BOOT-03** — Packages duplicados na lista `apk add` (`bootstrap_chroot.sh:~140`)  
+**RPT-03** — Jinja2 autoescape não ativo para `.md`; HTML em findings não escapado  
+**HID-03** — Dead code `text = ' '.join(cmd.args)` nunca usado (`ducky.py:~423`)  
 **BLE-QUIRKS** — Model IDs placeholder em `device_quirks.json` — quirks nunca aplicados  
+**SCHEDULER-PERSIST** — `core/scheduler.py` sem persistência; schedule perdido no restart  
 
 ---
 
-## 4. Avaliação Geral de Arquitetura
+## 4. Avaliação Geral
 
-### 4.1 Arquitetura · 7/10
+### 4.1 Arquitetura · 7.5/10
 
 **Pontos fortes:**
 
-O plano arquitetural do Urban Hack Sentinel v3 é bem pensado para um projeto académico. A escolha de async-first com `asyncio` como primitiva central é correta para um tool de field operations — I/O bound workloads (scans de rede, BLE, subprocess de ferramentas externas) beneficiam diretamente do modelo não-bloqueante. O EventBus (pub/sub com `asyncio.Queue`) é um padrão adequado para desacoplar módulos heterogéneos.
+A arquitetura async-first com asyncio como primitiva central é a escolha correta para este tipo de tool — I/O bound dominante (scans, BLE, subprocess de ferramentas externas) beneficia do modelo não-bloqueante. O EventBus pub/sub com `asyncio.Queue` desacopla módulos heterogéneos de forma elegante. Pydantic v2 para config, structlog para logging estruturado, SQLite WAL + Redis para dados — stack moderna e adequada ao Pi.
 
-O SQLite WAL mode para dados estruturados e Redis para pub/sub é uma stack razoável para um Pi: zero config, zero infra externa, mas com capacidade de streaming e cache. A escolha de Pydantic v2 para configuração com hot-reload é moderna e certa.
+O novo plugin system com entry points dinâmicos, dependency graph e lifecycle management é infraestrutura de produção. O scheduler com cron expressions e a adição de `/healthz` + Prometheus completam S0 de forma sólida. O CI/CD com ruff, mypy strict, pytest, Trivy e pip-audit é uma adição de alto valor — projetos académicos raramente têm este nível de automação.
 
-**Limitações estruturais:**
+**Limitações:**
 
-O modelo async não é aplicado de forma consistente — vários módulos introduzem `time.sleep()`, sockets bloqueantes e leituras de ficheiro inteiro em funções `async def` (RPT-04, ONVIF-01, HID-04, GPG-06), o que contradiz o princípio async-first e pode travar o Pi em momentos críticos de field operation.
+O modelo async não é aplicado uniformemente — `bt_hid.py` usa `python-dbus` síncrono (BTHID-01), `camera/enumeration.py` tem sockets bloqueantes, `reporting/generator.py` chama WeasyPrint de forma bloqueante (RPT-04). O princípio async-first existe no design mas não na prática de implementação.
 
-O plugin system está anunciado mas incompleto: existe apenas para o módulo WiFi e sem o mecanismo de registry/entry-points dinâmicos que permitiria adicionar módulos novos sem modificar o código core. Os módulos S4 (Metasploit, Credential, Report) são importados diretamente pelo ExploitRunner, criando acoplamento tight em vez de passar pelo EventBus.
+O `ExploitRunner` acopla diretamente 5 módulos via import em vez de routing pelo EventBus. O `network/__init__.py` com 1072 linhas viola o princípio de ficheiro único por classe planeado no MASTER_PLAN.
 
-A ausência de `/healthz` e `/metrics` Prometheus é uma lacuna real — num Pi em campo não há ecrã; saber se o processo está vivo e saudável via HTTP é essencial para qualquer operação autónoma.
+**Sugestão:** Definir uma política explícita: "toda operação I/O > 100ms usa `asyncio.to_thread()`". Executá-la como checklist no code review.
 
 ---
 
 ### 4.2 Performance · 5/10
 
-**Contexto de hardware:** Raspberry Pi 4 (4GB RAM, Cortex-A72 1.8GHz) ou Pi 5 (8GB RAM, Cortex-A76 2.4GHz). O projeto declaradamente targets ARM64.
+**Contexto:** Raspberry Pi 4 (Cortex-A72 1.8GHz, 4GB RAM) / Pi 5 (Cortex-A76 2.4GHz, 8GB RAM).
 
-**Problemas identificados:**
+**Bloqueios identificados:**
 
-*Event loop contention* — Os bloqueios mais críticos são: WeasyPrint PDF (5-30s no Pi 4), ONVIF socket (5s), DuckyScript DELAYs (seconds por payload), GPG signing de ficheiros grandes (variável). Qualquer um destes bloqueia **todas** as coroutines durante esse tempo — o Pi deixa de responder a BLE events, não processa callbacks, não envia WebSocket updates. Num tool de field, isto pode significar perder captures.
+| Operação | Bloqueio | Impacto no Pi 4 |
+|---|---|---|
+| WeasyPrint PDF | `html.write_pdf()` síncrono | 5–30s de event loop bloqueado |
+| ONVIF WS-Discovery | `recvfrom` bloqueante | 5s por sessão |
+| BT HID (python-dbus) | Toda operação D-Bus | 2–10s por ligação |
+| DuckyScript DELAY | `time.sleep()` | Proporcional à soma dos delays |
+| GPG signing de ficheiros grandes | Lê ficheiro inteiro para RAM | OOM em sessões longas |
+| Camera cred testing | Sockets bloqueantes | Variável |
 
-*Sem resource limits entre módulos* — Um scan Nmap com `-A` (aggressive) mais Nuclei runner mais Metasploit RPC simultâneos podem saturar a CPU de um Pi 4 facilmente. O `ProcessManager` tem suporte a cgroups v2 no plano mas não está implementado.
+Em field operation, qualquer destes bloqueios pode causar perda de captures BLE ou WiFi enquanto outra operação está a correr.
 
-*Credential Manager em memória* — `CredentialManager._credentials` acumula todas as credenciais em RAM (`Dict[str, Credential]`). Em sessões longas com muitos hosts, pode crescer indefinidamente.
+**O que funciona bem:** Pipeline WiFi (subprocess + asyncio.create_subprocess_exec), EventBus com backpressure natural, NmapScanner com streaming XML.
 
-*WeasyPrint* — biblioteca C com binding Python, muito pesada para ARM. Numa sessão de 8 horas, gerar um relatório PDF pode ser a operação mais cara do projeto. `asyncio.to_thread()` é a correção imediata; alternativa a longo prazo: usar `pandoc` via subprocess (mais leve no Pi).
-
-**O que funciona bem:** A pipeline WiFi (scanner + airodump + hashcat) é subprocess-based e naturalmente async. O NmapScanner com `asyncio.create_subprocess_exec` e streaming de XML é eficiente. O EventBus com `asyncio.Queue` tem backpressure natural.
-
----
-
-### 4.3 Modularidade · 6/10
-
-**Pontos fortes:**
-
-A divisão em domínios (`ble/`, `wifi/`, `network/`, `hid/`, `metasploit/`, `reporting/`, `credential/`, `exploit/`) é coerente e reflecte o threat model urbano. Cada domínio tem `__init__.py` com exports bem definidos. Os dataclasses (`AttackResult`, `ExploitResult`, `Credential`, `Finding`) criam contratos de dados razoavelmente estáveis entre módulos.
-
-**Limitações:**
-
-A `ExploitRunner` importa diretamente `MetasploitRPC`, `MetasploitConsole`, `NucleiRunner`, `SearchSploitIntegration` e `ChrootProcessManager` — 5 módulos diferentes com import direto. Qualquer mudança numa dessas interfaces exige atualizar `ExploitRunner`. A intenção de routing via EventBus não está implementada.
-
-O módulo `network/__init__.py` com 1072 linhas é demasiado monolítico — `NmapScanner`, `NucleiRunner`, `SearchSploitIntegration`, `RouterScanner`, `CameraDiscovery` e `NetworkModule` num único ficheiro. A divisão planeada no MASTER_PLAN (um ficheiro por classe) deveria ser implementada.
-
-Módulos que faltam e que criam buracos na modularidade: `camera/enumeration.py`, `camera/vuln_check.py`, `ui/api/main.py`, `ui/tui/app.py`, `ui/cli/main.py`, `core/health.py`.
+**Sugestão a curto prazo:** `asyncio.to_thread()` para os 4 maiores bloqueios (WeasyPrint, ONVIF, BT HID, camera creds) resolve 90% dos problemas sem refactoring.
 
 ---
 
-### 4.4 Compatibilidade · 4/10
+### 4.3 Modularidade · 6.5/10
+
+**Melhorou** desde o sprint anterior — o plugin system com entry points dinâmicos é o passo certo. A divisão em domínios (`ble/`, `wifi/`, `network/`, `hid/`, `metasploit/`, `reporting/`) é coerente.
+
+**Limitações persistentes:**
+
+- `network/__init__.py` monolítico (1072 linhas, 6 classes) — contraria a intenção do MASTER_PLAN
+- `ExploitRunner` com imports diretos de 5 módulos — sem routing pelo EventBus
+- Novos módulos S5 (`bt_hid.py`, `fragattacks.py`, `ssid_confusion.py`, `esp32.py`, `mqtt.py`) adicionados como ficheiros avulso em `modules/` sem registar no plugin system
+- Entry points em `pyproject.toml` não atualizados para os novos módulos
+
+---
+
+### 4.4 Compatibilidade · 5/10
 
 | Target | Suporte | Notas |
 |---|---|---|
-| **Raspberry Pi 5 (ARM64)** | ✅ First-class | Target declarado; Alpine chroot ARM64 |
-| **Raspberry Pi 4 (ARM64)** | ✅ Funcional | Mesma arquitectura; RAM pode ser limitante com Metasploit |
-| **Raspberry Pi 3 (ARM32)** | ❌ Não suportado | Python 3.11 arm64 só; sem ARM32 path |
-| **Raspberry Pi Zero 2W** | ⚠️ Marginal | ARM64 mas 512MB RAM — Metasploit + BlueZ + Python não cabem |
-| **x86_64 Linux (dev machine)** | ⚠️ Parcial | Código Python corre; `dbus-fast`/`bleak` funcionam; USB gadget configfs e HID requerem kernel OTG |
-| **x86_64 com VM** | ⚠️ Degradado | BlueZ passthrough requer USB BT adapter; WiFi monitor mode requer passthrough |
-| **macOS / Windows** | ❌ Não suportado | `dbus-fast`, `uinput`, configfs são Linux-only by design |
-| **Kali Linux ARM64** | ✅ Funcional | Todas as ferramentas externas disponíveis via apt |
-| **Alpine Linux (chroot)** | ✅ By design | Bootstrap script cria chroot ARM64 |
+| Raspberry Pi 5 ARM64 | ✅ | Target declarado; Docker ARM64 |
+| Raspberry Pi 4 ARM64 | ✅ | Mesmo code path; RAM pode ser limitante com MSF |
+| Raspberry Pi 3 ARM32 | ❌ | Python 3.11 arm64 apenas |
+| Raspberry Pi Zero 2W | ⚠️ | ARM64 mas 512MB RAM — MSF + BlueZ não cabem |
+| x86_64 Linux (dev) | ⚠️ | Python corre; USB gadget + BT exigem hardware |
+| x86_64 via Docker | ✅ | Docker multi-arch adicionado — melhoria real |
+| macOS / Windows | ❌ | dbus-fast, uinput, configfs são Linux-only |
+| Kali Linux ARM64 | ✅ | Todas as ferramentas disponíveis |
+| Alpine chroot | ✅ | Bootstrap script funcional (sem checksum) |
 
-**Limitações de compatibilidade:**
+**Melhoria real:** Docker multi-arch ARM64/AMD64 permite desenvolver sem hardware em x86_64.
 
-O USB Gadget (configfs HID) requer que o Pi esteja ligado via USB OTG — funciona apenas com Pi 4/5 ligados a um host via USB-C como device, ou com hat de USB gadget. Num Pi com alimentação normal, configfs existe mas sem UDC (USB Device Controller) disponível.
-
-O `core/health.py` ausente e a falta de CI/CD significa que não há teste automatizado de compatibilidade — qualquer alteração pode quebrar silenciosamente em ARM64 real.
-
-A dependência de `bluealsa` para HFP audio não está em `pyproject.toml` nem no bootstrap script — é um sistema Debian que precisa de instalação manual.
+**Ainda em falta:** mock backends para WiFi/BLE/HID — sem eles, o CI não consegue testar os módulos de ataque (os testes atuais testam apenas parsing e estrutura de dados, não o fluxo de ataque completo).
 
 ---
 
-### 4.5 Segurança da Própria Ferramenta · 4/10
+### 4.5 Segurança da Ferramenta · 4/10
 
-Paradoxalmente, uma ferramenta de segurança com bugs de segurança sérios no seu próprio código:
+Paradoxo de uma ferramenta de segurança com vulnerabilidades sérias no próprio código:
 
-- **MSF-01** — password default pública para o daemon Metasploit
 - **HID-02** — pickle deserialization = RCE via ficheiros DuckyScript
-- **BOOT-01** — bootstrap sem verificação de integridade do rootfs
-- **CHRT-01** — path hardcoded em `ensure_chroot()` quebra isolamento pretendido
+- **CHRT-01** — path hardcoded quebra isolamento pretendido da chroot
+- **BOOT-01** — rootfs Alpine instalado sem verificação de integridade
+- **MSF-01** — password default pública para daemon Metasploit
 - **RPT-01** — passphrase GPG em campo de dataclass serializável
-- **CRED-01** — export de credenciais capturadas em CSV/JSON plaintext sem encriptação
+- **GPG-04** — chain of custody sempre reporta adulteração → evidências académicas inválidas
 
-Num contexto académico em que o Pi pode ser confiscado durante uma demonstração, a exposição de credenciais capturadas (CRED-01) e a passphrase GPG (RPT-01) são riscos reais.
+Num contexto em que o Pi pode ser confiscado durante uma demonstração, as credenciais capturadas e a passphrase GPG em memória são riscos reais.
 
 ---
 
 ### 4.6 Rating Geral
 
-| Dimensão | Rating | Nota |
-|---|---|---|
-| **Conceito e Plano** | 9/10 | MASTER_PLAN ambicioso, bem estruturado, urbano e relevante |
-| **Arquitetura Core (S0)** | 7/10 | EventBus + ProcessMgr + Config + Storage sólidos |
-| **WiFi Module (S1)** | 8/10 | Pipeline mais maduro; WPS + Handshake + Geo funcionais |
-| **BLE/WhisperPair (S2)** | 6/10 | 4 estratégias KBP implementadas; HFP e quirks por completar |
-| **Network/Camera (S3)** | 5/10 | Camera enum/vuln ausentes; NET-01 crítico por resolver |
-| **Metasploit/Reporting (S4)** | 4/10 | Muito volume mas MSF RPC e GPG chain of custody quebrados |
-| **HID/Dashboard (S5)** | 3/10 | HID bugs funcionais; UI (FastAPI/TUI/CLI) ausente |
-| **CVE Coverage** | 3/10 | 3/15 CVEs com implementação real; restantes ausentes ou FRACO |
-| **Qualidade de Código** | 5/10 | Bons padrões mas inconsistentemente aplicados; 36 bugs |
-| **Segurança da Ferramenta** | 4/10 | Vários bugs de segurança na própria ferramenta |
-| **OVERALL** | **5.4/10** | Projeto academicamente sólido em conceito; implementação em ~53% com bugs bloqueantes |
+| Dimensão | Rating Anterior | Rating Atual | Nota |
+|---|---|---|---|
+| Conceito e Plano | 9/10 | **9/10** | MASTER_PLAN ambicioso, bem estruturado |
+| Arquitetura Core (S0) | 7/10 | **7.5/10** | Health, plugins, scheduler, CI, Docker adicionados |
+| WiFi Module (S1) | 8/10 | **8/10** | Pipeline sólido; testes adicionados |
+| BLE/WhisperPair (S2) | 6/10 | **6.5/10** | HFP integrado; quirks placeholder persistem |
+| Network/Camera (S3) | 5/10 | **6/10** | Camera modules adicionados; bugs de blocking e CVE DB |
+| Metasploit/Reporting (S4) | 4/10 | **4/10** | Bugs críticos não resolvidos; volume sem qualidade |
+| HID/Dashboard (S5) | 3/10 | **4.5/10** | Novos módulos; UI ausente; bugs funcionais |
+| CVE Coverage | 3/10 | **3.5/10** | 3/15 ÓTIMA/MÉDIO; 4 FRACO novos adicionados |
+| Qualidade de Código | 5/10 | **5/10** | Padrões bons mas inconsistentes; 43 bugs |
+| Segurança da Ferramenta | 4/10 | **4/10** | Bugs críticos persistem |
+| **OVERALL** | **5.4/10** | **5.8/10** | Progresso real em infraestrutura; exploits ainda incompletos |
 
 ---
 
 ### 4.7 Melhorias Prioritárias
 
-**Semana 1 — Resolver bugs bloqueantes (5h total)**
+**Nível 1 — Bugs que quebram funcionalidade core (< 4h total)**
 
 | # | Fix | Esforço |
 |---|-----|---------|
 | 1 | MSF-02: dict → array em msgpack | 15 min |
-| 2 | CHRT-01: path hardcoded do developer | 5 min |
+| 2 | CHRT-01: path hardcoded → `Path(__file__).parents[4]` | 5 min |
 | 3 | HID-01: keycode 'w' = 0x1A | 5 min |
-| 4 | HID-05: check `report[0] & 0x80` antes de escrever para hidg | 30 min |
-| 5 | GPG-04: pop entry_hash antes de calcular hash de verificação | 20 min |
-| 6 | HID-02: substituir pickle por JSON | 1h |
-| 7 | NET-01: validar targets com `ipaddress.ip_network()` | 30 min |
-| 8 | CRED-02: lançar `NotImplementedError` em `validate_credential()` | 10 min |
-| 9 | CHRT-03: bind_cmds como lista-de-listas | 30 min |
-| 10 | HID-06: remover LAYOUT_* de `__all__` em gadget.py | 5 min |
+| 4 | HID-05: check `report[0] & 0x80` antes de escrever hidg | 30 min |
+| 5 | GPG-04: pop `entry_hash` antes de calcular hash | 20 min |
+| 6 | MQTT-01: adicionar `paho-mqtt` ao pyproject.toml | 5 min |
+| 7 | BTHID-01: migrar bt_hid.py para dbus-fast | 2h |
+| 8 | HID-02: substituir pickle por JSON em ducky.py | 1h |
 
-**Semana 2 — Completar o que está a 80%**
+**Nível 2 — Completar o que está a 80% (< 8h total)**
 
 | # | Tarefa | Esforço |
 |---|--------|---------|
-| 11 | Integrar `start_capture()` em `run_full_chain()` (BLE-01) | 1h |
-| 12 | Implementar `core/health.py` — `/healthz` + Prometheus `/metrics` | 3h |
-| 13 | `camera/enumeration.py` — default creds, auth test | 4h |
-| 14 | `camera/vuln_check.py` — CVE mapping | 4h |
-| 15 | Substituir `time.sleep()` por `asyncio.sleep()` em HID (HID-04) + WeasyPrint por `asyncio.to_thread()` (RPT-04) | 30 min |
+| 9 | NET-01: validar targets com ipaddress.ip_network() | 30 min |
+| 10 | HID-04: time.sleep() → asyncio.sleep() | 10 min |
+| 11 | RPT-04: WeasyPrint → asyncio.to_thread() | 30 min |
+| 12 | NET-02: ONVIF socket → asyncio.to_thread() | 30 min |
+| 13 | GPG-01: str() → .data bytes na assinatura binária | 10 min |
+| 14 | RPT-02: import gnupg as gnupg_lib, evitar name collision | 5 min |
+| 15 | FRAG-01: remover path pessoal de fragattacks.py | 5 min |
+| 16 | CAM-CVE: criar CVE DB default mínima em camera/vuln_check.py | 2h |
+| 17 | CRED-02: implementar ou lançar NotImplementedError | 1h |
 
-**Semana 3 — Fechar gaps de CVE com maior impacto visual**
+**Nível 3 — CVEs com maior impacto visual**
 
-| # | CVE | Esforço | Impacto Académico |
-|---|-----|---------|-------------------|
-| 16 | CVE-2025-27840 — Deteção passiva ESP32 por OUI `A4:CF:12` no FastPairScanner | 2h | Alto — muitos IoT urbanos usam ESP32 |
-| 17 | TPMS — `rtl_433` subprocess wrapper + GPS correlation | 4h | Muito alto — tracking de carros em tempo real |
-| 18 | MQTT — `paho-mqtt` subscriber; enumerate topics `#`; log mensagens | 3h | Alto — infra urbana real |
-| 19 | AirDrop — filtro AWDL no FastPairScanner | 3h | Médio-alto — impacto de privacidade imediato |
-
-**A Longo Prazo — Para v3 Completo**
-
-1. UI completa (S5.4–S5.7) — FastAPI + React + TUI + CLI; maior gap de usabilidade
-2. CI/CD GitHub Actions com ruff + mypy + pytest (S0.9)
-3. Model IDs reais no `device_quirks.json`
-4. Kr00k: integrar `r00kie-kr00kie` via ChrootProcessManager
-5. FragAttacks: wrapping da tool de Vanhoef
-6. Sprint 6 — hardening, E2E tests, release SBOM, docs MkDocs
+| # | CVE | Esforço | Impacto |
+|---|-----|---------|---------|
+| 18 | CVE-2025-27840 — enviar comandos HCI não documentados via `hcitool cmd` | 3h | Alto |
+| 19 | MQTT — adicionar paho-mqtt + topic subscribe + enumeration real | 4h | Alto |
+| 20 | CVE-2023-45866 OTA — forçar NoInputNoOutput capability em bt_hid.py | 4h | Muito alto |
+| 21 | AirDrop — filtro AWDL/company ID Apple no FastPairScanner | 2h | Médio |
+| 22 | TPMS — wrapper `rtl_433` + GPS correlation | 4h | Muito alto visualmente |
 
 ---
 
 ## 5. Sumário Executivo de Bugs
 
-| ID | Módulo | Ficheiro | Linha | Severidade | Estado |
-|----|--------|----------|-------|------------|--------|
-| MSF-02 | MSF RPC | `metasploit/rpc.py` | 204 | 🔴 CRÍTICO | Novo |
-| CRED-02 | Credential | `credential/manager.py` | 416 | 🔴 CRÍTICO | Novo |
-| CHRT-01 | Chroot | `core/chroot_process.py` | ~370 | 🔴 CRÍTICO | Novo |
-| HID-02 | DuckyScript | `hid/ducky.py` | 562 | 🔴 CRÍTICO | Novo |
-| NET-01 | Network | `network/__init__.py` | 193 | 🔴 CRÍTICO | Persistente |
-| BOOT-01 | Bootstrap | `bootstrap_chroot.sh` | 58 | 🟠 ALTO | Novo |
-| BOOT-02 | Bootstrap | `bootstrap_chroot.sh` | 85 | 🟠 ALTO | Novo |
-| CHRT-02 | Chroot | `core/chroot_process.py` | 240 | 🟠 ALTO | Novo |
-| CHRT-03 | Chroot | `core/chroot_process.py` | 111 | 🟠 ALTO | Novo |
-| CRED-01 | Credential | `credential/manager.py` | 434 | 🟠 ALTO | Novo |
-| MSF-01 | MSF RPC | `metasploit/rpc.py` | 107 | 🟠 ALTO | Novo |
-| MSF-03 | MSF RPC | `metasploit/rpc.py` | 189 | 🟠 ALTO | Novo |
-| CON-01 | MSF Console | `metasploit/console.py` | 227 | 🟠 ALTO | Novo |
-| RPT-01 | Report Gen | `reporting/generator.py` | 196 | 🟠 ALTO | Novo |
-| RPT-02 | Report Gen | `reporting/generator.py` | 726 | 🟠 ALTO | Novo |
-| GPG-01 | GPG Evidence | `gpg_evidence.py` | 258 | 🟠 ALTO | Novo |
-| GPG-04 | GPG Evidence | `gpg_evidence.py` | 462 | 🟠 ALTO | Novo |
-| GPG-05 | GPG Evidence | `gpg_evidence.py` | 521 | 🟠 ALTO | Novo |
-| HID-01 | DuckyScript | `hid/ducky.py` | 140 | 🟠 ALTO | Novo |
-| HID-04 | HID Injector | `hid/injector.py` | 297 | 🟠 ALTO | Novo |
-| HID-05 | HID Injector | `hid/injector.py` | 514 | 🟠 ALTO | Novo |
-| HID-06 | USB Gadget | `hid/gadget.py` | 630 | 🟠 ALTO | Novo |
-| NET-02 | Network | `network/__init__.py` | 807 | 🟠 ALTO | Persistente |
-| NET-03 | Network | `network/__init__.py` | 519 | 🟠 ALTO | Novo |
-| MSF-04 | MSF RPC | `metasploit/rpc.py` | 148 | 🟡 MÉDIO | Novo |
-| CON-02 | MSF Console | `metasploit/console.py` | 343 | 🟡 MÉDIO | Novo |
-| GPG-02 | GPG Evidence | `gpg_evidence.py` | 309 | 🟡 MÉDIO | Novo |
-| GPG-03 | GPG Evidence | `gpg_evidence.py` | 78 | 🟡 MÉDIO | Novo |
-| GPG-06 | GPG Evidence | `gpg_evidence.py` | 240 | 🟡 MÉDIO | Novo |
-| CHRT-04 | Chroot | `core/chroot_process.py` | 136 | 🟡 MÉDIO | Novo |
-| RPT-04 | Report Gen | `reporting/generator.py` | 641 | 🟡 MÉDIO | Novo |
-| BLE-01 | BLE Exploit | `ble/exploit_chain.py` | 596 | 🟡 MÉDIO | Novo |
-| BOOT-03 | Bootstrap | `bootstrap_chroot.sh` | 140 | 🟢 BAIXO | Novo |
-| RPT-03 | Report Gen | `reporting/generator.py` | 234 | 🟢 BAIXO | Novo |
-| HID-03 | DuckyScript | `hid/ducky.py` | 423 | 🟢 BAIXO | Novo |
-| BLE-QUIRKS | Device Quirks | `device_quirks.json` | — | 🟢 BAIXO | Persistente |
+| ID | Módulo | Ficheiro | Severidade | Status |
+|----|--------|----------|------------|--------|
+| MSF-02 | MSF RPC | `metasploit/rpc.py` | 🔴 CRÍTICO | Persiste |
+| HID-02 | DuckyScript | `hid/ducky.py` | 🔴 CRÍTICO | Persiste |
+| CHRT-01 | Chroot | `core/chroot_process.py` | 🔴 CRÍTICO | Persiste |
+| CRED-02 | Credential | `credential/manager.py` | 🔴 CRÍTICO | Persiste |
+| NET-01 | Network | `network/__init__.py` | 🔴 CRÍTICO | Persiste |
+| BTHID-01 | BT HID | `modules/bt_hid.py` | 🟠 ALTO | Novo (S5) |
+| MQTT-01 | MQTT | `modules/mqtt.py` | 🟠 ALTO | Novo (S5) |
+| BOOT-01 | Bootstrap | `bootstrap_chroot.sh` | 🟠 ALTO | Persiste |
+| BOOT-02 | Bootstrap | `bootstrap_chroot.sh` | 🟠 ALTO | Persiste |
+| CHRT-02 | Chroot | `core/chroot_process.py` | 🟠 ALTO | Persiste |
+| CHRT-03 | Chroot | `core/chroot_process.py` | 🟠 ALTO | Persiste |
+| CRED-01 | Credential | `credential/manager.py` | 🟠 ALTO | Persiste |
+| MSF-01 | MSF RPC | `metasploit/rpc.py` | 🟠 ALTO | Persiste |
+| MSF-03 | MSF RPC | `metasploit/rpc.py` | 🟠 ALTO | Persiste |
+| MSF-TOKEN | MSF RPC | `metasploit/rpc.py` | 🟠 ALTO | Novo |
+| CON-01 | MSF Console | `metasploit/console.py` | 🟠 ALTO | Persiste |
+| RPT-01 | Report Gen | `reporting/generator.py` | 🟠 ALTO | Persiste |
+| RPT-02 | Report Gen | `reporting/generator.py` | 🟠 ALTO | Persiste |
+| GPG-01 | GPG Evidence | `gpg_evidence.py` | 🟠 ALTO | Persiste |
+| GPG-04 | GPG Evidence | `gpg_evidence.py` | 🟠 ALTO | Persiste |
+| GPG-05 | GPG Evidence | `gpg_evidence.py` | 🟠 ALTO | Persiste |
+| GPG-FILE | GPG Evidence | `gpg_evidence.py` | 🟠 ALTO | Novo |
+| HID-01 | DuckyScript | `hid/ducky.py` | 🟠 ALTO | Persiste |
+| HID-04 | HID Injector | `hid/injector.py` | 🟠 ALTO | Persiste |
+| HID-05 | HID Injector | `hid/injector.py` | 🟠 ALTO | Persiste |
+| HID-06 | USB Gadget | `hid/gadget.py` | 🟠 ALTO | Persiste |
+| NET-02 | Network | `network/__init__.py` | 🟠 ALTO | Persiste |
+| NET-03 | Network | `network/__init__.py` | 🟠 ALTO | Persiste |
+| FRAG-01 | FragAttacks | `wifi/fragattacks.py` | 🟡 MÉDIO | Novo (S5) |
+| FRAG-02 | FragAttacks | `wifi/fragattacks.py` | 🟡 MÉDIO | Novo (S5) |
+| SSID-01 | SSID Confusion | `modules/ssid_confusion.py` | 🟡 MÉDIO | Novo (S5) |
+| ESP32-01 | ESP32 | `modules/esp32.py` | 🟡 MÉDIO | Novo (S5) |
+| BTHID-02 | BT HID | `modules/bt_hid.py` | 🟡 MÉDIO | Novo (S5) |
+| CON-02 | MSF Console | `metasploit/console.py` | 🟡 MÉDIO | Persiste |
+| CON-TIMEOUT | MSF Console | `metasploit/console.py` | 🟡 MÉDIO | Novo |
+| GPG-02 | GPG Evidence | `gpg_evidence.py` | 🟡 MÉDIO | Persiste |
+| GPG-03 | GPG Evidence | `gpg_evidence.py` | 🟡 MÉDIO | Persiste |
+| CHRT-04 | Chroot | `core/chroot_process.py` | 🟡 MÉDIO | Persiste |
+| RPT-04 | Report Gen | `reporting/generator.py` | 🟡 MÉDIO | Persiste |
+| RPT-JSON | Report Gen | `reporting/generator.py` | 🟡 MÉDIO | Novo |
+| DUCKY-UNICODE | DuckyScript | `hid/ducky.py` | 🟡 MÉDIO | Novo |
+| GADGET-PATH | USB Gadget | `hid/gadget.py` | 🟡 MÉDIO | Novo |
+| CAM-BLOCK | Camera | `camera/enumeration.py` | 🟡 MÉDIO | Novo (S5) |
+| CAM-CVE | Camera | `camera/vuln_check.py` | 🟡 MÉDIO | Novo (S5) |
+| MSF-04 | MSF RPC | `metasploit/rpc.py` | 🟡 MÉDIO | Persiste |
+| BOOT-03 | Bootstrap | `bootstrap_chroot.sh` | 🟢 BAIXO | Persiste |
+| RPT-03 | Report Gen | `reporting/generator.py` | 🟢 BAIXO | Persiste |
+| HID-03 | DuckyScript | `hid/ducky.py` | 🟢 BAIXO | Persiste |
+| BLE-QUIRKS | Device Quirks | `device_quirks.json` | 🟢 BAIXO | Persiste |
+| SCHEDULER-PERSIST | Scheduler | `core/scheduler.py` | 🟢 BAIXO | Novo |
 
-**Total: 36 bugs — 5 críticos · 18 altos · 8 médios · 5 baixos**
-
-**Bugs resolvidos desde o relatório Sprint 3:** BLE-01 a BLE-09, NET-02 a NET-09 (versão anterior) — 17 corrigidos.
+**Total: 50 bugs — 5 críticos · 23 altos · 17 médios · 5 baixos**  
+**Novos neste sprint: 14 | Resolvidos desde S3: 1 (BLE-01 — HFP pipeline)**
 
 ---
 
-*Revisão estática sobre branch `main` commit `8b65ad9`. Linhas verificadas contra código fonte. Fixes propostos são minimais — sem refactoring adicional ao necessário.*
+## 6. Sugestões Adicionais
+
+Além dos fixes de bugs, estas sugestões melhorariam significativamente o projeto em dimensões além da correção de erros.
+
+---
+
+### 6.1 Mock Backend System — Desenvolver sem Hardware
+
+O maior bloqueio atual é não poder testar módulos de ataque sem WiFi adapter, BT adapter, Pi físico, etc. A solução é uma camada de abstração:
+
+```python
+# Adicionar a cada módulo:
+class WiFiBackend(Protocol):
+    async def scan(self, interface: str) -> List[NetworkInfo]: ...
+    async def deauth(self, bssid: str, client: str) -> bool: ...
+
+class RealWiFiBackend(WiFiBackend):
+    """Usa iw + airodump-ng reais."""
+    ...
+
+class MockWiFiBackend(WiFiBackend):
+    """Retorna dados simulados. Ativa com URBAN_HS_BACKEND=mock."""
+    async def scan(self, interface: str) -> List[NetworkInfo]:
+        return FIXTURE_NETWORKS  # carregado de tests/fixtures/
+```
+
+Com `URBAN_HS_BACKEND=mock` no `.env`, o CI consegue testar todo o fluxo de ataque sem hardware. Quando o Pi chega, basta remover a variável de ambiente.
+
+---
+
+### 6.2 mac80211_hwsim — WiFi Virtual para Testes Reais
+
+Para testar handshake capture e deauth sem adaptador físico:
+
+```bash
+sudo modprobe mac80211_hwsim radios=3
+# Cria wlan0, wlan1, wlan2 — interfaces WiFi virtuais
+# wlan0: AP (hostapd)
+# wlan1: cliente (wpa_supplicant)
+# wlan2: monitor para capture (airodump-ng)
+```
+
+O kernel simula rádio 802.11 completo — monitor mode, injeção de frames, handshake real. Os testes de `HandshakeAttack` e `WPSPixieAttack` podem correr em GitHub Actions sem hardware.
+
+---
+
+### 6.3 Graylog / Loki para Logs de Campo
+
+Em field operation o Pi está headless. Logs via `structlog` para JSON são bons mas precisam de destino. Sugestão: adicionar output GELF ou Loki:
+
+```python
+# Em core/logger.py, adicionar handler opcional
+if config.log_remote_url:
+    structlog.configure(
+        processors=[..., structlog.processors.JSONRenderer()],
+        logger_factory=GELFLoggerFactory(config.log_remote_url)
+    )
+```
+
+Um laptop na mesma rede recebe todos os logs em tempo real via Graylog ou Grafana/Loki. Para uma demonstração académica, ver logs em tempo real numa dashboard é visualmente impactante.
+
+---
+
+### 6.4 Threat Intelligence — Correlacionar MACs com OUI DB
+
+O `FastPairScanner` já recolhe MACs. Adicionar lookup automático de fabricante via OUI:
+
+```python
+from manuf import manuf  # pip install manuf
+p = manuf.MacParser()
+vendor = p.get_manuf("AA:BB:CC:DD:EE:FF")  # "Google, Inc."
+```
+
+Isto permite, em tempo real, classificar dispositivos vistos em campo: "3 Google Pixel, 2 Apple AirPods, 1 ESP32 (Espressif)". Para a demonstração urbana, é imediatamente legível e impactante.
+
+---
+
+### 6.5 Timeline View nos Relatórios
+
+O `AuditSession` tem timestamps em todos os eventos. Adicionar uma visualização de timeline ao relatório PDF/HTML:
+
+```
+08:32:01 | WiFi Scan → 12 redes encontradas
+08:32:45 | Deauth → AA:BB:CC:DD:EE:FF desligado
+08:32:47 | Handshake capturado → "CafeRede"
+08:33:12 | BLE Scan → CVE-2025-36911 candidato encontrado
+08:35:00 | WhisperPair exploit → Account key escrita
+```
+
+Uma timeline cronológica num relatório académico demonstra o fluxo de um ataque real de forma muito mais convincente do que tabelas de resultados.
+
+---
+
+### 6.6 Cobertura de Testes — Objetivo 60% para S6
+
+Estado atual: ~15% de cobertura (WiFi scanner + BLE structure). Para S6:
+
+1. **Fixtures** — criar `tests/fixtures/` com pcaps, JSON de scan results, e BLE advertisements reais capturados
+2. **Mock subprocessos** — `unittest.mock.patch("asyncio.create_subprocess_exec")` retorna output fixo
+3. **Cobertura mínima por módulo** — WiFi: 70%, BLE: 60%, Network: 50%, HID: 50%, MSF: 40%, Report: 60%
+
+Sem cobertura de testes, qualquer refactoring introduz regressões silenciosas. Para um projeto com 50 bugs conhecidos, testes são o safety net para os fixes.
+
+---
+
+### 6.7 Contenção de Recursos com cgroups v2
+
+Em field operation, um scan Nmap `-A` + Nuclei + MSF simultaneamente pode saturar o Pi 4. O `ProcessManager` tem suporte planeado a cgroups:
+
+```python
+# Implementar em ProcessManager
+async def run_with_limits(self, cmd: List[str], cpu_quota: float = 0.5, mem_mb: int = 256):
+    """Run subprocess within cgroup limits."""
+    cgroup_path = f"/sys/fs/cgroup/urban-hs/{uuid4()}"
+    # criar cgroup, definir cpu.max e memory.max
+    # executar processo sob o cgroup
+```
+
+Isto garante que nenhum módulo monopoliza recursos — o Pi mantém-se responsivo para BLE scanning enquanto Nmap corre.
+
+---
+
+### 6.8 Integração Zeek/Suricata para Detecção Defensiva
+
+O projeto é ofensivo mas para contexto académico, adicionar um modo de detecção tem alto valor:
+
+```python
+class DefensiveModule:
+    """Modo monitor — deteta ataques dos tipos que o projeto executa."""
+    async def detect_deauth_flood(self, interface: str) -> AsyncIterator[Alert]: ...
+    async def detect_fast_pair_spoofing(self) -> AsyncIterator[Alert]: ...
+    async def detect_mqtt_enumeration(self, interface: str) -> AsyncIterator[Alert]: ...
+```
+
+Demonstrar que consegues tanto atacar como detetar o mesmo vetor é academicamente muito mais forte — mostra compreensão profunda dos protocolos.
+
+---
+
+### 6.9 Device Quirks DB — Dados Reais
+
+`device_quirks.json` tem 9 entradas com `model_id: "ABCDEF"`. Para o projeto ter valor, precisas de IDs reais de dispositivos vulneráveis:
+
+- Google Pixel Buds Pro: `0x2EB4` (Fast Pair Model ID)
+- Google Pixel Buds A-Series: `0x1E89`  
+- JBL headphones com Fast Pair: vários IDs documentados no repositório `nicedoc.io/niccokunzmann/python-fast-pair`
+
+Substituir placeholders por IDs reais faz o `WhisperPairTester` funcionar com hardware real imediatamente.
+
+---
+
+*Revisão estática sobre branch `main` commit `3de3b97`. Código verificado ficheiro a ficheiro. Fixes propostos são minimais e não introduzem refactoring adicional ao necessário.*
