@@ -299,6 +299,13 @@ class ReportGenerator:
         session.findings.sort(key=lambda f: f.severity_order)
         
         # Generate report content
+        # Handle both string and enum format
+        if isinstance(format, str):
+            try:
+                format = ReportFormat(format)
+            except ValueError:
+                raise ValueError(f"Unsupported format: {format}")
+        
         if format == ReportFormat.MARKDOWN:
             return await self._generate_markdown(session)
         elif format == ReportFormat.HTML:
@@ -438,6 +445,7 @@ class ReportGenerator:
             "config": self.config,
             "generator": self,
             "generated_at": datetime.utcnow(),
+            "datetime": datetime,
         }
         
         html_content = template.render(**context)
