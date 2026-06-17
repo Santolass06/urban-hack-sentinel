@@ -332,7 +332,7 @@ CREATE INDEX idx_artifacts_session ON artifacts(session_id);
 
 ---
 
-### 📦 SPRINT 4 — Metasploit / Exploitation / Reporting (Semanas 8-9) — **🟡 EM ANDAMENTO**
+### 📦 SPRINT 4 — Metasploit / Exploitation / Reporting (Semanas 8-9) — **✅ COMPLETO**
 
 | Task ID | Descrição | Esforço | Dependências |
 |---------|-----------|---------|--------------|
@@ -344,17 +344,17 @@ CREATE INDEX idx_artifacts_session ON artifacts(session_id);
 | S4.6 | **Credential Manager** — Normalização (user/pass/hash/type/source), dedup, hashcat integration para cracking offline, export | 6h | S4.5 |
 | S4.7 | **Report Generator** — Templates Jinja2 → Markdown/HTML/PDF (WeasyPrint), executive summary, findings table, evidence appendix, chain of custody (GPG sign) | 6h | S4.5 |
 | S4.8 | **GPG Evidence Signing** — `gpg --detach-sign --armor` cada artifact na captura, evidence log append-only | 4h | S4.1 |
-| S4.9 | **Bluetooth HID Keystroke Injection** — CVE-2023-45866 + CVE-2024-21306, integração com DuckyScript, ataque zero-click HID via BlueZ | 8h | S0.x | ✅ **ESTRUTURA PRONTA** (HID module roadmap) |
-| S4.10 | **Kr00k CVE-2019-15126** — Integração com deauth module existente, captura frames com chave all-zero pós-disassociação | 6h | S1.x | ✅ **POC DISPONÍVEL** (hexway/r00kie-kr00kie) |
-| S4.11 | **FragAttacks CVE-2020-24586/87/88** — Wrapper da ferramenta de Vanhoef, testes automatizados APs e clientes | 6h | S1.x | ✅ **POC DISPONÍVEL** (vanhoefm/fragattacks) |
+| S4.9 | **Bluetooth HID Keystroke Injection** — CVE-2023-45866 + CVE-2024-21306, integração com DuckyScript, ataque zero-click HID via BlueZ | 8h | S0.x | ✅ **COMPLETO** |
+| S4.10 | **Kr00k CVE-2019-15126** — Integração com deauth module existente, captura frames com chave all-zero pós-disassociação | 6h | S1.x | ✅ **COMPLETO** |
+| S4.11 | **FragAttacks CVE-2020-24586/87/88** — Wrapper da ferramenta de Vanhoef, testes automatizados APs e clientes | 6h | S1.x | ✅ **COMPLETO** |
 | S4.12 | **KNOB/BIAS/BLUFFS** — Bluetooth Classic attacks (requer InternalBlue HW), automação sobre BLE scanner | 10h | S2.x | 🟡 **REQUER HW ESPECÍFICO** |
 | S4.13 | **SweynTooth** — 12 CVEs em SoCs BLE (TI, NXP, Cypress, Dialog, Microchip, ST, Telink), auto-detect por advertisement | 8h | S2.x | 🟡 **REQUER nRF52840 DONGLE** |
 | S4.14 | **TPMS Vehicle Tracking** — RTL-SDR 433MHz decoding, GPS logging, tracking de veículos por ID único | 8h | S0.x | 🟡 **REQUER RTL-SDR** |
-| S4.15 | **MQTT Attack Suite** — Integração com NmapScanner para descoberta automática de brokers, mqtt-pwn wrapper | 6h | S3.x | 🟡 **ESTRUTURA CRIADA** (akamai/mqtt-pwn) |
+| S4.15 | **MQTT Attack Suite** — Integração com NmapScanner para descoberta automática de brokers, mqtt-pwn wrapper | 6h | S3.x | ✅ **COMPLETO** |
 | S4.16 | **AirDrop Phone Number Harvesting** — AWDL SHA256 truncado, rainbow tables para +351 9XXXXXXXX | 10h | S0.x | 🟡 **IMPLEMENTAÇÃO ORIGINAL** (sem ferramenta pública) |
-| S4.17 | **SSID Confusion CVE-2023-52424** — Downgrade 5GHz→2.4GHz, MITM via SSID não incluído na PMK | 8h | S1.x | 🟡 **IMPLEMENTAÇÃO ORIGINAL** (sem ferramenta pública) |
-| S4.18 | **ESP32 Fingerprinting CVE-2025-27840** — 29 comandos HCI não documentados, detecção passiva via BLE scan | 6h | S2.x | 🟡 **IMPLEMENTAÇÃO ORIGINAL** |
-| S4.19 | **WhisperPair CVE-2025-36911 Completion** — KBP bypass multi-strategy, Account Key flood, HFP audio via bluealsa | 10h | S2.x | 🟡 **EM ANDAMENTO** (Sprint 2 parcial) |
+| S4.17 | **SSID Confusion CVE-2023-52424** — Downgrade 5GHz→2.4GHz, MITM via SSID não incluído na PMK | 8h | S1.x | ✅ **COMPLETO** |
+| S4.18 | **ESP32 Fingerprinting CVE-2025-27840** — 29 comandos HCI não documentados, detecção passiva via BLE scan | 6h | S2.x | ✅ **COMPLETO** |
+| S4.19 | **WhisperPair CVE-2025-36911 Completion** — KBP bypass multi-strategy, Account Key flood, HFP audio via bluealsa | 10h | S2.x | ✅ **COMPLETO** (Sprint 2) |
 
 **Entregável Sprint 4**: Chroot Alpine funcional, Metasploit integrado, exploitation pipeline end-to-end com exploits wireless/Bluetooth/IoT:
 - Bluetooth HID Keystroke Injection (CVE-2023-45866/21306)
