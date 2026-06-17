@@ -637,17 +637,20 @@ class ReportGenerator:
         """Generate PDF report using WeasyPrint."""
         if not WEASYPRINT_AVAILABLE:
             raise RuntimeError("WeasyPrint not available for PDF generation")
-        
+
         # Generate HTML first
         html_path = await self._generate_html(session, custom_template)
-        
-        # Convert to PDF
+
+        # Convert to PDF - run in thread pool to avoid blocking event loop
         timestamp = int(time.time())
         pdf_path = self.report_dir / f"report_{session.id}_{int(time.time())}.pdf"
-        
-        try:
+
+        def _write_pdf():
             html = HTML(filename=html_path)
             html.write_pdf(str(pdf_path))
+
+        try:
+            await asyncio.to_thread(_write_pdf)
             logger.info("PDF report generated", path=str(pdf_path))
             return str(pdf_path)
         except Exception as e:

