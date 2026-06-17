@@ -172,6 +172,10 @@ class GPGSigner:
             verbose=False,
         )
         
+        # Warn if no key provided
+        if key_id is None:
+            logger.warning("GPGSigner initialized without key_id; artifacts will not be signed")
+        
         # Set default key if provided
         if key_id:
             self._verify_key(key_id)
