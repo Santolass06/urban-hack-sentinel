@@ -25,10 +25,10 @@
 | Module | Status | Description |
 |--------|--------|-------------|
 | **BLE/Fast Pair** | 🟡 | Fast Pair scanner ✅, WhisperPair (CVE-2025-36911) vuln test ✅, exploit chain 🟡 |
-| **Camera Discovery** | 🔄 | ONVIF/RTSP/HTTP, default creds, vuln scanning |
-| **Network Scanner** | 🔄 | Nmap wrapper, OS fingerprint, service enum |
+| **Camera Discovery** | ✅ | mDNS/UPnP/ONVIF/RTSP/HTTP, default creds, vuln scanning |
+| **Network Scanner** | ✅ | Nmap wrapper, OS fingerprint, service enum |
 | **Metasploit RPC** | 🔄 | Module execution, session management |
-| **Nuclei Scanner** | 🔄 | Template-based vuln scanning |
+| **Nuclei Scanner** | ✅ | Template-based vuln scanning |
 | **HID/USB Gadget** | 🔄 | DuckyScript, HID injection, USB gadget profiles |
 | **Geo/wardriving** | 🔄 | GPS/MLAT, Kismet/Wigle/CSV/KML export |
 
@@ -277,6 +277,37 @@ urban-hs --camera-enum --target 192.168.1.100
 # Check camera vulnerabilities
 urban-hs --camera-vuln --target 192.168.1.100
 ```
+
+---
+
+## 🎯 Exploit Roadmap (Sprint 4+)
+
+The following high-value exploits are planned or implemented based on the security research review:
+
+### 🔴 Critical Impact (Ready/Implementing)
+| Exploit | CVE | Status | Hardware |
+|---------|-----|--------|----------|
+| **Bluetooth HID Keystroke Injection** | CVE-2023-45866, CVE-2024-21306 | 🟡 Planned (HID module) | Pi built-in |
+| **WhisperPair Fast Pair KBP Bypass** | CVE-2025-36911 | 🟡 Partial (Sprint 2) | Pi built-in |
+| **Kr00k** | CVE-2019-15126 | 🟡 Planned | Alfa WiFi |
+| **FragAttacks** | CVE-2020-24586/87/88 | 🟡 Planned | Alfa WiFi |
+
+### 🟠 High Impact
+| Exploit | CVE | Status | Hardware |
+|---------|-----|--------|----------|
+| **KNOB** | CVE-2019-9506 | 🟡 Planned | InternalBlue HW |
+| **BIAS** | CVE-2020-10135 | 🟡 Planned | InternalBlue HW |
+| **BLUFFS** | CVE-2023-24023 | 🟡 Planned | InternalBlue HW |
+| **SweynTooth** | 12 CVEs | 🟡 Planned | nRF52840 dongle |
+
+### 🟡 Medium Impact (Original Contributions)
+| Exploit | Description | Status | Hardware |
+|---------|-------------|--------|----------|
+| **AirDrop Phone Harvesting** | AWDL SHA256 truncated hash brute-force | 🟡 Original impl | Pi built-in |
+| **SSID Confusion** | Downgrade 5GHz→2.4GHz MITM via SSID not in PMK | 🟡 Original impl | Alfa WiFi |
+| **ESP32 Fingerprinting** | 29 undocumented HCI commands detection | 🟡 Original impl | Pi built-in |
+| **TPMS Vehicle Tracking** | 433MHz passive vehicle tracking via RTL-SDR | 🟡 Planned | RTL-SDR Blog V4 |
+| **MQTT Attack Suite** | Broker discovery + credential brute + topic enum | 🟡 Planned | Network access |
 
 ---
 

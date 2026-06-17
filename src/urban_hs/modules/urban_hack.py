@@ -19,7 +19,6 @@ from urban_hs.modules.wifi import (
 from urban_hs.modules.ble import (
     FastPairScanner, WhisperPairTester, WhisperPairExploit,
     BLEDevice, BLEDeviceType,
-    FastPairScanner, WhisperPairTester, WhisperPairExploit,
 )
 
 logger = structlog.get_logger(__name__)

@@ -24,6 +24,12 @@ from typing import Any, Dict, List, Optional, Callable, Set, Union
 from enum import Enum
 from urllib.parse import urlparse
 
+try:
+    import aiohttp
+    AIOHTTP_AVAILABLE = True
+except ImportError:
+    AIOHTTP_AVAILABLE = False
+
 logger = structlog.get_logger(__name__)
 
 
@@ -144,6 +150,9 @@ class NmapScanner:
         cmd.extend(["-oX", "-"])  # XML to stdout
         
         # Scan type specific options
+        # Check for root privileges for OS fingerprinting
+        has_root = os.geteuid() == 0
+        
         if scan_type == ScanType.HOST_DISCOVERY:
             cmd.append("-sn")
         elif scan_type == ScanType.PORT_SCAN:
@@ -153,14 +162,22 @@ class NmapScanner:
             cmd.extend(["-sT", "-sV"])
             cmd.extend(["-p", ports or self.default_ports])
         elif scan_type == ScanType.OS_FINGERPRINT:
-            cmd.extend(["-sT", "-O"])
+            cmd.extend(["-sT"])
+            if has_root:
+                cmd.extend(["-O"])
+            else:
+                logger.warning("OS fingerprinting (-O) requires root privileges, skipping")
             cmd.extend(["-p", ports or self.default_ports])
         elif scan_type == ScanType.VULN_SCAN:
             cmd.extend(["-sT", "-sV"])
             cmd.extend(["-p", ports or self.default_ports])
             cmd.extend(["--script", ",".join(self.default_scripts)])
         elif scan_type == ScanType.FULL_SCAN:
-            cmd.extend(["-sT", "-sV", "-O"])
+            cmd.extend(["-sT", "-sV"])
+            if has_root:
+                cmd.extend(["-O"])
+            else:
+                logger.warning("OS fingerprinting (-O) requires root privileges, skipping")
             cmd.extend(["-p", ports or self.default_ports])
             cmd.extend(["--script", ",".join(self.default_scripts)])
         
@@ -614,23 +631,20 @@ class RouterScanner:
             results = []
             stdout_str = stdout.decode()
             
-            # Parse hydra output for successful logins
+            # Parse hydra output for successful logins using regex
+            # Output format: [22][ssh] host: 192.168.1.1   login: admin   password: 12345
+            import re
             for line in stdout_str.split("\n"):
-                if "login:" in line and "password:" in line:
-                    # Parse successful login
-                    parts = line.split()
-                    login_idx = parts.index("login:") if "login:" in parts else -1
-                    pass_idx = parts.index("password:") if "password:" in parts else -1
-                    if login_idx >= 0 and pass_idx >= 0:
-                        username = parts[login_idx + 1]
-                        password = parts[pass_idx + 1]
-                        results.append({
-                            "service": service,
-                            "ip": target_ip,
-                            "port": port,
-                            "username": username,
-                            "password": password,
-                        })
+                match = re.search(r"login:\s+(\S+)\s+password:\s+(\S+)", line)
+                if match:
+                    username, password = match.group(1), match.group(2)
+                    results.append({
+                        "service": service,
+                        "ip": target_ip,
+                        "port": port,
+                        "username": username,
+                        "password": password,
+                    })
             
             return results
             
@@ -692,11 +706,11 @@ class CameraDiscovery:
         cameras.extend(onvif_cameras)
         
         # 4. RTSP port scan
-        rtsp_cameras = await self._rtsp_scan("192.168.1.0/24")  # Would need proper network range
+        rtsp_cameras = await self._rtsp_scan(network)
         cameras.extend(rtsp_cameras)
         
         # 5. HTTP fingerprinting
-        http_cameras = await self._http_fingerprint("192.168.1.0/24")
+        http_cameras = await self._http_fingerprint(network)
         cameras.extend(http_cameras)
         
         # Deduplicate by IP/MAC
@@ -722,16 +736,20 @@ class CameraDiscovery:
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
             
-            # Parse avahi output
+            # Parse avahi output (uses ; as delimiter from -p flag)
             for line in stdout.decode().split("\n"):
                 if "IPv4" in line or "IPv6" in line:
-                    # Parse avahi output format
-                    parts = line.split()
-                    if len(parts) >= 4:
+                    # Parse avahi-browse -p output format:
+                    # =;interface;IPv4/IPv6;name;type;domain;hostname;IP;port;...
+                    parts = line.split(";")
+                    if len(parts) >= 8:
                         cameras.append({
                             "discovery_method": "mdns",
-                            "service": parts[2] if len(parts) > 2 else "",
-                            "hostname": parts[3] if len(parts) > 3 else "",
+                            "hostname": parts[6],   # hostname
+                            "ip": parts[7],         # IP address
+                            "port": int(parts[8]) if parts[8].isdigit() else None,
+                            "service": parts[4],    # service type (e.g., _rtsp._tcp)
+                            "interface": parts[1],
                         })
         except Exception as e:
             logger.warning("mDNS discovery failed", error=str(e))
@@ -752,25 +770,34 @@ class CameraDiscovery:
                 "\r\n"
             )
             
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-            sock.settimeout(5)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            sock.sendto(ssdp_request.encode(), ("239.255.255.250", 1900))
+            def _recv_responses():
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+                sock.settimeout(5)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                sock.sendto(ssdp_request.encode(), ("239.255.255.250", 1900))
+                
+                responses = []
+                try:
+                    while True:
+                        data, addr = sock.recvfrom(65535)
+                        responses.append((data, addr))
+                except socket.timeout:
+                    pass
+                finally:
+                    sock.close()
+                return responses
             
-            try:
-                while True:
-                    data, addr = sock.recvfrom(65535)
-                    response = data.decode()
-                    if "camera" in response.lower() or "onvif" in response.lower() or "rtsp" in response.lower():
-                        cameras.append({
-                            "discovery_method": "upnp",
-                            "ip": addr[0],
-                            "response": response[:500],
-                        })
-            except socket.timeout:
-                pass
-            finally:
-                sock.close()
+            # Run blocking socket I/O in thread pool to not block event loop
+            responses = await asyncio.to_thread(_recv_responses)
+            
+            for data, addr in responses:
+                response = data.decode()
+                if "camera" in response.lower() or "onvif" in response.lower() or "rtsp" in response.lower():
+                    cameras.append({
+                        "discovery_method": "upnp",
+                        "ip": addr[0],
+                        "response": response[:500],
+                    })
                 
         except Exception as e:
             logger.warning("UPnP discovery failed", error=str(e))
@@ -781,9 +808,50 @@ class CameraDiscovery:
         """Discover ONVIF cameras via WS-Discovery."""
         cameras = []
         try:
-            # Use onvif library or raw WS-Discovery SOAP
-            # This is a simplified version
-            pass
+            # WS-Discovery SOAP request
+            ws_discovery = (
+                '<?xml version="1.0" encoding="UTF-8"?>'
+                '<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" '
+                'xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing" '
+                'xmlns:wsd="http://schemas.xmlsoap.org/ws/2005/04/discovery">'
+                '<soap:Header>'
+                '<wsa:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</wsa:Action>'
+                '<wsa:MessageID>uuid:12345678-1234-1111-2222-333344445555</wsa:MessageID>'
+                '<wsa:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</wsa:To>'
+                '</soap:Header>'
+                '<soap:Body>'
+                '<wsd:Probe/>'
+                '</soap:Body>'
+                '</soap:Envelope>'
+            )
+            
+            # Send to multicast address
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+            sock.settimeout(5)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            sock.sendto(ws_discovery.encode(), ("239.255.255.250", 3702))
+            
+            try:
+                while True:
+                    data, addr = sock.recvfrom(65535)
+                    response = data.decode()
+                    # Parse SOAP response for ONVIF device info
+                    if "onvif" in response.lower() or "device" in response.lower():
+                        import re
+                        # Extract XAddrs for device service
+                        xaddrs_match = re.search(r'<d:XAddrs>([^<]+)</d:XAddrs>', response)
+                        types_match = re.search(r'<d:Types>([^<]+)</d:Types>', response)
+                        cameras.append({
+                            "discovery_method": "onvif_ws_discovery",
+                            "ip": addr[0],
+                            "xaddrs": xaddrs_match.group(1) if xaddrs_match else None,
+                            "types": types_match.group(1) if types_match else None,
+                        })
+            except socket.timeout:
+                pass
+            finally:
+                sock.close()
+                
         except Exception as e:
             logger.warning("ONVIF discovery failed", error=str(e))
         return cameras
@@ -826,7 +894,85 @@ class CameraDiscovery:
 
     async def _http_fingerprint(self, network: str) -> List[Dict[str, Any]]:
         """Fingerprint cameras via HTTP."""
-        return []
+        if not AIOHTTP_AVAILABLE:
+            logger.warning("HTTP fingerprinting requires aiohttp package, skipping")
+            return []
+        
+        cameras = []
+        try:
+            # Use nmap to find HTTP services on common camera ports
+            nmap = NmapScanner()
+            hosts = await nmap.scan(
+                targets=network,
+                scan_type=ScanType.PORT_SCAN,
+                ports="80,8080,8081,8443,8888,8889,5000,5001",
+            )
+            
+            import aiohttp
+            import asyncio
+            
+            # Common camera paths to check
+            camera_paths = [
+                "/", "/index.html", "/video", "/stream", "/live",
+                "/cgi-bin/nph-zms", "/cgi-bin/cgi?action=snapshot",
+                "/snapshot.cgi", "/image.jpg", "/mjpeg.cgi",
+                "/onvif/device_service", "/api/camera", "/web/",
+                "/web/cgi-bin/hi3510/param.cgi", "/cgi-bin/main.cgi",
+                "/ISAPI/Streaming/channels/101/picture", "/onvif/Device"
+            ]
+            
+            async def check_http_camera(host_ip: str, port: int) -> Optional[Dict[str, Any]]:
+                try:
+                    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
+                        for path in camera_paths:
+                            try:
+                                url = f"http://{host_ip}:{port}{path}"
+                                async with session.get(url) as resp:
+                                    if resp.status == 200:
+                                        content = await resp.text()
+                                        # Check for camera indicators
+                                        camera_indicators = [
+                                            "camera", "ipcam", "webcam", "dvrt", "nvr",
+                                            "hikvision", "dahua", "axis", "foscam", "amcrest",
+                                            "reolink", "tplink", "ubiquiti", "unifi",
+                                            "onvif", "rtsp", "mjpeg", "h264", "h265"
+                                        ]
+                                        if any(ind in content.lower() for ind in camera_indicators):
+                                            return {
+                                                "ip": host_ip,
+                                                "port": port,
+                                                "protocol": "http",
+                                                "path": path,
+                                                "server": resp.headers.get("Server", ""),
+                                                "title": self._extract_title(content),
+                                            }
+                            except Exception:
+                                continue
+                except Exception:
+                    pass
+                return None
+            
+            # Run checks in parallel
+            tasks = []
+            for host in hosts:
+                for port_info in host.ports:
+                    if port_info.port in (80, 8080, 8081, 8443, 8888, 8889, 5000, 5001) and port_info.state == "open":
+                        tasks.append(check_http_camera(host.ip, port_info.port))
+            
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if result and not isinstance(result, Exception):
+                    cameras.append(result)
+                    
+        except Exception as e:
+            logger.warning("HTTP fingerprinting failed", error=str(e))
+        return cameras
+    
+    def _extract_title(self, html: str) -> str:
+        """Extract title from HTML content."""
+        import re
+        match = re.search(r'<title[^>]*>([^<]+)</title>', html, re.IGNORECASE)
+        return match.group(1).strip() if match else ""
 
 
 class NetworkModule:
@@ -883,6 +1029,13 @@ class NetworkModule:
         cameras = await self.camera_discovery.discover_cameras()
         results["cameras"] = cameras
 
+        # Convert vulnerabilities to dict with string severity for JSON serialization
+        vuln_dicts = []
+        for v in vulns:
+            vuln_dict = v.__dict__.copy()
+            vuln_dict["severity"] = v.severity.value  # Convert Enum to string
+            vuln_dicts.append(vuln_dict)
+        
         # 4. Router scanning (if any routers detected)
         router_ips = [h.ip for h in hosts if any(p.port in [80, 443, 8080, 8443] for p in h.ports)]
         for ip in router_ips:
@@ -895,13 +1048,13 @@ class NetworkModule:
         results["summary"] = {
             "total_hosts": len(hosts),
             "total_ports_open": sum(len(h.ports) for h in hosts),
-            "vulnerabilities_found": len(results["vulnerabilities"]),
+            "vulnerabilities_found": len(vuln_dicts),
             "cameras_found": len(results["cameras"]),
-            "critical_vulns": len([v for v in results["vulnerabilities"] if v.get("severity") == "critical"]),
-            "high_vulns": len([v for v in results["vulnerabilities"] if v.get("severity") == "high"]),
+            "critical_vulns": len([v for v in vuln_dicts if v.get("severity") == "critical"]),
+            "high_vulns": len([v for v in vuln_dicts if v.get("severity") == "high"]),
         }
-
-        return results
+        
+        results["vulnerabilities"] = vuln_dicts
 
 
 # Exports
