@@ -1,0 +1,145 @@
+version: '3.8'
+
+services:
+  # ============================================================
+  # DEVELOPMENT ENVIRONMENT
+  # ============================================================
+  dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.arm64
+      target: builder
+    container_name: urban-hs-dev
+    environment:
+      - URBAN_HS_LOG_LEVEL=DEBUG
+      - PYTHONPATH=/app/src
+    volumes:
+      - ../:/app:cached
+      - ../scripts:/app/scripts:ro
+      - /var/log/urban-hs:/var/log/urban-hs
+      - /var/lib/urban-hs:/var/lib/urban-hs
+    working_dir: /app
+    command: tail -f /dev/null
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_ADMIN
+    devices:
+      - /dev/net/tun
+    network_mode: host
+    restart: unless-stopped
+
+  # ============================================================
+  # PRODUCTION RUNTIME
+  # ============================================================
+  prod:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.arm64
+      target: runtime
+    container_name: urban-hs-prod
+    environment:
+      - URBAN_HS_LOG_LEVEL=INFO
+      - URBAN_HS_CONFIG=/etc/urban-hs/config.yaml
+    volumes:
+      - /etc/urban-hs:/etc/urban-hs:ro
+      - /var/log/urban-hs:/var/log/urban-hs
+      - /var/lib/urban-hs:/var/lib/urban-hs
+      # Hardware access
+      - /dev/bus/usb:/dev/bus/usb
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_ADMIN
+    devices:
+      - /dev/net/tun
+      - /dev/ttyACM0:/dev/ttyACM0  # GPS
+      - /dev/ttyACM1:/dev/ttyACM1  # GPS backup
+    network_mode: host
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+  # ============================================================
+  # REDIS (for pub/sub and caching)
+  # ============================================================
+  redis:
+    image: redis:7-alpine
+    container_name: urban-hs-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ============================================================
+  # GPSD (for GPS data)
+  # ============================================================
+  gpsd:
+    image: ghcr.io/maxburns/gpsd:latest
+    container_name: urban-hs-gpsd
+    devices:
+      - /dev/ttyACM0:/dev/ttyACM0
+      - /dev/ttyACM1:/dev/ttyACM1
+    command: gpsd -N -D 3 /dev/ttyACM0
+    ports:
+      - "2947:2947"
+    restart: unless-stopped
+    privileged: true
+
+  # ============================================================
+  # PROMETHEUS (metrics collection)
+  # ============================================================
+  prometheus:
+    image: prom/prometheus:v2.50.0
+    container_name: urban-hs-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  # ============================================================
+  # GRAFANA (visualization)
+  # ============================================================
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: urban-hs-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=urbanhs
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+volumes:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  default:
+    name: urban-hs-net
+    driver: bridge

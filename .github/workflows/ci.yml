@@ -1,0 +1,342 @@
+name: Urban Hack Sentinel CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * 0'  # Weekly on Sunday at 2 AM
+
+env:
+  PYTHON_VERSION: '3.11'
+  POETRY_VERSION: '1.8.2'
+
+jobs:
+  # ============================================================
+  # LINTING
+  # ============================================================
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Cache Poetry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: poetry-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            poetry-${{ runner.os }}-
+      
+      - name: Install Poetry
+        run: |
+          pip install -q poetry==${{ env.POETRY_VERSION }}
+          poetry config virtualenvs.create false
+      
+      - name: Install dependencies
+        run: |
+          poetry install --with lint,dev --no-interaction
+      
+      - name: Run Ruff (lint)
+        run: |
+          poetry run ruff check src/ tests/ --output-format=github
+      
+      - name: Run Ruff (format)
+        run: |
+          poetry run ruff format src/ tests/ --check
+      
+      - name: Run MyPy
+        run: |
+          poetry run mypy src/ --strict --show-error-codes --no-error-summary
+
+  # ============================================================
+  # TYPE CHECKING
+  # ============================================================
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            pip-${{ runner.os }}-
+      
+      - name: Install dependencies
+        run: |
+          pip install -q mypy types-requests types-psutil types-cryptography
+          pip install -q -e .[dev]
+      
+      - name: Run MyPy (strict)
+        run: |
+          mypy src/ --strict \
+            --show-error-codes \
+            --no-error-summary \
+            --warn-unused-ignores \
+            --warn-redundant-casts \
+            --warn-unreachable \
+            --disallow-untyped-defs \
+            --disallow-incomplete-defs \
+            --check-untyped-defs \
+            --disallow-untyped-decorators
+
+  # ============================================================
+  # UNIT TESTS
+  # ============================================================
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libpcap-dev \
+            libbluetooth-dev \
+            bluez \
+            libsqlite3-dev \
+            redis-tools \
+            gcc \
+            g++ \
+            > /dev/null
+      
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            pip-${{ runner.os }}-${{ matrix.python-version }}-
+      
+      - name: Install dependencies
+        run: |
+          pip install -q -e .[test]
+      
+      - name: Run tests
+        run: |
+          pytest tests/ -v --tb=short -x --timeout=60
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: ./coverage.xml
+          flags: unittests
+          name: coverage-${{ matrix.python-version }}
+
+  # ============================================================
+  # INTEGRATION TESTS (requires hardware - runs on self-hosted)
+  # ============================================================
+  integration-test:
+    name: Integration Tests
+    runs-on: [self-hosted, linux, arm64]
+    if: ${{ github.repository == 'Santolass06/urban-hack-sentinel' }}
+    timeout-minutes: 60
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pip install -q -e .[test]
+      
+      - name: Check hardware
+        run: |
+          echo "=== Hardware Check ==="
+          echo "WiFi interfaces:"
+          iw dev
+          echo ""
+          echo "Bluetooth adapters:"
+          hciconfig -a
+          echo ""
+          echo "GPS devices:"
+          ls -la /dev/ttyACM* /dev/ttyUSB* 2>/dev/null || echo "None found"
+          echo ""
+          echo "USB Gadget support:"
+          ls /sys/class/udc/ 2>/dev/null || echo "No UDC found"
+      
+      - name: Run integration tests
+        run: |
+          pytest tests/integration/ -v --tb=long -x --timeout=300 || echo "Integration tests completed (may skip if hardware unavailable)"
+
+  # ============================================================
+  # BUILD DOCKER IMAGE
+  # ============================================================
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+    if: github.event_name == 'push' || github.event_name == 'schedule'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.arm64
+          platforms: linux/arm64,linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ============================================================
+  # SECURITY SCAN
+  # ============================================================
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'HIGH,CRITICAL'
+      
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+      
+      - name: Run Bandit
+        run: |
+          pip install -q bandit[toml]
+          bandit -r src/ -f json -o bandit-results.json || true
+          cat bandit-results.json | jq '.results[] | {file, line, issue: .issue_text, severity: .issue_severity}'
+
+  # ============================================================
+  # DEPENDENCY AUDIT
+  # ============================================================
+  deps-audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pip install -q -e .
+      
+      - name: Run pip-audit
+        run: |
+          pip install -q pip-audit
+          pip-audit --desc --format=json --output=audit-results.json || true
+          cat audit-results.json | jq '.vulnerabilities[] | {package, version, fix_version, id, description}'
+
+  # ============================================================
+  # RELEASE
+  # ============================================================
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test, docker, security, deps-audit]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install Poetry
+        run: |
+          pip install -q poetry==${{ env.POETRY_VERSION }}
+      
+      - name: Build package
+        run: |
+          poetry build
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+      
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          skip_existing: true

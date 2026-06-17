@@ -1,0 +1,147 @@
+# Multi-arch Dockerfile for Urban Hack Sentinel (ARM64/AMD64)
+# Build: docker buildx build --platform linux/arm64,linux/amd64 -t ghcr.io/santolass06/urban-hack-sentinel:latest --push -f docker/Dockerfile.arm64 .
+
+# ============================================================
+# BUILD STAGE
+# ============================================================
+FROM python:3.11-slim AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    pkg-config \
+    libpcap-dev \
+    libbluetooth-dev \
+    libsqlite3-dev \
+    libffi-dev \
+    libssl-dev \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Poetry
+ENV POETRY_VERSION=1.8.2
+ENV POETRY_HOME=/opt/poetry
+ENV POETRY_VENV=/opt/poetry-venv
+ENV POETRY_NO_INTERACTION=1
+ENV POETRY_VIRTUALENVS_CREATE=false
+
+RUN python3 -m venv $POETRY_VENV \
+    && $POETRY_VENV/bin/pip install --no-cache-dir poetry==$POETRY_VERSION
+
+ENV PATH="$POETRY_VENV/bin:$PATH"
+
+# Set working directory
+WORKDIR /app
+
+# Copy dependency files
+COPY pyproject.toml poetry.lock* ./
+
+# Install dependencies (without dev dependencies)
+RUN poetry install --only=main --no-interaction --no-ansi
+
+# Copy source code
+COPY src/ ./src/
+COPY scripts/ ./scripts/
+
+# Install project in editable mode
+RUN poetry install --only=main --no-interaction --no-ansi
+
+# ============================================================
+# RUNTIME STAGE
+# ============================================================
+FROM python:3.11-slim AS runtime
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Core system
+    libpcap0.8 \
+    libbluetooth3 \
+    libsqlite3-0 \
+    libffi8 \
+    libssl3 \
+    # Network tools
+    iproute2 \
+    iw \
+    wireless-tools \
+    ethtool \
+    tcpdump \
+    nmap \
+    # Bluetooth
+    bluez \
+    bluez-tools \
+    # GPS
+    gpsd \
+    gpsd-clients \
+    # USB
+    usbutils \
+    # System monitoring
+    htop \
+    iotop \
+    # Utility
+    curl \
+    jq \
+    vim-tiny \
+    # Cleanup
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user
+RUN groupadd -r -g 1000 urbanhs && \
+    useradd -r -u 1000 -g urbanhs -d /home/urbanhs -s /bin/bash urbanhs
+
+# Create directories
+RUN mkdir -p \
+    /opt/urban-hs \
+    /var/lib/urban-hs \
+    /var/log/urban-hs/jsonl \
+    /var/lib/urban-hs/evidence \
+    /var/lib/urban-hs/reports \
+    /var/lib/urban-hs/credentials \
+    /var/lib/urban-hs/artifacts \
+    /var/lib/urban-hs/hashes \
+    /var/lib/urban-hs/pcaps \
+    /etc/urban-hs \
+    && chown -R urbanhs:urbanhs /var/lib/urban-hs /var/log/urban-hs /opt/urban-hs
+
+# Copy Python environment from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy application code
+COPY --from=builder /app/src /opt/urban-hs/src
+COPY --from=builder /app/scripts /opt/urban-hs/scripts
+
+# Install kernel headers for USB gadget (if available)
+# Note: This requires the host to have matching kernel headers
+# RUN apt-get update && apt-get install -y linux-headers-$(uname -r) || true
+
+# Set Python path
+ENV PYTHONPATH=/opt/urban-hs/src
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Default configuration
+ENV URBAN_HS_CONFIG=/etc/urban-hs/config.yaml
+ENV URBAN_HS_LOG_LEVEL=INFO
+ENV URBAN_HS_LOG_DIR=/var/log/urban-hs
+ENV URBAN_HS_DATA_DIR=/var/lib/urban-hs
+
+# Switch to non-root user
+USER urbanhs
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python3 -c "import sys; sys.path.insert(0, '/opt/urban-hs/src'); from urban_hs.core import create_health_checker; import asyncio; hc = create_health_checker(); r = asyncio.run(hc.run_checks()); overall = asyncio.run(hc.get_overall_status(r)); exit(0 if overall.value == 'healthy' else 1)" || exit 1
+
+# Entry point
+ENTRYPOINT ["python3", "-m", "urban_hs"]
+CMD ["--help"]
+
+# Labels
+LABEL org.opencontainers.image.title="Urban Hack Sentinel"
+LABEL org.opencontainers.image.description="WiFi/BLE/Network security auditing framework for Raspberry Pi"
+LABEL org.opencontainers.image.vendor="Urban Hack Sentinel Team"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.source="https://github.com/Santolass06/urban-hack-sentinel"
+LABEL org.opencontainers.image.documentation="https://github.com/Santolass06/urban-hack-sentinel/blob/main/README.md"

@@ -15,7 +15,7 @@ from urban_hs.modules.wifi.attacks import (
     AttackResult,
     AttackStatus,
 )
-from urban_hs.modules.wifi.managers import HandshakeManager, MACChanger, GeoMapper
+from urban_hs.modules.wifi.managers import HandshakeManager, MACChanger, GeoMapper, HandshakeInfo
 
 __all__ = [
     "WiFiScanner",
@@ -35,4 +35,5 @@ __all__ = [
     "HandshakeManager",
     "MACChanger",
     "GeoMapper",
+    "HandshakeInfo",
 ]

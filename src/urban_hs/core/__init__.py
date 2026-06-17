@@ -38,6 +38,30 @@ from urban_hs.core.process_mgr import (
     init_process_manager,
     shutdown_process_manager,
 )
+from urban_hs.core.health import (
+    HealthStatus,
+    HealthCheckResult,
+    SystemMetrics,
+    HealthChecker,
+    HealthCheckMiddleware,
+    create_health_checker,
+)
+from urban_hs.core.scheduler import (
+    TriggerType,
+    JobStatus,
+    ScheduledJob,
+    Scheduler,
+)
+from urban_hs.core.plugins import (
+    PluginStatus,
+    PluginType,
+    PluginMetadata,
+    PluginInstance,
+    UrbanPlugin,
+    PluginManager,
+    create_plugin_manager,
+    urban_plugin,
+)
 
 __all__ = [
     # Config
@@ -81,6 +105,30 @@ __all__ = [
     "get_process_manager",
     "init_process_manager",
     "shutdown_process_manager",
+    
+    # Health
+    "HealthStatus",
+    "HealthCheckResult",
+    "SystemMetrics",
+    "HealthChecker",
+    "HealthCheckMiddleware",
+    "create_health_checker",
+    
+    # Scheduler
+    "TriggerType",
+    "JobStatus",
+    "ScheduledJob",
+    "Scheduler",
+    
+    # Plugins
+    "PluginStatus",
+    "PluginType",
+    "PluginMetadata",
+    "PluginInstance",
+    "UrbanPlugin",
+    "PluginManager",
+    "create_plugin_manager",
+    "urban_plugin",
 ]
 
 
