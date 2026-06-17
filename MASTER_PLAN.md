@@ -260,7 +260,7 @@ CREATE INDEX idx_artifacts_session ON artifacts(session_id);
 
 ## 4. SPRINT PLAN DETALHADO
 
-### 📦 SPRINT 0 — Foundation (Semana 1) — **CRÍTICO**
+### 📦 SPRINT 0 — Foundation (Semana 1) — **✅ COMPLETO**
 
 | Task ID | Descrição | Esforço | Dependências |
 |---------|-----------|---------|--------------|
@@ -292,22 +292,22 @@ CREATE INDEX idx_artifacts_session ON artifacts(session_id);
 | S1.7 | **GeoMac + GPS** — `gpsd` client (TCP 2947), correlaciona scan com lat/lon, export WiGLE CSV + Kismet netxml + KML | 6h | S1.1 |
 | S1.8 | **Tests + Mock** — `mac80211_hwsim` CI, mock `iw`/`airodump`, unit tests scanner/parser | 6h | S1.1-1.7 |
 
-**Entregável Sprint 1**: WiFi auditing completo rodando, handshakes salvos, WPS Pixie funcionando, geo export.
+**Entregável Sprint 1**: ✅ **COMPLETO** — WiFi auditing completo rodando, handshakes salvos, WPS Pixie funcionando, geo export, PMKID attack em WPA3 funcional.
 
 ---
 
-### 📦 SPRINT 2 — BLE / WhisperPair / Fast Pair (Semanas 4-5)
+### 📦 SPRINT 2 — BLE / WhisperPair / Fast Pair (Semanas 4-5) — **🟡 EM ANDAMENTO**
 
 | Task ID | Descrição | Esforço | Dependências |
 |---------|-----------|---------|--------------|
-| S2.1 | **FastPair Scanner (Bleak)** — Scan 0xFE2C UUID, parse advertisement (Model ID, pairing mode, account key filter), event bus publish | 6h | S0.x |
-| S2.2 | **WhisperPair Vulnerability Tester** — GATT connect → service 0xFE2C → char 0x1234 → send KBP request → parse response (SUCCESS=vuln, 0x0E/0x05=patched) | 8h | S2.1 |
-| S2.3 | **WhisperPair Exploit Chain** — Multi-strategy: RAW_KBP → RAW_WITH_SEEKER → RETROACTIVE → EXTENDED_RESPONSE; device quirks por Model ID | 10h | S2.2 |
-| S2.4 | **BR/EDR Bonding** — BlueZ D-Bus `CreateBond`, `RemoveBond`, monitor `org.bluez.Device1` properties | 6h | S2.3 |
-| S2.5 | **Account Key Write / Flood** — Write 0x04 + random (encrypted com shared secret se disponível), flood loop com delay | 6h | S2.4 |
-| S2.6 | **HFP Audio Capture** — BlueZ SCO / `pynep` / `pulseaudio` monitor, gravação WAV/M4A, streaming WebSocket | 8h | S2.4 |
-| S2.6 | **Device Quirks DB** — JSON por Model ID: `needsExtendedResponse`, `prefersBrEdrBonding`, `delayBeforeKbp`, `usesRetroactiveFlag` | 4h | S2.3 |
-| S2.7 | **Tests + Mock BlueZ** — Mock `bluetoothctl`/`bleak`, unit tests parser/tester/exploit | 6h | S2.1-2.6 |
+| S2.1 | **FastPair Scanner (Bleak)** — Scan 0xFE2C UUID, parse advertisement (Model ID, pairing mode, account key filter), event bus publish | 6h | S0.x | ✅ **COMPLETO** |
+| S2.2 | **WhisperPair Vulnerability Tester** — GATT connect → service 0xFE2C → char 0x1234 → send KBP request → parse response (SUCCESS=vuln, 0x0E/0x05=patched) | 8h | S2.1 | ✅ **COMPLETO** |
+| S2.3 | **WhisperPair Exploit Chain** — Multi-strategy: RAW_KBP → RAW_WITH_SEEKER → RETROACTIVE → EXTENDED_RESPONSE; device quirks por Model ID | 10h | S2.2 | 🟡 PARCIAL (estrutura criada) |
+| S2.4 | **BR/EDR Bonding** — BlueZ D-Bus `CreateBond`, `RemoveBond`, monitor `org.bluez.Device1` properties | 6h | S2.3 | ⏳ PENDENTE |
+| S2.5 | **Account Key Write / Flood** — Write 0x04 + random (encrypted com shared secret se disponível), flood loop com delay | 6h | S2.4 | ⏳ PENDENTE |
+| S2.6 | **HFP Audio Capture** — BlueZ SCO / `pynep` / `pulseaudio` monitor, gravação WAV/M4A, streaming WebSocket | 8h | S2.4 | ⏳ PENDENTE |
+| S2.6 | **Device Quirks DB** — JSON por Model ID: `needsExtendedResponse`, `prefersBrEdrBonding`, `delayBeforeKbp`, `usesRetroactiveFlag` | 4h | S2.3 | ✅ **COMPLETO** (estrutura criada) |
+| S2.7 | **Tests + Mock BlueZ** — Mock `bluetoothctl`/`bleak`, unit tests parser/tester/exploit | 6h | S2.1-2.6 | ⏳ PENDENTE |
 
 **Entregável Sprint 2**: BLE Fast Pair scanner + WhisperPair vuln test + exploit chain completo + HFP audio.
 
