@@ -315,20 +315,20 @@ CREATE INDEX idx_artifacts_session ON artifacts(session_id);
 
 ---
 
-### 📦 SPRINT 3 — Network / Camera / Vuln Scanning (Semanas 6-7)
+### 📦 SPRINT 3 — Network / Camera / Vuln Scanning (Semanas 6-7) — **🟡 EM ANDAMENTO**
 
 | Task ID | Descrição | Esforço | Dependências |
 |---------|-----------|---------|--------------|
-| S3.1 | **Network Scanner (Nmap Wrapper)** — Async `python-nmap` ou subprocess XML/JSON, host discovery (-sn), port scan (-sS), OS detect (-O), service version (-sV), NSE scripts | 8h | S0.x |
-| S3.2 | **Nuclei Runner** — Template execution (`-t cves/ -t exposures/ -t misconfig/`), JSONL parsing, deduplication, severity mapping | 6h | S3.1 |
-| S3.3 | **SearchSploit Integration** — Local ExploitDB (`searchsploit -j`), filter por CVE/service, auto-download exploit para `artifacts/` | 4h | S3.1 |
-| S3.4 | **Router Scan** — `RouterSploit` (autopwn), `hydra` credential brute (SSH, HTTP, Telnet, FTP), custom auth lists | 6h | S3.1 |
-| S3.5 | **Camera Discovery** — mDNS (`_rtsp._tcp`, `_onvif._tcp`), UPnP SSDP, ONVIF `GetDeviceInformation`, RTSP `DESCRIBE`, HTTP fingerprint | 8h | S0.x |
-| S3.6 | **Camera Enumeration** — Auth test (basic/digest), default creds list (admin/admin, admin/12345, etc.), config dump, firmware version | 6h | S3.5 |
-| S3.7 | **Camera Vuln Check** — CVE mapping (CVEdb local), exploit availability (Nuclei/Metasploit), RTSP auth bypass test | 6h | S3.6 |
-| S3.8 | **IoT Protocols** — Matter/Thread (mDNS `_matter._tcp`), Zigbee (via SDR/CC2531 se HW), BLE GATT enumeration | 6h | S2.1 |
+| S3.1 | **Network Scanner (Nmap Wrapper)** — Async `python-nmap` ou subprocess XML/JSON, host discovery (-sn), port scan (-sS), OS detect (-O), service version (-sV), NSE scripts | 8h | S0.x | ✅ **COMPLETO** |
+| S3.2 | **Nuclei Runner** — Template execution (`-t cves/ -t exposures/ -t misconfig/`), JSONL parsing, deduplication, severity mapping | 6h | S3.1 | ✅ **COMPLETO** |
+| S3.3 | **SearchSploit Integration** — Local ExploitDB (`searchsploit -j`), filter por CVE/service, auto-download exploit para `artifacts/` | 4h | S3.1 | 🟡 **ESTRUTURA CRIADA** (searchsploit não instalado) |
+| S3.4 | **Router Scan** — `RouterSploit` (autopwn), `hydra` credential brute (SSH, HTTP, Telnet, FTP), custom auth lists | 6h | S3.1 | 🟡 **ESTRUTURA CRIADA** (RouterSploit não instalado) |
+| S3.5 | **Camera Discovery** — mDNS (`_rtsp._tcp`, `_onvif._tcp`), UPnP SSDP, ONVIF `GetDeviceInformation`, RTSP `DESCRIBE`, HTTP fingerprint | 8h | S0.x | 🟡 **ESTRUTURA CRIADA** |
+| S3.6 | **Camera Enumeration** — Auth test (basic/digest), default creds list (admin/admin, admin/12345, etc.), config dump, firmware version | 6h | S3.5 | 🟡 **ESTRUTURA CRIADA** |
+| S3.7 | **Camera Vuln Check** — CVE mapping (CVEdb local), exploit availability (Nuclei/Metasploit), RTSP auth bypass test | 6h | S3.6 | ⏳ PENDENTE |
+| S3.8 | **IoT Protocols** — Matter/Thread (mDNS `_matter._tcp`), Zigbee (via SDR/CC2531 se HW), BLE GATT enumeration | 6h | S2.1 | ⏳ PENDENTE |
 
-**Entregável Sprint 3**: Network vuln scanning, camera discovery/enumeration/vuln check, IoT baseline.
+**Entregável Sprint 3**: ⚠️ **PARCIAL** — Nmap wrapper + Nuclei runner funcionando. Camera discovery estrutura criada. SearchSploit, RouterSploit, Hydra integration pendentes (dependências não instaladas no sistema de teste).
 
 ---
 

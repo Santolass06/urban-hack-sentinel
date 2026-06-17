@@ -219,6 +219,67 @@ urban-hs --export ble-kismet --output /tmp/ble_wardrive.netxml
 
 ---
 
+## 🌐 Network / Vulnerability Scanning (Sprint 3)
+
+### 1. Network Host Discovery
+```bash
+# Discover live hosts on network
+urban-hs --net-scan --target 192.168.1.0/24 --type host_discovery
+
+# Discover hosts with open ports
+urban-hs --net-scan --target 192.168.1.0/24 --type port_scan --ports 1-1000
+```
+
+### 2. Service Version & OS Detection
+```bash
+# Full service version scan on specific hosts
+urban-hs --net-scan --target 192.168.1.1,192.168.1.100 --type service_version --ports 22,80,443,554
+
+# OS fingerprinting
+urban-hs --net-scan --target 192.168.1.1 --type os_fingerprint
+```
+
+### 3. Vulnerability Scanning with Nuclei
+```bash
+# Scan for vulnerabilities (critical/high/medium)
+urban-hs --vuln-scan --target 192.168.1.0/24 --severity critical,high,medium
+
+# Custom template scan
+urban-hs --vuln-scan --target 192.168.1.1 --templates /path/to/templates
+```
+
+### 4. Exploit Database Search
+```bash
+# Search ExploitDB for exploits
+urban-hs --search-exploit "CVE-2024-1234"
+
+# Search by service/technology
+urban-hs --search-exploit "nginx" --exact
+```
+
+### 5. Router Credential Testing
+```bash
+# Brute force router credentials
+urban-hs --router-brute --target 192.168.1.1 --service ssh --user-list users.txt --pass-list passwords.txt
+
+# HTTP form brute force
+urban-hs --router-brute --target 192.168.1.1 --service http-form --port 80
+```
+
+### 6. Camera Discovery
+```bash
+# Discover cameras via mDNS/UPnP/ONVIF/RTSP
+urban-hs --camera-discover --target 192.168.1.0/24
+
+# Enumerate camera details
+urban-hs --camera-enum --target 192.168.1.100
+
+# Check camera vulnerabilities
+urban-hs --camera-vuln --target 192.168.1.100
+```
+
+---
+
 ## 🔧 API Server + Dashboard
 
 ```bash
@@ -316,12 +377,9 @@ urban_hs/
 │   │   ├── fastpair.py      # Fast Pair scanner + WhisperPair
 │   │   ├── exploit_chain.py # WhisperPair exploit chain (BlueZ bonding, Account Key, HFP)
 │   │   ├── plugin.py        # BLE plugin integration
-│   │   └── fastpair.py      # Fast Pair scanner + WhisperPair
 │   │
-│   ├── network/             # 🔄 Sprint 3
-│   │   ├── scanner.py       # Nmap wrapper
-│   │   ├── nuclei.py        # Nuclei runner
-│   │   └── camera.py        # Camera discovery/enum
+│   ├── network/             # 🟡 Sprint 3 - Partial
+│   │   ├── __init__.py      # Nmap wrapper, Nuclei runner, Camera discovery
 │   │
 │   ├── metasploit/          # 🔄 Sprint 4
 │   │   └── msf_rpc.py       # MSF RPC client
