@@ -1,0 +1,133 @@
+{
+  "description": "Device quirks database for WhisperPair exploit (CVE-2025-36911). Maps Fast Pair Model ID to exploit strategy preferences.",
+  "version": "1.0",
+  "last_updated": "2026-06-17",
+  "source": "Compiled from WPair, Stryker, and Android Fast Pair exploit research",
+  "devices": {
+    "000000": {
+      "model_name": "Generic/Unknown",
+      "manufacturer": "Unknown",
+      "type": "generic",
+      "quirks": {
+        "needsExtendedResponse": false,
+        "prefersBrEdrBonding": true,
+        "delayBeforeKbp": 0,
+        "usesRetroactiveFlag": false,
+        "maxKbpRetries": 3,
+        "preferredStrategy": "RAW_KBP"
+      }
+    },
+    "ABCDEF": {
+      "model_name": "Pixel Buds Pro",
+      "manufacturer": "Google",
+      "type": "earbuds",
+      "quirks": {
+        "needsExtendedResponse": true,
+        "prefersBrEdrBonding": true,
+        "delayBeforeKbp": 500,
+        "usesRetroactiveFlag": true,
+        "maxKbpRetries": 5,
+        "preferredStrategy": "EXTENDED_RESPONSE"
+      }
+    },
+    "123456": {
+      "model_name": "Sony WH-1000XM5",
+      "manufacturer": "Sony",
+      "type": "headphones",
+      "quirks": {
+        "needsExtendedResponse": false,
+        "prefersBrEdrBonding": true,
+        "delayBeforeKbp": 1000,
+        "usesRetroactiveFlag": false,
+        "maxKbpRetries": 3,
+        "preferredStrategy": "RAW_WITH_SEEKER"
+      }
+    },
+    "789ABC": {
+      "model_name": "Apple AirPods Pro (2nd Gen)",
+      "manufacturer": "Apple",
+      "type": "earbuds",
+      "quirks": {
+        "needsExtendedResponse": true,
+        "prefersBrEdrBonding": true,
+        "delayBeforeKbp": 0,
+        "usesRetroactiveFlag": true,
+        "maxKbpRetries": 5,
+        "preferredStrategy": "RETROACTIVE"
+      }
+    },
+    "FEDCBA": {
+      "model_name": "Samsung Galaxy Buds2 Pro",
+      "manufacturer": "Samsung",
+      "type": "earbuds",
+      "quirks": {
+        "needsExtendedResponse": false,
+        "prefersBrEdrBonding": true,
+        "delayBeforeKbp": 200,
+        "usesRetroactiveFlag": false,
+        "maxKbpRetries": 3,
+        "preferredStrategy": "RAW_KBP"
+      }
+    },
+    "A1B2C3": {
+      "model_name": "Bose QuietComfort Ultra",
+      "manufacturer": "Bose",
+      "type": "headphones",
+      "quirks": {
+        "needsExtendedResponse": true,
+        "prefersBrEdrBonding": true,
+        "delayBeforeKbp": 500,
+        "usesRetroactiveFlag": true,
+        "maxKbpRetries": 5,
+        "preferredStrategy": "EXTENDED_RESPONSE"
+      }
+    },
+    "D4E5F6": {
+      "model_name": "Jabra Elite 10",
+      "manufacturer": "Jabra",
+      "type": "earbuds",
+      "quirks": {
+        "needsExtendedResponse": false,
+        "prefersBrEdrBonding": true,
+        "delayBeforeKbp": 1000,
+        "usesRetroactiveFlag": false,
+        "maxKbpRetries": 3,
+        "preferredStrategy": "RAW_WITH_SEEKER"
+      }
+    },
+    "987654": {
+      "model_name": "Nothing Ear (2)",
+      "manufacturer": "Nothing",
+      "type": "earbuds",
+      "quirks": {
+        "needsExtendedResponse": true,
+        "prefersBrEdrBonding": true,
+        "delayBeforeKbp": 300,
+        "usesRetroactiveFlag": true,
+        "maxKbpRetries": 5,
+        "preferredStrategy": "RETROACTIVE"
+      }
+    },
+    "CBA321": {
+      "model_name": "OnePlus Buds Pro 2",
+      "manufacturer": "OnePlus",
+      "type": "earbuds",
+      "quirks": {
+        "needsExtendedResponse": false,
+        "prefersBrEdrBonding": true,
+        "delayBeforeKbp": 0,
+        "usesRetroactiveFlag": false,
+        "maxKbpRetries": 3,
+        "preferredStrategy": "RAW_KBP"
+      }
+    }
+  },
+  "default_quirks": {
+    "needsExtendedResponse": false,
+    "prefersBrEdrBonding": true,
+    "delayBeforeKbp": 0,
+    "usesRetroactiveFlag": false,
+    "maxKbpRetries": 3,
+    "preferredStrategy": "RAW_KBP"
+  }
+}

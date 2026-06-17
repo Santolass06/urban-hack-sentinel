@@ -14,6 +14,7 @@ from urban_hs.modules.ble.fastpair import (
     PASSKEY_UUID,
     ACCOUNT_KEY_UUID,
     get_device_quirks,
+    _load_device_quirks,
     DEVICE_QUIRKS,
 )
 from urban_hs.modules.ble.exploit_chain import (
@@ -37,6 +38,7 @@ __all__ = [
     "PASSKEY_UUID",
     "ACCOUNT_KEY_UUID",
     "get_device_quirks",
+    "_load_device_quirks",
     "DEVICE_QUIRKS",
     "BlueZBondingManager",
     "BondedDevice",
