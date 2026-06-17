@@ -9,28 +9,33 @@
 
 **Urban Hack Sentinel v3** transforma um Raspberry Pi numa plataforma completa de auditoria wireless/Bluetooth/IoT que opera continuamente:
 
-### 🎯 Core Capabilities (Sprint 0-1)
-| Capability | Status | Description |
-|------------|--------|-------------|
-| **WiFi Scanner** | ✅ | Passive/active scan 2.4/5/6 GHz via `iw` JSON + `airodump-ng` fallback |
-| **PMKID Attack** | ✅ | Client-less PMKID capture (WPA2/WPA3) via `hcxdumptool` + `hcxpcapngtool` |
-| **Handshake Capture** | ✅ | Deauth + 4-way handshake via `aireplay-ng` + `airodump-ng` |
-| **WPS Pixie Dust** | ✅ | Offline PIN attack via `reaver --pixie-dust` |
-| **WPS PIN Dictionary** | ✅ | Common PIN database per OUI |
-| **Deauth Attack** | ✅ | Targeted/broadcast deauth via `aireplay-ng` |
-| **MAC Randomization** | ✅ | OUI profiles (Apple, Samsung, Intel, Realtek, Atheros) |
-| **Handshake Manager** | ✅ | Deduplication, Hashcat integration, WiGLE/Kismet export |
+### 🎯 Core Capabilities (Sprint 0-4)
+|| Capability | Status | Description ||
+||------------|--------|-------------|
+|| **WiFi Scanner** | ✅ | Passive/active scan 2.4/5/6 GHz via `iw` JSON + `airodump-ng` fallback |
+|| **PMKID Attack** | ✅ | Client-less PMKID capture (WPA2/WPA3) via `hcxdumptool` + `hcxpcapngtool` |
+|| **Handshake Capture** | ✅ | Deauth + 4-way handshake via `aireplay-ng` + `airodump-ng` |
+|| **WPS Pixie Dust** | ✅ | Offline PIN attack via `reaver --pixie-dust` |
+|| **WPS PIN Dictionary** | ✅ | Common PIN database per OUI |
+|| **Deauth Attack** | ✅ | Targeted/broadcast deauth via `aireplay-ng` |
+|| **MAC Randomization** | ✅ | OUI profiles (Apple, Samsung, Intel, Realtek, Atheros) |
+|| **Handshake Manager** | ✅ | Deduplication, Hashcat integration, WiGLE/Kismet export |
 
-### 🚀 Advanced Features (Sprint 2-5)
-| Module | Status | Description |
-|--------|--------|-------------|
-| **BLE/Fast Pair** | 🟡 | Fast Pair scanner ✅, WhisperPair (CVE-2025-36911) vuln test ✅, exploit chain 🟡 |
-| **Camera Discovery** | ✅ | mDNS/UPnP/ONVIF/RTSP/HTTP, default creds, vuln scanning |
-| **Network Scanner** | ✅ | Nmap wrapper, OS fingerprint, service enum |
-| **Metasploit RPC** | 🔄 | Module execution, session management |
-| **Nuclei Scanner** | ✅ | Template-based vuln scanning |
-| **HID/USB Gadget** | 🔄 | DuckyScript, HID injection, USB gadget profiles |
-| **Geo/wardriving** | 🔄 | GPS/MLAT, Kismet/Wigle/CSV/KML export |
+### 🚀 Advanced Features (Sprints 2-5)
+|| Module | Status | Description |
+||--------|--------|-------------|
+|| **BLE/Fast Pair** | ✅ | Fast Pair scanner ✅, WhisperPair (CVE-2025-36911) vuln test ✅, exploit chain ✅ |
+|| **Camera Discovery** | ✅ | mDNS/UPnP/ONVIF/RTSP/HTTP, default creds, vuln scanning |
+|| **Network Scanner** | ✅ | Nmap wrapper, OS fingerprint, service enum |
+|| **Metasploit RPC** | ✅ | Module execution, session management, exploit execution |
+|| **Nuclei Scanner** | ✅ | Template-based vuln scanning |
+|| **HID/USB Gadget** | ✅ | DuckyScript, HID injection, USB gadget profiles |
+|| **Geo/wardriving** | 🔄 | GPS/MLAT, Kismet/Wigle/CSV/KML export |
+|| **MQTT Attack Suite** | ✅ | Broker discovery, topic enum, cred brute force |
+|| **ESP32 Fingerprinting** | ✅ | CVE-2025-27840 passive detection |
+|| **SPID Confusion** | ✅ | CVE-2023-52424 detection |
+|| **Kr00k/FragAttacks** | ✅ | CVE-2019-15126, CVE-2020-24586/87/88 |
+|| **Bluetooth HID** | ✅ | CVE-2023-45866, CVE-2024-21306 injection |
 
 ---
 
@@ -280,17 +285,17 @@ urban-hs --camera-vuln --target 192.168.1.100
 
 ---
 
-## 🎯 Exploit Roadmap (Sprint 4+)
+## 🎯 Exploit Roadmap (Sprints 4+)
 
-The following high-value exploits are planned or implemented based on the security research review:
+The following high-value exploits have been implemented:
 
-### 🔴 Critical Impact (Ready/Implementing)
+### 🔴 Critical Impact (**Implemented**)
 | Exploit | CVE | Status | Hardware |
 |---------|-----|--------|----------|
-| **Bluetooth HID Keystroke Injection** | CVE-2023-45866, CVE-2024-21306 | 🟡 Planned (HID module) | Pi built-in |
-| **WhisperPair Fast Pair KBP Bypass** | CVE-2025-36911 | 🟡 Partial (Sprint 2) | Pi built-in |
-| **Kr00k** | CVE-2019-15126 | 🟡 Planned | Alfa WiFi |
-| **FragAttacks** | CVE-2020-24586/87/88 | 🟡 Planned | Alfa WiFi |
+| **Bluetooth HID Keystroke Injection** | CVE-2023-45866, CVE-2024-21306 | ✅ **Implemented** (bt_hid module) | Pi built-in |
+| **WhisperPair Fast Pair KBP Bypass** | CVE-2025-36911 | ✅ **Implemented** (Sprint 2) | Pi built-in |
+| **Kr00k** | CVE-2019-15126 | ✅ **Implemented** (wifi/attacks.py) | Alfa WiFi |
+| **FragAttacks** | CVE-2020-24586/87/88 | ✅ **Implemented** (wifi/fragattacks.py) | Alfa WiFi |
 
 ### 🟠 High Impact
 | Exploit | CVE | Status | Hardware |
@@ -300,14 +305,14 @@ The following high-value exploits are planned or implemented based on the securi
 | **BLUFFS** | CVE-2023-24023 | 🟡 Planned | InternalBlue HW |
 | **SweynTooth** | 12 CVEs | 🟡 Planned | nRF52840 dongle |
 
-### 🟡 Medium Impact (Original Contributions)
+### 🟡 Medium Impact (Original Contributions - **Implemented**)
 | Exploit | Description | Status | Hardware |
 |---------|-------------|--------|----------|
 | **AirDrop Phone Harvesting** | AWDL SHA256 truncated hash brute-force | 🟡 Original impl | Pi built-in |
-| **SSID Confusion** | Downgrade 5GHz→2.4GHz MITM via SSID not in PMK | 🟡 Original impl | Alfa WiFi |
-| **ESP32 Fingerprinting** | 29 undocumented HCI commands detection | 🟡 Original impl | Pi built-in |
+| **SSID Confusion** | Downgrade 5GHz→2.4GHz MITM via SSID not in PMK | ✅ **Implemented** (ssid_confusion.py) | Alfa WiFi |
+| **ESP32 Fingerprinting** | 29 undocumented HCI commands detection | ✅ **Implemented** (esp32.py) | Pi built-in |
 | **TPMS Vehicle Tracking** | 433MHz passive vehicle tracking via RTL-SDR | 🟡 Planned | RTL-SDR Blog V4 |
-| **MQTT Attack Suite** | Broker discovery + credential brute + topic enum | 🟡 Planned | Network access |
+| **MQTT Attack Suite** | Broker discovery + credential brute + topic enum | ✅ **Implemented** (mqtt.py) | Network access |
 
 ---
 

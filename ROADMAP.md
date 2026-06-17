@@ -9,166 +9,166 @@
 
 ### F1 — Wardriving + Geolocalização 🟠
 **Objetivo**: Registar redes com coordenadas GPS, exportar para Kismet/Wigle/CSV.
-| Task | Prioridade | Detalhes |
-|------|------------|----------|
-| F1.1 | 🟠 | Integrar `gpsd` + USB GPS (u-blox, etc.) — ler `$GPRMC`/`$GPGGA` via TCP 2947 |
-| F1.2 | 🟠 | Adicionar `lat`, `lon`, `alt`, `speed`, `hdop` a cada entrada em `REDES[]` e `metrics.jsonl` |
-| F1.3 | 🟡 | Exportador `to_kismet_netxml()` — gera `.netxml` compatível Kismet |
-| F1.4 | 🟡 | Exportador `to_wigle_csv()` — formato WiGLE WiFi Wardriving |
-| F1.5 | 🟢 | Modo "wardrive" dedicado: scan contínuo sem ataques, só logging + GPS |
-| F1.6 | 🟢 | Integração opcional com **Bettercap** para BLE/Bluetooth LE simultâneo |
+| Task | Prioridade | Detalhes | Status |
+|------|------------|----------|--------|
+| F1.1 | 🟠 | Integrar `gpsd` + USB GPS (u-blox, etc.) — ler `$GPRMC`/`$GPGGA` via TCP 2947 | ✅ Completo |
+| F1.2 | 🟠 | Adicionar `lat`, `lon`, `alt`, `speed`, `hdop` a cada entrada em `REDES[]` e `metrics.jsonl` | ✅ Completo |
+| F1.3 | 🟡 | Exportador `to_kismet_netxml()` — gera `.netxml` compatível Kismet | ✅ Completo |
+| F1.4 | 🟡 | Exportador `to_wigle_csv()` — formato WiGLE WiFi Wardriving | ✅ Completo |
+| F1.5 | 🟢 | Modo "wardrive" dedicado: scan contínuo sem ataques, só logging + GPS | 🔄 Pendente |
+| F1.6 | 🟢 | Integração opcional com **Bettercap** para BLE/Bluetooth LE simultâneo | ⏳ Pendente |
 
 ### F2 — Dashboard Web Local (Read-Only) 🟡
 **Objetivo**: Visualizar status, métricas, mapa de redes via browser no LAN.
-| Task | Prioridade | Detalhes |
-|------|------------|----------|
-| F2.1 | 🟡 | Servidor HTTP leve (Go `net/http` ou Python `aiohttp`) na porta 8080 |
-| F2.2 | 🟡 | API `/api/status` → JSON com métricas atuais (temp, jobs, targets, uptime) |
-| F2.3 | 🟡 | API `/api/networks` → lista redes + última vista + sinal + tipo + GPS |
-| F2.4 | 🟡 | API `/api/metrics` → streaming Server-Sent Events (SSE) para gráficos tempo real |
-| F2.5 | 🟢 | Frontend simples: Leaflet.js + OpenStreetMap para mapa de redes (se GPS) |
-| F2.6 | 🟢 | Página `/cracked` — lista hashes cracked do `.potfile` |
-| F2.7 | 🔵 | Autenticação básica (htpasswd) ou token Bearer para exposição LAN |
+| Task | Prioridade | Detalhes | Status |
+|------|------------|----------|--------|
+| F2.1 | 🟡 | Servidor HTTP leve (Go `net/http` ou Python `aiohttp`) na porta 8080 | 🔄 Pendente |
+| F2.2 | 🟡 | API `/api/status` → JSON com métricas atuais (temp, jobs, targets, uptime) | ✅ Completo |
+| F2.2 | 🟡 | API `/api/networks` → lista redes + última vista + sinal + tipo + GPS | ✅ Completo |
+| F2.4 | 🟡 | API `/api/metrics` → streaming Server-Sent Events (SSE) para gráficos tempo real | ✅ Completo |
+| F2.5 | 🟢 | Frontend simples: Leaflet.js + OpenStreetMap para mapa de redes (se GPS) | 🔄 Pendente |
+| F2.6 | 🟢 | Página `/cracked` — lista hashes cracked do `.potfile` | 🔄 Pendente |
+| F2.7 | 🔵 | Autenticação básica (htpasswd) ou token Bearer para exposição LAN | 🔄 Pendente |
 
 ### F3 — Suporte Multi-Interface Simultâneo 🟠
 **Objetivo**: Usar 2+ rádios USB em paralelo (ex: 2.4 GHz + 5 GHz dedicados).
-| Task | Prioridade | Detalhes |
-|------|------------|----------|
-| F3.1 | 🟠 | Config `WIFI_IFACES="wlan1,wlan2"` — array de interfaces |
-| F3.2 | 🟠 | Round-robin ou divisão de canais por interface (2.4G numa, 5G noutra) |
-| F3.3 | 🟡 | `hcxdumptool` suporta múltiplas interfaces (`-i wlan1 -i wlan2`) — aproveitar |
-| F3.4 | 🟡 | Sincronização de estado: `REDES` global, `CURRENT_TARGETS` por interface |
-| F3.5 | 🟢 | Detecção automática de capacidades por interface (injection, monitor, 5G/6G) |
+| Task | Prioridade | Detalhes | Status |
+|------|------------|----------|--------|
+| F3.1 | 🟠 | Config `WIFI_IFACES="wlan1,wlan2"` — array de interfaces | ✅ Completo |
+| F3.2 | 🟠 | Round-robin ou divisão de canais por interface (2.4G numa, 5G noutra) | ✅ Completo |
+| F3.3 | 🟡 | `hcxdumptool` suporta múltiplas interfaces (`-i wlan1 -i wlan2`) — aproveitar | ✅ Completo |
+| F3.4 | 🟡 | Sincronização de estado: `REDES` global, `CURRENT_TARGETS` por interface | ✅ Completo |
+| F3.5 | 🟢 | Detecção automática de capacidades por interface (injection, monitor, 5G/6G) | 🔄 Pendente |
 
 ### F4 — Ataques Avançados WPA3 / 802.11r 🟡
 **Objetivo**: Capturar material crackável em redes WPA3-SAE e Fast Transition.
-| Task | Prioridade | Detalhes |
-|------|------------|----------|
-| F4.1 | 🟡 | Detectar redes WPA3-SAE (flags `sae`/`wpa3` no `iw` JSON) |
-| F4.2 | 🟡 | PMKID em WPA3: `hcxdumptool` já suporta — validar e documentar |
-| F4.3 | 🟢 | 802.11r (Fast Transition): capturar PMK-R0/R1 via reassociação forçada |
-| F4.4 | 🟢 | Downgrade attack: forçar WPA2 se AP suporta transição (mixed mode) |
-| F4.5 | 🔵 | SAE-PK (WPA3-Enterprise) — fora de escopo por agora |
+| Task | Prioridade | Detalhes | Status |
+|------|------------|----------|--------|
+| F4.1 | 🟡 | Detectar redes WPA3-SAE (flags `sae`/`wpa3` no `iw` JSON) | ✅ Completo |
+| F4.2 | 🟡 | PMKID em WPA3: `hcxdumptool` já suporta — validar e documentar | ✅ Completo |
+| F4.3 | 🟢 | 802.11r (Fast Transition): capturar PMK-R0/R1 via reassociação forçada | 🔄 Pendente |
+| F4.4 | 🟢 | Downgrade attack: forçar WPA2 se AP suporta transição (mixed mode) | 🔄 Pendente |
+| F4.5 | 🔵 | SAE-PK (WPA3-Enterprise) — fora de escopo por agora | ⏳ Pendente |
 
 ### F5 — Cracking Distribuído / Offloading 🟢
 **Objetivo**: Enviar hashes para máquinas potentes (desktop, cloud) para cracking.
-| Task | Prioridade | Detalhes |
-|------|------------|----------|
-| F5.1 | 🟢 | Watcher em `$HASH_DIR` — detecta novos `.22000` |
-| F5.2 | 🟢 | Upload via `rsync`/`scp`/`syncthing` para host remoto configurado |
-| F5.3 | 🟢 | Polling de resultados: baixa `.potfile` cracked do remoto |
-| F5.4 | 🔵 | Integração opcional com **Hashtopolis** (API REST) para fleet management |
-| F5.5 | 🔵 | Auto-geração de relatório: "X redes, Y cracked, top passwords" |
+| Task | Prioridade | Detalhes | Status |
+|------|------------|----------|--------|
+| F5.1 | 🟢 | Watcher em `$HASH_DIR` — detecta novos `.22000` | ✅ Completo |
+| F5.2 | 🟢 | Upload via `rsync`/`scp`/`syncthing` para host remoto configurado | ✅ Completo |
+| F5.3 | 🟢 | Polling de resultados: baixa `.potfile` cracked do remoto | ✅ Completo |
+| F5.4 | 🔵 | Integração opcional com **Hashtopolis** (API REST) para fleet management | 🔄 Pendente |
+| F5.5 | 🔵 | Auto-geração de relatório: "X redes, Y cracked, top passwords" | 🔄 Pendente |
 
 ### F6 — Inteligência de Alvos (Priorização) 🟡
 **Objetivo**: Atacar primeiro redes com maior probabilidade de sucesso.
-| Task | Prioridade | Detalhes |
-|------|------------|----------|
-| F6.1 | 🟡 | Scoring: sinal + tipo (WPS > WPA2 > WPA3 > OPEN) + histórico sucessos |
-| F6.2 | 🟡 | Base de dados local (SQLite) com `bssid`, `essid`, `last_seen`, `cracked`, `attempts` |
-| F6.3 | 🟢 | Lista "known vulnerable": OUI conhecida, firmware padrão, WPS PIN fraco |
-| F6.4 | 🟢 | Integração com **Wigle.net API** — enriquece com localização globalKnown |
-| F6.5 | 🔵 | ML leve: regressão logística `p(crack) ~ signal + vendor + encryption + time` |
+| Task | Prioridade | Detalhes | Status |
+|------|------------|----------|--------|
+| F6.1 | 🟡 | Scoring: sinal + tipo (WPS > WPA2 > WPA3 > OPEN) + histórico sucessos | ✅ Completo |
+| F6.2 | 🟡 | Base de dados local (SQLite) com `bssid`, `essid`, `last_seen`, `cracked`, `attempts` | ✅ Completo |
+| F6.3 | 🟢 | Lista "known vulnerable": OUI conhecida, firmware padrão, WPS PIN fraco | ✅ Completo |
+| F6.4 | 🟢 | Integração com **Wigle.net API** — enriquece com localização globalKnown | 🔄 Pendente |
+| F6.5 | 🔵 | ML leve: regressão logística `p(crack) ~ signal + vendor + encryption + time` | ⏳ Pendente |
 
 ### F7 — Bluetooth / BLE / IoT Reconnaissance 🔵
 **Objetivo**: Expandir além de Wi-Fi para superfície de ataque IoT.
-| Task | Prioridade | Detalhes |
-|------|------------|----------|
-| F7.1 | 🔵 | `bluetoothctl` / `btmon` scan passivo — log devices, RSSI, serviços |
-| F7.2 | 🔵 | Bettercap BLE module para enumeração GATT |
-| F7.3 | 🔵 | Correlação MAC Wi-Fi ↔ BLE (mesmo dispositivo, OUI partilhado) |
-| F7.4 | 🔵 | Exportador para formato Kismet BLE |
+| Task | Prioridade | Detalhes | Status |
+|------|------------|----------|--------|
+| F7.1 | 🔵 | `bluetoothctl` / `btmon` scan passivo — log devices, RSSI, serviços | ✅ Completo |
+| F7.2 | 🔵 | Bettercap BLE module para enumeração GATT | ✅ Completo |
+| F7.3 | 🔵 | Correlação MAC Wi-Fi ↔ BLE (mesmo dispositivo, OUI partilhado) | ✅ Completo |
+| F7.4 | 🔵 | Exportador para formato Kismet BLE | ✅ Completo |
 
 ### F8 — Hardening & Reliability 🔴
 **Objetivo**: Produção robusta, auto-recovery, zero supervisão manual.
-| Task | Prioridade | Detalhes |
-|------|------------|----------|
-| F8.1 | 🔴 | Watchdog: `systemd` `WatchdogSec=` + script heartbeat a cada 30s |
-| F8.2 | 🔴 | Auto-recovery interface: se `iw` falha 3x → `ip link set down/up` + re-set monitor |
-| F8.3 | 🔴 | Log rotation: `logrotate` config para `/var/log/urban-hack-sentinel/*.log` |
-| F8.4 | 🟠 | Healthcheck HTTP endpoint (`/healthz`) para orchestração (k8s, systemd) |
-| F8.5 | 🟠 | Métricas Prometheus (`/metrics`) — `temp_c`, `jobs_active`, `networks_seen`, `hashes_captured` |
-| F8.6 | 🟡 | Testes de integração (bats/shunit2) em CI — mock `iw`, `hcxdumptool` |
-| F8.7 | 🟡 | Assinatura GPG dos artefactos (hashes, pcaps) para cadeia de custódia |
+| Task | Prioridade | Detalhes | Status |
+|------|------------|----------|--------|
+| F8.1 | 🔴 | Watchdog: `systemd` `WatchdogSec=` + script heartbeat a cada 30s | ✅ Completo |
+| F8.2 | 🔴 | Auto-recovery interface: se `iw` falha 3x → `ip link set down/up` + re-set monitor | ✅ Completo |
+| F8.3 | 🔴 | Log rotation: `logrotate` config para `/var/log/urban-hack-sentinel/*.log` | ✅ Completo |
+| F8.4 | 🟠 | Healthcheck HTTP endpoint (`/healthz`) para orchestração (k8s, systemd) | ✅ Completo |
+| F8.5 | 🟠 | Métricas Prometheus (`/metrics`) — `temp_c`, `jobs_active`, `networks_seen`, `hashes_captured` | ✅ Completo |
+| F8.6 | 🟡 | Testes de integração (bats/shunit2) em CI — mock `iw`, `hcxdumptool` | ✅ Completo |
+| F8.7 | 🟡 | Assinatura GPG dos artefactos (hashes, pcaps) para cadeia de custódia | ✅ Completo |
 
 ### F9 — IA/ML Local (Edge) 🔵
 **Objetivo**: Decisão de parâmetros sem API externa (substitui o antigo GPT).
-| Task | Prioridade | Detalhes |
-|------|------------|----------|
-| F9.1 | 🔵 | Modelo leve (ONNX/TFLite) embutido: input=métricas → output=timeout, jobs, signal_thresh |
-| F9.2 | 🔵 | Treino offline: recolhe dataset `(metrics, outcome)` → treina XGBoost/LightGBM pequeno |
-| F9.3 | 🔵 | Inferência via `onnxruntime` ou `python3 -c "import onnxruntime"` no loop |
-| F9.4 | 🔵 | Fallback heurístico se modelo falhar (regras atuais) |
+| Task | Prioridade | Detalhes | Status |
+|------|------------|----------|--------|
+| F9.1 | 🔵 | Modelo leve (ONNX/TFLite) embutido: input=métricas → output=timeout, jobs, signal_thresh | 🔄 Pendente |
+| F9.2 | 🔵 | Treino offline: recolhe dataset `(metrics, outcome)` → treina XGBoost/LightGBM pequeno | 🔄 Pendente |
+| F9.3 | 🔵 | Inferência via `onnxruntime` ou `python3 -c "import onnxruntime"` no loop | 🔄 Pendente |
+| F9.4 | 🔵 | Fallback heurístico se modelo falhar (regras atuais) | 🔄 Pendente |
 
 ---
 
 ## ⚙️ TASKS (Tarefas atómicas, independentes)
 
 ### T1 — Qualidade de Código & DX 🟠
-| ID | Task | Prioridade | Esforço |
-|----|------|------------|---------|
-| T1.1 | Adicionar `shellcheck` no CI (GitHub Actions) | 🟠 | 1h |
-| T1.2 | `set -euo pipefail` já feito — adicionar `shopt -s inherit_errexit` | 🟢 | 15m |
-| T1.3 | Função `die()` unificada para erros fatais com cleanup | 🟡 | 30m |
-| T1.4 | Logging estruturado: `log_info`, `log_warn`, `log_error`, `log_debug` | 🟡 | 1h |
-| T1.5 | Configuração via `getopt`/`argparse` para flags CLI (`--config`, `--dry-run`, `--once`) | 🟢 | 2h |
-| T1.6 | Modo `--dry-run`: só scan, não ataca, imprime plano | 🟢 | 1h |
-| T1.7 | Completar `config.env.example` com todas as vars documentadas | 🟠 | 30m |
+| ID | Task | Prioridade | Esforço | Status |
+|----|------|------------|---------|--------|
+| T1.1 | Adicionar `shellcheck` no CI (GitHub Actions) | 🟠 | 1h | ✅ Completo |
+| T1.2 | `set -euo pipefail` já feito — adicionar `shopt -s inherit_errexit` | 🟢 | 15m | ✅ Completo |
+| T1.3 | Função `die()` unificada para erros fatais com cleanup | 🟡 | 30m | ✅ Completo |
+| T1.4 | Logging estruturado: `log_info`, `log_warn`, `log_error`, `log_debug` | 🟡 | 1h | ✅ Completo |
+| T1.5 | Configuração via `getopt`/`argparse` para flags CLI (`--config`, `--dry-run`, `--once`) | 🟢 | 2h | ✅ Completo |
+| T1.6 | Modo `--dry-run`: só scan, não ataca, imprime plano | 🟢 | 1h | ✅ Completo |
+| T1.7 | Completar `config.env.example` com todas as vars documentadas | 🟠 | 30m | ✅ Completo |
 
 ### T2 — Scanner & Parsing 🟠
-| ID | Task | Prioridade | Esforço |
-|----|------|------------|---------|
-| T2.1 | Migrar 100% para `iw -f json` (remover fallback `iwlist` se `jq` sempre presente) | 🟡 | 1h |
-| T2.2 | Parse completo de `flags` array: `privacy`, `wpa3`, `sae`, `wps`, `802.11r`, `802.11k`, `802.11v` | 🟠 | 2h |
-| T2.3 | Detectar canal real (`primary`, `secondary`, `width`: 20/40/80/160 MHz) | 🟡 | 1h |
-| T2.4 | Vendor OUI lookup local (base `ieee-oui.txt` embutida) → `vendor` field | 🟢 | 2h |
-| T2.5 | Deduplicação inteligente: mesmo BSSID, múltiplos SSIDs (hidden + broadcast) | 🟢 | 1h |
+| ID | Task | Prioridade | Esforço | Status |
+|----|------|------------|---------|--------|
+| T2.1 | Migrar 100% para `iw -f json` (remover fallback `iwlist` se `jq` sempre presente) | 🟡 | 1h | ✅ Completo |
+| T2.2 | Parse completo de `flags` array: `privacy`, `wpa3`, `sae`, `wps`, `802.11r`, `802.11k`, `802.11v` | 🟠 | 2h | ✅ Completo |
+| T2.3 | Detectar canal real (`primary`, `secondary`, `width`: 20/40/80/160 MHz) | 🟡 | 1h | ✅ Completo |
+| T2.4 | Vendor OUI lookup local (base `ieee-oui.txt` embutida) → `vendor` field | 🟢 | 2h | ✅ Completo |
+| T2.5 | Deduplicação inteligente: mesmo BSSID, múltiplos SSIDs (hidden + broadcast) | 🟢 | 1h | ✅ Completo |
 
 ### T3 — Ataques & Captura 🟠
-| ID | Task | Prioridade | Esforço |
-|----|------|------------|---------|
-| T3.1 | `attack_pmkid`: adicionar `--active_beacon` + `--enable_status=15` para mais info | 🟡 | 30m |
-| T3.2 | `attack_handshake`: usar `airodump-ng --wps` para capturar WPS info simultâneo | 🟢 | 30m |
-| T3.3 | `attack_wps`: suporte a `pixiewps` offline (se reaver captura M1-M3) | 🟠 | 2h |
-| T3.4 | `capture_open`: filtro BPF para tráfego interessante (HTTP, DNS, TLS SNI) | 🟢 | 1h |
-| T3.5 | Timeout adaptativo: mais tempo em canais 5G (propagation), menos em 2.4G | 🟢 | 1h |
-| T3.6 | Captura de **EAPOL M1/M3** para PMKID mesmo sem handshake completo | 🟠 | 2h |
+| ID | Task | Prioridade | Esforço | Status |
+|----|------|------------|---------|--------|
+| T3.1 | `attack_pmkid`: adicionar `--active_beacon` + `--enable_status=15` para mais info | 🟡 | 30m | ✅ Completo |
+| T3.2 | `attack_handshake`: usar `airodump-ng --wps` para capturar WPS info simultâneo | 🟢 | 30m | ✅ Completo |
+| T3.3 | `attack_wps`: suporte a `pixiewps` offline (se reaver captura M1-M3) | 🟠 | 2h | ✅ Completo |
+| T3.4 | `capture_open`: filtro BPF para tráfego interessante (HTTP, DNS, TLS SNI) | 🟢 | 1h | ✅ Completo |
+| T3.5 | Timeout adaptativo: mais tempo em canais 5G (propagation), menos em 2.4G | 🟢 | 1h | ✅ Completo |
+| T3.6 | Captura de **EAPOL M1/M3** para PMKID mesmo sem handshake completo | 🟠 | 2h | ✅ Completo |
 
 ### T4 — Pós-Processamento & Hashes 🟡
-| ID | Task | Prioridade | Esforço |
-|----|------|------------|---------|
-| T4.1 | `hcxpcapngtool` flags: `--pmkid`, `--eapol`, `--username` (identity) | 🟡 | 30m |
-| T4.2 | Deduplicação de hashes: mesmo PMKID/ESSID → não re-escrever | 🟡 | 1h |
-| T4.3 | Metadados no `.22000`: embed ESSID, BSSID, timestamp, GPS (hcxtools 6.2+) | 🟢 | 1h |
-| T4.4 | Script `crack_all.sh`: itera `$HASH_DIR/*.22000` com hashcat profiles | 🟢 | 2h |
-| T4.5 | Integração `hashcat --show` → CSV relatório: `essid,bssid,password,method` | 🟢 | 1h |
+| ID | Task | Prioridade | Esforço | Status |
+|----|------|------------|---------|--------|
+| T4.1 | `hcxpcapngtool` flags: `--pmkid`, `--eapol`, `--username` (identity) | 🟡 | 30m | ✅ Completo |
+| T4.2 | Deduplicação de hashes: mesmo PMKID/ESSID → não re-escrever | 🟡 | 1h | ✅ Completo |
+| T4.3 | Metadados no `.22000`: embed ESSID, BSSID, timestamp, GPS (hcxtools 6.2+) | 🟢 | 1h | ✅ Completo |
+| T4.4 | Script `crack_all.sh`: itera `$HASH_DIR/*.22000` com hashcat profiles | 🟢 | 2h | ✅ Completo |
+| T4.5 | Integração `hashcat --show` → CSV relatório: `essid,bssid,password,method` | 🟢 | 1h | ✅ Completo |
 
 ### T5 — Sistema & Deploy 🟠
-| ID | Task | Prioridade | Esforço |
-|------|------|------------|---------|
-| T5.1 | `Makefile` alvos: `install`, `uninstall`, `config`, `test`, `package` | 🟠 | 1h |
-| T5.2 | Pacote `.deb` / `.rpm` / `PKGBUILD` (Arch) para instalação nativa | 🟢 | 4h |
-| T5.3 | Dockerfile para build isolado (cross-compile ARM64) | 🟢 | 2h |
-| T5.4 | Ansible role para provisioning em fleet de Pis | 🔵 | 4h |
-| T5.5 | `systemd` drop-in para override de `WIFI_IFACE` por host | 🟡 | 30m |
-| T5.6 | `logrotate.d/urban-hack-sentinel` — compress, maxage 30d, rotate 12 | 🟠 | 15m |
+| ID | Task | Prioridade | Esforço | Status |
+|----|------|------------|---------|--------|
+| T5.1 | `Makefile` alvos: `install`, `uninstall`, `config`, `test`, `package` | 🟠 | 1h | ✅ Completo |
+| T5.2 | Pacote `.deb` / `.rpm` / `PKGBUILD` (Arch) para instalação nativa | 🟢 | 4h | 🔄 Pendente |
+| T5.3 | Dockerfile para build isolado (cross-compile ARM64) | 🟢 | 2h | ✅ Completo |
+| T5.4 | Ansible role para provisioning em fleet de Pis | 🔵 | 4h | 🔄 Pendente |
+| T5.5 | `systemd` drop-in para override de `WIFI_IFACE` por host | 🟡 | 30m | ✅ Completo |
+| T5.6 | `logrotate.d/urban-hack-sentinel` — compress, maxage 30d, rotate 12 | 🟠 | 15m | ✅ Completo |
 
 ### T6 — Documentação & UX 🟡
-| ID | Task | Prioridade | Esforço |
-|----|------|------------|---------|
-| T6.1 | `man urban-hack-sentinel.8` page | 🟢 | 2h |
-| T6.2 | Diagrama de arquitetura (Mermaid/Excalidraw) no README | 🟢 | 1h |
-| T6.3 | Guia "Primeiros passos" para não-especialistas | 🟡 | 2h |
-| T6.4 | Página `CONTRIBUTING.md` + `CODE_OF_CONDUCT.md` | 🟢 | 1h |
-| T6.5 | Badges no README: license, build status, version, platform | 🟢 | 15m |
+| ID | Task | Prioridade | Esforço | Status |
+|----|------|------------|---------|--------|
+| T6.1 | `man urban-hack-sentinel.8` page | 🟢 | 2h | ✅ Completo |
+| T6.2 | Diagrama de arquitetura (Mermaid/Excalidraw) no README | 🟢 | 1h | ✅ Completo |
+| T6.3 | Guia "Primeiros passos" para não-especialistas | 🟡 | 2h | ✅ Completo |
+| T6.4 | Página `CONTRIBUTING.md` + `CODE_OF_CONDUCT.md` | 🟢 | 1h | ✅ Completo |
+| T6.5 | Badges no README: license, build status, version, platform | 🟢 | 15m | ✅ Completo |
 
 ### T7 — Testes & Validação 🟠
-| ID | Task | Prioridade | Esforço |
-|----|------|------------|---------|
-| T7.1 | Testes unitários BATS para funções puras (`freq_to_channel`, `parse_json`, etc.) | 🟠 | 3h |
-| T7.2 | Testes de integração com `mac80211_hwsim` (virtual Wi-Fi no CI) | 🟡 | 6h |
-| T7.3 | Fuzzing config parsing (valores inválidos, injection) | 🟢 | 2h |
-| T7.4 | Benchmark: ciclos/segundo, CPU%, memoria, hashes/hora por HW | 🟢 | 2h |
+| ID | Task | Prioridade | Esforço | Status |
+|----|------|------------|---------|--------|
+| T7.1 | Testes unitários BATS para funções puras (`freq_to_channel`, `parse_json`, etc.) | 🟠 | 3h | ✅ Completo |
+| T7.2 | Testes de integração com `mac80211_hwsim` (virtual Wi-Fi no CI) | 🟡 | 6h | ✅ Completo |
+| T7.3 | Fuzzing config parsing (valores inválidos, injection) | 🟢 | 2h | ✅ Completo |
+| T7.4 | Benchmark: ciclos/segundo, CPU%, memoria, hashes/hora por HW | 🟢 | 2h | ✅ Completo |
 
 ---
 

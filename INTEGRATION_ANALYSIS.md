@@ -52,18 +52,24 @@
 
 ## 3. Mapeamento: O que aplicar ao Urban Hack Sentinel (Pi / Linux)
 
-### 3.1 **Alta Prioridade — Implementar Agora**
+### 3.1 **Alta Prioridade — Implementar Agora** ✅ **TODOS COMPLETOS**
 
-| Feature | Origem | Esforço | Valor |
-|---------|--------|---------|-------|
-| **WPS Pixie Dust (Offline)** | Stryker | Médio | Captura PIN sem brute-force online |
-| **WPS Common PINs Database** | Stryker | Baixo | Dicionário de PINs padrão por OUI |
-| **MAC Changer Profiles / OUI Spoofing** | Stryker | Baixo | Anti-tracking avançado (Apple, Samsung, Intel) |
-| **Handshake Manager + Hashcat Integration** | Stryker | Médio | UI/CLI para gerenciar .22000, cracking local |
-| **GeoMac / WiGLE Export** | Stryker | Médio | Mapa OSM + KML/CSV para wardriving |
-| **BLE Fast Pair Scanner** | WPair | Médio | Descoberta dispositivos Fast Pair (0xFE2C) |
-| **CVE-2025-36911 Vulnerability Test** | WPair | Alto | Teste não-invasivo vulnerabilidade WhisperPair |
-| **Account Key Flood** | WPair | Alto | Expulsão chaves originais, persistência |
+| Feature | Origem | Esforço | Valor | Status |
+|---------|--------|---------|-------|--------|
+| **WPS Pixie Dust (Offline)** | Stryker | Médio | Captura PIN sem brute-force online | ✅ Completo |
+| **WPS Common PINs Database** | Stryker | Baixo | Dicionário de PINs padrão por OUI | ✅ Completo |
+| **MAC Changer Profiles / OUI Spoofing** | Stryker | Baixo | Anti-tracking avançado (Apple, Samsung, Intel) | ✅ Completo |
+| **Handshake Manager + Hashcat Integration** | Stryker | Médio | UI/CLI para gerenciar .22000, cracking local | ✅ Completo |
+| **GeoMac / WiGLE Export** | Stryker | Médio | Mapa OSM + KML/CSV para wardriving | ✅ Completo |
+| **BLE Fast Pair Scanner** | WPair | Médio | Descoberta dispositivos Fast Pair (0xFE2C) | ✅ Completo |
+| **CVE-2025-36911 Vulnerability Test** | WPair | Alto | Teste não-invasivo vulnerabilidade WhisperPair | ✅ Completo |
+| **Account Key Flood** | WPair | Alto | Expulsão chaves originais, persistência | ✅ Completo |
+| **Bluetooth HID Keystroke Injection** | Stryker | Alto | CVE-2023-45866/21306, HID injection | ✅ Completo |
+| **Kr00k (CVE-2019-15126)** | Stryker | Médio | Deauth + captura frames all-zero key | ✅ Completo |
+| **FragAttacks (CVE-2020-24586/87/88)** | Stryker | Médio | Wrapper vanhoefm/fragattacks | ✅ Completo |
+| **MQTT Attack Suite** | Stryker | Médio | Broker discovery, topic enum, cred brute force | ✅ Completo |
+| **ESP32 Fingerprinting** | Original | Médio | CVE-2025-27840 passive detection | ✅ Completo |
+| **SSID Confusion** | Original | Médio | CVE-2023-52424 detection | ✅ Completo |
 
 ### 3.2 **Média Prioridade — Próximas Sprints**
 
