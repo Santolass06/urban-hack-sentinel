@@ -837,32 +837,27 @@ Num contexto em que o Pi pode ser confiscado durante uma demonstração, as cred
 
 ### 4.7 Melhorias Prioritárias
 
-**Nível 1 — Bugs que quebram funcionalidade core (< 4h total)**
+**Nível 1 — Bugs activos que quebram funcionalidade (< 4h total)**
 
 | # | Fix | Esforço |
 |---|-----|---------|
-| 1 | MSF-02: dict → array em msgpack | 15 min |
-| 2 | CHRT-01: path hardcoded → `Path(__file__).parents[4]` | 5 min |
-| 3 | HID-01: keycode 'w' = 0x1A | 5 min |
-| 4 | HID-05: check `report[0] & 0x80` antes de escrever hidg | 30 min |
-| 5 | GPG-04: pop `entry_hash` antes de calcular hash | 20 min |
-| 6 | MQTT-01: adicionar `paho-mqtt` ao pyproject.toml | 5 min |
-| 7 | BTHID-01: migrar bt_hid.py para dbus-fast | 2h |
-| 8 | HID-02: substituir pickle por JSON em ducky.py | 1h |
+| 1 | MQTT-01: adicionar `paho-mqtt` ao pyproject.toml | 5 min |
+| 2 | BTHID-01: migrar bt_hid.py de `python-dbus` para `dbus-fast` | 2h |
+| 3 | HID-05: verificar path compiled→hidg; separar delay markers de keycodes | 30 min |
+| 4 | GPG-05: logar warning quando GPGSigner não tem key configurada | 10 min |
+| 5 | FRAG-01: remover `/home/andresantos/fragattacks` hardcoded | 5 min |
+| 6 | CAM-CVE: criar CVE DB default mínima em `camera/vuln_check.py` | 2h |
+| 7 | MSF-TOKEN: limpar `self._token = None` em `_reconnect()` | 5 min |
 
-**Nível 2 — Completar o que está a 80% (< 8h total)**
+**Nível 2 — Qualidade e completude (< 6h total)**
 
 | # | Tarefa | Esforço |
 |---|--------|---------|
-| 9 | NET-01: validar targets com ipaddress.ip_network() | 30 min |
-| 10 | HID-04: time.sleep() → asyncio.sleep() | 10 min |
-| 11 | RPT-04: WeasyPrint → asyncio.to_thread() | 30 min |
-| 12 | NET-02: ONVIF socket → asyncio.to_thread() | 30 min |
-| 13 | GPG-01: str() → .data bytes na assinatura binária | 10 min |
-| 14 | RPT-02: import gnupg as gnupg_lib, evitar name collision | 5 min |
-| 15 | FRAG-01: remover path pessoal de fragattacks.py | 5 min |
-| 16 | CAM-CVE: criar CVE DB default mínima em camera/vuln_check.py | 2h |
-| 17 | CRED-02: implementar ou lançar NotImplementedError | 1h |
+| 8 | RPT-04: WeasyPrint → `asyncio.to_thread()` | 30 min |
+| 9 | CAM-BLOCK: sockets de camera creds → `asyncio.to_thread()` | 30 min |
+| 10 | CRED-01: `field(default_factory=list)` → `Optional[List[str]] = None` | 10 min |
+| 11 | GPG-FILE: passar path ao GPG em vez de ler ficheiro inteiro para RAM | 20 min |
+| 12 | BTHID-02: forçar `NoInputNoOutput` capability para CVE-2023-45866 OTA | 3h |
 
 **Nível 3 — CVEs com maior impacto visual**
 
@@ -878,61 +873,70 @@ Num contexto em que o Pi pode ser confiscado durante uma demonstração, as cred
 
 ## 5. Sumário Executivo de Bugs
 
-| ID | Módulo | Ficheiro | Severidade | Status |
-|----|--------|----------|------------|--------|
-| MSF-02 | MSF RPC | `metasploit/rpc.py` | 🔴 CRÍTICO | Persiste |
-| HID-02 | DuckyScript | `hid/ducky.py` | 🔴 CRÍTICO | Persiste |
-| CHRT-01 | Chroot | `core/chroot_process.py` | 🔴 CRÍTICO | Persiste |
-| CRED-02 | Credential | `credential/manager.py` | 🔴 CRÍTICO | Persiste |
-| NET-01 | Network | `network/__init__.py` | 🔴 CRÍTICO | Persiste |
-| BTHID-01 | BT HID | `modules/bt_hid.py` | 🟠 ALTO | Novo (S5) |
-| MQTT-01 | MQTT | `modules/mqtt.py` | 🟠 ALTO | Novo (S5) |
-| BOOT-01 | Bootstrap | `bootstrap_chroot.sh` | 🟠 ALTO | Persiste |
-| BOOT-02 | Bootstrap | `bootstrap_chroot.sh` | 🟠 ALTO | Persiste |
-| CHRT-02 | Chroot | `core/chroot_process.py` | 🟠 ALTO | Persiste |
-| CHRT-03 | Chroot | `core/chroot_process.py` | 🟠 ALTO | Persiste |
-| CRED-01 | Credential | `credential/manager.py` | 🟠 ALTO | Persiste |
-| MSF-01 | MSF RPC | `metasploit/rpc.py` | 🟠 ALTO | Persiste |
-| MSF-03 | MSF RPC | `metasploit/rpc.py` | 🟠 ALTO | Persiste |
-| MSF-TOKEN | MSF RPC | `metasploit/rpc.py` | 🟠 ALTO | Novo |
-| CON-01 | MSF Console | `metasploit/console.py` | 🟠 ALTO | Persiste |
-| RPT-01 | Report Gen | `reporting/generator.py` | 🟠 ALTO | Persiste |
-| RPT-02 | Report Gen | `reporting/generator.py` | 🟠 ALTO | Persiste |
-| GPG-01 | GPG Evidence | `gpg_evidence.py` | 🟠 ALTO | Persiste |
-| GPG-04 | GPG Evidence | `gpg_evidence.py` | 🟠 ALTO | Persiste |
-| GPG-05 | GPG Evidence | `gpg_evidence.py` | 🟠 ALTO | Persiste |
-| GPG-FILE | GPG Evidence | `gpg_evidence.py` | 🟠 ALTO | Novo |
-| HID-01 | DuckyScript | `hid/ducky.py` | 🟠 ALTO | Persiste |
-| HID-04 | HID Injector | `hid/injector.py` | 🟠 ALTO | Persiste |
-| HID-05 | HID Injector | `hid/injector.py` | 🟠 ALTO | Persiste |
-| HID-06 | USB Gadget | `hid/gadget.py` | 🟠 ALTO | Persiste |
-| NET-02 | Network | `network/__init__.py` | 🟠 ALTO | Persiste |
-| NET-03 | Network | `network/__init__.py` | 🟠 ALTO | Persiste |
-| FRAG-01 | FragAttacks | `wifi/fragattacks.py` | 🟡 MÉDIO | Novo (S5) |
-| FRAG-02 | FragAttacks | `wifi/fragattacks.py` | 🟡 MÉDIO | Novo (S5) |
-| SSID-01 | SSID Confusion | `modules/ssid_confusion.py` | 🟡 MÉDIO | Novo (S5) |
-| ESP32-01 | ESP32 | `modules/esp32.py` | 🟡 MÉDIO | Novo (S5) |
-| BTHID-02 | BT HID | `modules/bt_hid.py` | 🟡 MÉDIO | Novo (S5) |
-| CON-02 | MSF Console | `metasploit/console.py` | 🟡 MÉDIO | Persiste |
-| CON-TIMEOUT | MSF Console | `metasploit/console.py` | 🟡 MÉDIO | Novo |
-| GPG-02 | GPG Evidence | `gpg_evidence.py` | 🟡 MÉDIO | Persiste |
-| GPG-03 | GPG Evidence | `gpg_evidence.py` | 🟡 MÉDIO | Persiste |
-| CHRT-04 | Chroot | `core/chroot_process.py` | 🟡 MÉDIO | Persiste |
-| RPT-04 | Report Gen | `reporting/generator.py` | 🟡 MÉDIO | Persiste |
-| RPT-JSON | Report Gen | `reporting/generator.py` | 🟡 MÉDIO | Novo |
-| DUCKY-UNICODE | DuckyScript | `hid/ducky.py` | 🟡 MÉDIO | Novo |
-| GADGET-PATH | USB Gadget | `hid/gadget.py` | 🟡 MÉDIO | Novo |
-| CAM-BLOCK | Camera | `camera/enumeration.py` | 🟡 MÉDIO | Novo (S5) |
-| CAM-CVE | Camera | `camera/vuln_check.py` | 🟡 MÉDIO | Novo (S5) |
-| MSF-04 | MSF RPC | `metasploit/rpc.py` | 🟡 MÉDIO | Persiste |
-| BOOT-03 | Bootstrap | `bootstrap_chroot.sh` | 🟢 BAIXO | Persiste |
-| RPT-03 | Report Gen | `reporting/generator.py` | 🟢 BAIXO | Persiste |
-| HID-03 | DuckyScript | `hid/ducky.py` | 🟢 BAIXO | Persiste |
-| BLE-QUIRKS | Device Quirks | `device_quirks.json` | 🟢 BAIXO | Persiste |
-| SCHEDULER-PERSIST | Scheduler | `core/scheduler.py` | 🟢 BAIXO | Novo |
+### Bugs Activos (verificados no código — commit `3de3b97`)
 
-**Total: 50 bugs — 5 críticos · 23 altos · 17 médios · 5 baixos**  
-**Novos neste sprint: 14 | Resolvidos desde S3: 1 (BLE-01 — HFP pipeline)**
+| ID | Módulo | Ficheiro | Severidade |
+|----|--------|----------|------------|
+| MSF-01 | MSF RPC | `metasploit/rpc.py` | 🟠 ALTO |
+| MSF-TOKEN | MSF RPC | `metasploit/rpc.py` | 🟠 ALTO |
+| MSF-04 | MSF RPC | `metasploit/rpc.py` | 🟡 MÉDIO |
+| CON-02 | MSF Console | `metasploit/console.py` | 🟡 MÉDIO |
+| CON-TIMEOUT | MSF Console | `metasploit/console.py` | 🟡 MÉDIO |
+| CRED-01 | Credential | `credential/manager.py` | 🟠 ALTO |
+| GPG-02 | GPG Evidence | `gpg_evidence.py` | 🟡 MÉDIO |
+| GPG-03 | GPG Evidence | `gpg_evidence.py` | 🟡 MÉDIO |
+| GPG-05 | GPG Evidence | `gpg_evidence.py` | 🟠 ALTO |
+| GPG-FILE | GPG Evidence | `gpg_evidence.py` | 🟠 ALTO |
+| RPT-04 | Report Gen | `reporting/generator.py` | 🟡 MÉDIO |
+| RPT-JSON | Report Gen | `reporting/generator.py` | 🟡 MÉDIO |
+| HID-05 | HID Injector | `hid/injector.py` | 🟠 ALTO |
+| DUCKY-UNICODE | DuckyScript | `hid/ducky.py` | 🟡 MÉDIO |
+| GADGET-PATH | USB Gadget | `hid/gadget.py` | 🟡 MÉDIO |
+| BTHID-01 | BT HID | `modules/bt_hid.py` | 🟠 ALTO |
+| BTHID-02 | BT HID | `modules/bt_hid.py` | 🟡 MÉDIO |
+| MQTT-01 | MQTT | `modules/mqtt.py` | 🟠 ALTO |
+| FRAG-01 | FragAttacks | `wifi/fragattacks.py` | 🟡 MÉDIO |
+| FRAG-02 | FragAttacks | `wifi/fragattacks.py` | 🟡 MÉDIO |
+| SSID-01 | SSID Confusion | `modules/ssid_confusion.py` | 🟡 MÉDIO |
+| ESP32-01 | ESP32 | `modules/esp32.py` | 🟡 MÉDIO |
+| CAM-BLOCK | Camera | `camera/enumeration.py` | 🟡 MÉDIO |
+| CAM-CVE | Camera | `camera/vuln_check.py` | 🟡 MÉDIO |
+| BOOT-03 | Bootstrap | `bootstrap_chroot.sh` | 🟢 BAIXO |
+| RPT-03 | Report Gen | `reporting/generator.py` | 🟢 BAIXO |
+| HID-03 | DuckyScript | `hid/ducky.py` | 🟢 BAIXO |
+| BLE-QUIRKS | Device Quirks | `device_quirks.json` | 🟢 BAIXO |
+| SCHEDULER-PERSIST | Scheduler | `core/scheduler.py` | 🟢 BAIXO |
+
+**Total activo: 29 bugs — 0 críticos · 7 altos · 13 médios · 5 baixos + 4 baixos**
+
+---
+
+### Resolvidos neste Push (22 corrigidos — verificados no código)
+
+| ID | Fix aplicado |
+|----|-------------|
+| ✅ MSF-02 | msgpack array format corrigido |
+| ✅ MSF-03 | auth.logout sem double-token |
+| ✅ HID-01 | keycode `'w'` = `0x1A` |
+| ✅ HID-02 | pickle substituído por JSON |
+| ✅ HID-04 | `time.sleep` → `asyncio.sleep` |
+| ✅ HID-06 | LAYOUT_* removidos de `__all__` |
+| ✅ GPG-01 | `signature.data` (bytes) em vez de `str()` |
+| ✅ GPG-04 | `entry_copy` sem `entry_hash` para verificação |
+| ✅ NET-01 | `ipaddress.ip_network()` valida todos os targets |
+| ✅ NET-02 | ONVIF socket → `asyncio.to_thread()` |
+| ✅ NET-03 | `exploit_id` validado com `re.match(r'^\d+$')` |
+| ✅ CRED-02 | `validate_credential()` levanta `NotImplementedError` |
+| ✅ RPT-01 | `gpg_passphrase_provider: Callable` em vez de string |
+| ✅ RPT-02 | `import gnupg as gnupg_module`, sem name collision |
+| ✅ BOOT-01 | `sha256sum -c` adicionado ao bootstrap |
+| ✅ BOOT-02 | Edge repos removidos; apenas `main` e `community` |
+| ✅ CHRT-01 | `Path(__file__).parents[4]` em vez de path pessoal |
+| ✅ CHRT-02 | `if 'proc' in locals()` no finally block |
+| ✅ CHRT-03 | bind_cmds como lista-de-listas + execução via `sh -c` |
+| ✅ CHRT-04 | `cd` executado dentro de `sh -c` com `shlex.quote` |
+| ✅ CON-01 | Validação de `\n`/`\r` em option values |
+| ✅ BLE-01 | `start_capture()` integrado em `run_full_chain()` |
 
 ---
 
