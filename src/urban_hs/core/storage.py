@@ -253,7 +253,11 @@ class Storage:
         await self._migrate()
 
         # Initialize Redis
-        self._redis = redis.from_url(self.redis_url, decode_responses=True)
+        try:
+            self._redis = redis.from_url(self.redis_url, decode_responses=True)
+        except Exception as e:
+            logger.warning("Failed to connect to Redis, continuing without cache", error=str(e))
+            self._redis = None
 
         self._initialized = True
         logger.info("Storage initialized", path=str(self.sqlite_path), pool_size=self.pool_size)
@@ -731,6 +735,182 @@ class Storage:
             await f.write(line)
 
     async def shutdown(self) -> None:
+        """Close all connections."""
+        # Close SQLite connections
+        while not self._pool.empty():
+            conn = await self._pool.get()
+            await conn.close()
+        
+        # Close Redis
+        if self._redis:
+            await self._redis.aclose()
+        
+        logger.info("Storage shutdown complete")
+
+    # ============================================================
+    # SQLite Optimization (S6.3)
+    # ============================================================
+    
+    async def create_composite_indices(self) -> None:
+        """Create composite indices for common query patterns."""
+        indices = [
+            # Device queries
+            "CREATE INDEX IF NOT EXISTS idx_devices_type_last_seen ON devices(type, last_seen DESC);",
+            "CREATE INDEX IF NOT EXISTS idx_devices_mac_type ON devices(mac, type);",
+            
+            # WiFi network queries
+            "CREATE INDEX IF NOT EXISTS idx_wifi_encryption_channel ON wifi_networks(encryption, channel);",
+            "CREATE INDEX IF NOT EXISTS idx_wifi_signal_encryption ON wifi_networks(signal_dbm DESC, encryption);",
+            "CREATE INDEX IF NOT EXISTS idx_wifi_vendor_encryption ON wifi_networks(vendor, encryption);",
+            
+            # Handshake queries
+            "CREATE INDEX IF NOT EXISTS idx_handshakes_network_status ON wifi_handshakes(network_id, crack_status);",
+            "CREATE INDEX IF NOT EXISTS idx_handshakes_bssid_status ON wifi_handshakes(bssid, crack_status);",
+            
+            # BLE device queries
+            "CREATE INDEX IF NOT EXISTS idx_ble_name_rssi ON ble_devices(name, rssi DESC);",
+            "CREATE INDEX IF NOT EXISTS idx_ble_fastpair_vuln ON ble_devices(is_fast_pair, whisperpair_vuln);",
+            "CREATE INDEX IF NOT EXISTS idx_ble_hfp_audio ON ble_devices(hfp_connected, audio_recordings);",
+            
+            # Camera queries
+            "CREATE INDEX IF NOT EXISTS idx_cameras_vuln_manufacturer ON cameras(vulnerable, manufacturer);",
+            "CREATE INDEX IF NOT EXISTS idx_cameras_vuln_cves ON cameras(vulnerable, cves);",
+            
+            # Network host queries
+            "CREATE INDEX IF NOT EXISTS idx_hosts_os_vulns ON network_hosts(os_guess, vulns);",
+            "CREATE INDEX IF NOT EXISTS idx_hosts_ports_services ON network_hosts(ports_open);",
+            
+            # Vulnerability queries
+            "CREATE INDEX IF NOT EXISTS idx_vulns_type_severity ON vulnerabilities(target_type, severity);",
+            "CREATE INDEX IF NOT EXISTS idx_vulns_exploit_available ON vulnerabilities(exploit_available, severity);",
+            "CREATE INDEX IF NOT EXISTS idx_vulns_cve_status ON vulnerabilities(cve_id, status);",
+            
+            # Credential queries
+            "CREATE INDEX IF NOT EXISTS idx_creds_type_source ON credentials(target_type, source);",
+            "CREATE INDEX IF NOT EXISTS idx_creds_hash_type ON credentials(hash_type, hash);",
+            
+            # Audit session queries
+            "CREATE INDEX IF NOT EXISTS idx_sessions_time_range ON audit_sessions(started_at, ended_at);",
+            
+            # Artifact queries
+            "CREATE INDEX IF NOT EXISTS idx_artifacts_type_time ON artifacts(type, created_at DESC);",
+            "CREATE INDEX IF NOT EXISTS idx_artifacts_session_type ON artifacts(session_id, type);",
+        ]
+        
+        for idx in indices:
+            try:
+                await self.execute(idx)
+            except Exception as e:
+                logger.warning("Failed to create index", index=idx, error=str(e))
+        
+        logger.info("Composite indices created", count=len(indices))
+
+    async def optimize_database(self) -> Dict[str, Any]:
+        """Run SQLite optimization: ANALYZE, PRAGMA optimize, WAL checkpoint."""
+        results = {}
+        
+        # Get a connection
+        async with self._get_conn() as conn:
+            # Enable WAL mode if not already enabled
+            await conn.execute("PRAGMA journal_mode=WAL;")
+            
+            # Set busy timeout
+            await conn.execute("PRAGMA busy_timeout=5000;")
+            
+            # Set page size (if not set)
+            await conn.execute("PRAGMA page_size=4096;")
+            
+            # Set cache size (negative = KB, positive = pages)
+            await conn.execute("PRAGMA cache_size=-32768;")  # 32MB cache
+            
+            # Set mmap size
+            await conn.execute("PRAGMA mmap_size=268435456;")  # 256MB
+            
+            # Set synchronous mode
+            await conn.execute("PRAGMA synchronous=NORMAL;")
+            
+            # Set temp store to memory
+            await conn.execute("PRAGMA temp_store=MEMORY;")
+            
+            # Run ANALYZE to update query planner statistics
+            await conn.execute("ANALYZE;")
+            results["analyze"] = "completed"
+            
+            # Run PRAGMA optimize (automatically runs ANALYZE on tables that need it)
+            await conn.execute("PRAGMA optimize;")
+            results["pragma_optimize"] = "completed"
+            
+            # WAL checkpoint (truncate WAL file)
+            checkpoint_result = await conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            results["wal_checkpoint"] = "completed"
+            
+            # Get database stats
+            cursor = await conn.execute("PRAGMA page_count;")
+            page_count = await cursor.fetchone()
+            cursor = await conn.execute("PRAGMA page_size;")
+            page_size = await cursor.fetchone()
+            cursor = await conn.execute("PRAGMA freelist_count;")
+            freelist = await cursor.fetchone()
+            
+            results["stats"] = {
+                "page_count": page_count[0] if page_count else 0,
+                "page_size": page_size[0] if page_size else 0,
+                "freelist_count": freelist[0] if freelist else 0,
+                "db_size_mb": (page_count[0] * page_size[0]) / (1024 * 1024) if page_count and page_size else 0,
+            }
+            
+            await conn.commit()
+        
+        logger.info("Database optimization completed", results=results)
+        return results
+    
+    async def vacuum_database(self, full: bool = False) -> Dict[str, Any]:
+        """Run VACUUM to reclaim space and defragment database."""
+        results: Dict[str, Any] = {"vacuum_type": "FULL" if full else "INCREMENTAL"}
+        
+        async with self._get_conn() as conn:
+            # Get size before
+            cursor = await conn.execute("PRAGMA page_count;")
+            page_count_before = await cursor.fetchone()
+            cursor = await conn.execute("PRAGMA page_size;")
+            page_size = await cursor.fetchone()
+            size_before = (page_count_before[0] * page_size[0]) / (1024 * 1024) if page_count_before and page_size else 0
+            
+            if full:
+                await conn.execute("VACUUM;")
+            else:
+                # Incremental vacuum - reclaim up to 100 pages
+                await conn.execute("PRAGMA incremental_vacuum(100);")
+            
+            # Get size after
+            cursor = await conn.execute("PRAGMA page_count;")
+            page_count_after = await cursor.fetchone()
+            cursor = await conn.execute("PRAGMA page_size;")
+            page_size = await cursor.fetchone() if page_size is None else page_size
+            size_after = (page_count_after[0] * page_size[0]) / (1024 * 1024) if page_count_after and page_size else 0
+            
+            results["size_before_mb"] = round(size_before, 2)
+            results["size_after_mb"] = round(size_after, 2)
+            results["space_reclaimed_mb"] = round(size_before - size_after, 2)
+            
+            await conn.commit()
+        
+        logger.info("Database vacuum completed", results=results)
+        return results
+
+    async def schedule_optimization(self, interval_hours: int = 24) -> None:
+        """Schedule periodic database optimization."""
+        # This would be called by the scheduler
+        # Run optimization
+        await self.optimize_database()
+        
+        # Run incremental vacuum weekly
+        await self.vacuum_database(full=False)
+        
+        # Full vacuum monthly
+        # (Would track last full vacuum time)
+        
+        logger.info("Scheduled optimization completed")
         """Close all connections."""
         # Close SQLite connections
         while not self._pool.empty():

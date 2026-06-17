@@ -1,0 +1,149 @@
+site_name: Urban Hack Sentinel
+site_description: Unified wireless/Bluetooth/IoT auditing framework for Raspberry Pi
+site_author: André Santos
+site_url: https://github.com/Santolass06/urban-hack-sentinel
+repo_url: https://github.com/Santolass06/urban-hack-sentinel
+repo_name: urban-hack-sentinel
+
+theme:
+  name: material
+  language: en
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - autorefs
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [src/urban_hs]
+          options:
+            show_source: true
+            show_signature: true
+            show_signature_annotations: true
+            show_root_heading: true
+            show_root_toc_entry: true
+            show_category_heading: true
+            merge_init_into_class: true
+            show_breadcrumbs: true
+            docstring_style: google
+            members_order: source
+            docstring_section_style: spacy
+            show_root_members_full_path: false
+  - gen-files:
+      scripts:
+        - scripts/gen_ref_pages.py
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.emoji:
+      emoji_index: twemoji
+      emoji_generator: to_svg
+  - admonition
+  - pymdownx.details
+  - pymdownx.keys
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quickstart.md
+      - Hardware Requirements: getting-started/hardware.md
+      - Configuration: getting-started/configuration.md
+  - Core Concepts:
+      - Architecture: core/architecture.md
+      - Event Bus: core/event_bus.md
+      - Process Manager: core/process_manager.md
+      - Storage Layer: core/storage.md
+      - Health Checks: core/health.md
+      - Scheduler: core/scheduler.md
+      - Plugin System: core/plugins.md
+      - Concurrency: core/concurrency.md
+      - Memory Profiling: core/memory.md
+      - Security: core/security.md
+  - Modules:
+      - WiFi: modules/wifi.md
+      - BLE / WhisperPair: modules/ble.md
+      - Network: modules/network.md
+      - Camera: modules/camera.md
+      - Metasploit: modules/metasploit.md
+      - Exploits: modules/exploit.md
+      - HID / USB: modules/hid.md
+      - Bluetooth HID: modules/bt_hid.md
+      - Camera Exploits: modules/camera_exploits.md
+      - MQTT: modules/mqtt.md
+      - ESP32: modules/esp32.md
+      - SSID Confusion: modules/ssid_confusion.md
+      - FragAttacks: modules/fragattacks.md
+  - UI/UX:
+      - FastAPI Backend: ui/api.md
+      - Textual TUI: ui/tui.md
+      - Rich CLI: ui/cli.md
+      - React PWA: ui/web.md
+  - Advanced:
+      - Chroot Alpine: advanced/chroot.md
+      - Metasploit Integration: advanced/metasploit.md
+      - Exploit Development: advanced/exploit_dev.md
+      - Supply Chain Security: advanced/supply_chain.md
+      - GPU Acceleration: advanced/gpu.md
+  - Development:
+      - Contributing: development/contributing.md
+      - Code Style: development/style.md
+      - Testing: development/testing.md
+      - Debugging: development/debugging.md
+      - CI/CD: development/ci_cd.md
+  - Reference:
+      - API Reference: reference/api.md
+      - Configuration: reference/config.md
+      - CLI Commands: reference/cli.md
+      - REST API: reference/rest_api.md
+      - WebSocket: reference/websocket.md
+      - Data Models: reference/models.md
+      - Events: reference/events.md
+      - Prometheus Metrics: reference/metrics.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/Santolass06/urban-hack-sentinel
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/andresantos
+  analytics:
+    provider: google
+    property: G-XXXXXXXXXX

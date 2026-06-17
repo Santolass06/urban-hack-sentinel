@@ -62,6 +62,47 @@ from urban_hs.core.plugins import (
     create_plugin_manager,
     urban_plugin,
 )
+from urban_hs.core.concurrency import (
+    ResourceType,
+    ResourcePriority,
+    ResourceConfig,
+    ResourceUsage,
+    ResourcePool,
+    ResourceManager,
+    get_resource_manager,
+)
+from urban_hs.core.memory import (
+    MemorySnapshot,
+    AllocationRecord,
+    LeakReport,
+    MemoryProfiler,
+    memory_profile,
+    detect_gc_leaks,
+    StreamingParser,
+    JSONLStreamingParser,
+    stream_parse_jsonl,
+    stream_parse_pcap,
+    abatch,
+    alimit,
+    afilter,
+    amap,
+)
+from urban_hs.core.security import (
+    Capability,
+    CapabilitySet,
+    MODULE_CAPABILITIES,
+    drop_privileges,
+    SeccompAction,
+    SeccompRule,
+    SeccompProfile,
+    SeccompFilter,
+    SECCOMP_PROFILES,
+    RootlessChrootConfig,
+    RootlessChroot,
+    SupplyChainConfig,
+    SupplyChainVerifier,
+    harden_process,
+)
 
 __all__ = [
     # Config
@@ -119,6 +160,47 @@ __all__ = [
     "JobStatus",
     "ScheduledJob",
     "Scheduler",
+    
+    # Concurrency
+    "ResourceType",
+    "ResourcePriority",
+    "ResourceConfig",
+    "ResourceUsage",
+    "ResourcePool",
+    "ResourceManager",
+    "get_resource_manager",
+    
+    # Memory
+    "MemorySnapshot",
+    "AllocationRecord",
+    "LeakReport",
+    "MemoryProfiler",
+    "memory_profile",
+    "detect_gc_leaks",
+    "StreamingParser",
+    "JSONLStreamingParser",
+    "stream_parse_jsonl",
+    "stream_parse_pcap",
+    "abatch",
+    "alimit",
+    "afilter",
+    "amap",
+    
+    # Security
+    "Capability",
+    "CapabilitySet",
+    "MODULE_CAPABILITIES",
+    "drop_privileges",
+    "SeccompAction",
+    "SeccompRule",
+    "SeccompProfile",
+    "SeccompFilter",
+    "SECCOMP_PROFILES",
+    "RootlessChrootConfig",
+    "RootlessChroot",
+    "SupplyChainConfig",
+    "SupplyChainVerifier",
+    "harden_process",
     
     # Plugins
     "PluginStatus",
