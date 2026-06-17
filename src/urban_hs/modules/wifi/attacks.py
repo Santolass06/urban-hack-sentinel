@@ -151,7 +151,7 @@ class BaseAttack(ABC):
         cmd = [
             "hcxdumptool",
             "-i", self.interface,
-            "--filterlist", bssid,
+            "--filterlist_ap", bssid,
             "--filtermode", "2",
             "-c", str(channel),
             "-o", str(output_file),

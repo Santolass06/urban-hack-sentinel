@@ -661,7 +661,7 @@ class CameraEnumerator:
     ) -> EnumerationResult:
         """Perform full camera enumeration."""
         protocols = protocols or [CameraProtocol.HTTP, CameraProtocol.RTSP, CameraProtocol.ONVIF]
-        result = EnumerationResult(ip=ip, port=port)
+        result = EnumerationResult(ip=ip, port=port, protocol=CameraProtocol.HTTP)
 
         # Test credentials
         if port in (80, 8080, 8081, 8443, 8888, 8889, 5000, 5001):
