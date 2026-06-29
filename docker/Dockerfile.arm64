@@ -113,6 +113,10 @@ COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /app/src /opt/urban-hs/src
 COPY --from=builder /app/scripts /opt/urban-hs/scripts
 
+# Fix ownership + editable-install path for runtime.
+RUN chown -R urbanhs:urbanhs /opt/urban-hs/src /opt/urban-hs/scripts \
+    && sed -i 's|^/app/src|/opt/urban-hs/src|' /opt/venv/lib/python3.11/site-packages/urban_hs.pth
+
 ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONPATH=/opt/urban-hs/src
 ENV PYTHONUNBUFFERED=1

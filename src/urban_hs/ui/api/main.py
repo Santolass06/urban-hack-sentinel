@@ -5,174 +5,61 @@ Entry point::
 
     uvicorn urban_hs.ui.api.main:run --host 0.0.0.0 --port 8000
 
-The ``run`` helper is registered as a console script in ``pyproject.toml``
-(``urban-hs-server``).
+The ``run`` helper is registered as a console script in
+``pyproject.toml`` (``urban-hs-server``).
 """
 
 from __future__ import annotations
 
-import os
+import logging
 from pathlib import Path
-from typing import Any, Dict
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from urban_hs.core import init_core, shutdown_core
+from urban_hs import __version__
 
-from urban_hs.ui.api.routers import wifi as wifi_router
-from urban_hs.ui.api.routers import ble as ble_router
-
-app = FastAPI(
-    title="Urban Hack Sentinel API",
-    description="REST + WebSocket API for wireless/Bluetooth/IoT auditing.",
-    version="3.0.0",
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Lifecycle
-# ---------------------------------------------------------------------------
-@app.on_event("startup")
-async def _startup() -> None:
-    await init_core(
-        config_file=os.environ.get("URBAN_HS_CONFIG_FILE"),
-        log_level=os.environ.get("URBAN_HS_LOG_LEVEL", "INFO"),
+def _build_app() -> FastAPI:
+    root = Path(__file__).resolve().parents[2]  # src/urban_hs
+    web_root = root / "ui" / "web"
+
+    application = FastAPI(
+        title="Urban Hack Sentinel API",
+        description="REST + WebSocket control plane.",
+        version=__version__,
     )
 
+    from urban_hs.ui.api.routers.system import router as system_router
+    application.include_router(system_router, prefix="/api/v1")
 
-@app.on_event("shutdown")
-async def _shutdown() -> None:
-    await shutdown_core()
+    # Root-level health endpoint (outside the /api/v1 namespace).
+    @application.get("/healthz", include_in_schema=False)
+    async def _root_health() -> dict[str, str]:
+        return {"status": "ok"}
 
+    from urban_hs.ui.api.routers.wifi import router as wifi_router
+    application.include_router(wifi_router, prefix="/api/v1/wifi")
 
-# ---------------------------------------------------------------------------
-# Health
-# ---------------------------------------------------------------------------
-@app.get("/healthz")
-async def healthz() -> Dict[str, str]:
-    return {"status": "ok"}
+    from urban_hs.ui.api.routers.ble import router as ble_router
+    application.include_router(ble_router, prefix="/api/v1/ble")
 
+    from urban_hs.ui.api.routers.network import router as network_router
+    application.include_router(network_router, prefix="/api/v1/network")
 
-# ---------------------------------------------------------------------------
-# System info
-# ---------------------------------------------------------------------------
-@app.get("/api/v1/system/info")
-async def system_info() -> Dict[str, Any]:
-    import platform
+    if web_root.exists():
+        @application.get("/", include_in_schema=False)
+        async def _serve_index() -> FileResponse:
+            return FileResponse(str(web_root / "index.html"))
 
-    try:
-        from urban_hs.core.config import Config
-
-        Config()
-    except Exception:
-        pass
-
-    return {
-        "version": "3.0.0",
-        "arch": platform.machine(),
-        "system": platform.system(),
-        "release": platform.release(),
-        "python": platform.python_version(),
-    }
-
-
-# ---------------------------------------------------------------------------
-# Device registry
-# ---------------------------------------------------------------------------
-@app.get("/api/v1/devices")
-async def list_devices(limit: int = 100) -> Dict[str, Any]:
-    try:
-        from urban_hs.core.storage import get_storage
-
-        storage = get_storage()
-        rows = await storage.fetchall(
-            "SELECT * FROM devices ORDER BY last_seen DESC LIMIT ?", (limit,)
+        application.mount(
+            "/static", StaticFiles(directory=str(web_root)), name="web-static"
         )
-        return {"devices": [dict(r) for r in rows]}
-    except Exception as exc:
-        return {"devices": [], "error": str(exc)}
+
+    return application
 
 
-# ---------------------------------------------------------------------------
-# WiFi router
-# ---------------------------------------------------------------------------
-app.include_router(wifi_router.router, prefix="/api/v1/wifi", tags=["wifi"])
-
-
-# ---------------------------------------------------------------------------
-# BLE router
-# ---------------------------------------------------------------------------
-app.include_router(ble_router.router, prefix="/api/v1/ble", tags=["ble"])
-
-
-# ---------------------------------------------------------------------------
-# WebSocket: live event bus stream
-# ---------------------------------------------------------------------------
-class ConnectionManager:
-    def __init__(self) -> None:
-        self.active: list[WebSocket] = []
-
-    async def connect(self, ws: WebSocket) -> None:
-        await ws.accept()
-        self.active.append(ws)
-
-    def disconnect(self, ws: WebSocket) -> None:
-        self.active.remove(ws)
-
-    async def broadcast(self, message: Dict[str, Any]) -> None:
-        for ws in list(self.active):
-            try:
-                await ws.send_json(message)
-            except Exception:
-                self.disconnect(ws)
-
-
-manager = ConnectionManager()
-
-
-@app.websocket("/ws/events")
-async def ws_events(websocket: WebSocket) -> Any:
-    await manager.connect(websocket)
-    try:
-        while True:
-            data = await websocket.receive_text()
-            await websocket.send_json({"type": "ack", "echo": data})
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-    except Exception:
-        manager.disconnect(websocket)
-
-
-# ---------------------------------------------------------------------------
-# Static frontend
-# ---------------------------------------------------------------------------
-_WEB_DIR = Path(__file__).resolve().parent.parent / "web"
-if _WEB_DIR.exists():
-    app.mount("/", StaticFiles(directory=str(_WEB_DIR), html=True), name="web")
-
-
-def run() -> None:
-    """Console script entry point."""
-    import uvicorn
-
-    uvicorn.run(
-        "urban_hs.ui.api.main:run",
-        host="0.0.0.0",
-        port=int(os.environ.get("URBAN_HS_API_PORT", "8000")),
-        reload=bool(os.environ.get("URBAN_HS_API_RELOAD")),
-        log_level=os.environ.get("URBAN_HS_LOG_LEVEL", "info").lower(),
-    )
-
-
-if __name__ == "__main__":
-    run()
+app = _build_app()

@@ -1,0 +1,59 @@
+# urban-hs config.yaml.example
+# Copy to /etc/urban-hack-sentinel/config.yaml
+
+platform:
+  arch: auto  # auto | arm64 | x86_64
+  hostname: sentinel-01
+
+wifi:
+  interface: wlan1
+  strategy: passive_only  # passive_only | mode_switch | direct
+  scan_interval: 30
+  channels_2ghz: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+  channels_5ghz: [36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144]
+
+ble:
+  adapter: hci0
+  scan_duration: 10
+
+network:
+  scan_timeout: 300
+  nuclei_templates_path: /opt/nuclei-templates
+
+security:
+  enable_encryption: false
+  gpg_key_id: ""
+  gpg_passphrase: ""
+
+reporting:
+  formats: [pdf, json, html]
+  wigle_username: ""
+  wigle_password: ""
+  geo_api_key: ""
+
+storage:
+  sqlite_path: /var/lib/urban-hs/urban_hs.db
+  evidence_dir: /var/lib/urban-hs/evidence
+  reports_dir: /var/lib/urban-hs/reports
+  credentials_dir: /var/lib/urban-hs/credentials
+  artifacts_dir: /var/lib/urban-hs/artifacts
+  hashes_dir: /var/lib/urban-hs/hashes
+  pcaps_dir: /var/lib/urban-hs/pcaps
+
+modules:
+  wifi:
+    enabled: true
+  ble:
+    enabled: true
+  network:
+    enabled: true
+  camera:
+    enabled: false
+  metasploit:
+    enabled: false
+  hid:
+    enabled: false
+  mqtt:
+    enabled: false
+  reporting:
+    enabled: true
