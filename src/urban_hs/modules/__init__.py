@@ -51,13 +51,6 @@ from urban_hs.modules.wifi import (  # noqa: E402
     ScanStrategy,
     WiFiScanner,
 )
-from urban_hs.modules.ble import (  # noqa: E402
-    BLEDevice,
-    BLEDeviceType,
-    FastPairScanner,
-    WhisperPairExploit,
-    WhisperPairTester,
-)
 
 __all__ = [
     "WiFiScanner",
@@ -65,9 +58,4 @@ __all__ = [
     "CHANNELS_2GHZ",
     "CHANNELS_5GHZ",
     "CHANNELS_6GHZ",
-    "FastPairScanner",
-    "WhisperPairTester",
-    "WhisperPairExploit",
-    "BLEDevice",
-    "BLEDeviceType",
 ]

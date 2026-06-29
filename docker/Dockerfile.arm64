@@ -25,6 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libffi-dev \
     libssl-dev \
     libgpgme-dev \
+    libdbus-1-dev \
+    dbus \
     git \
     curl \
     && rm -rf /var/lib/apt/lists/*
@@ -51,6 +53,7 @@ ARG TARGETARCH
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpcap0.8 \
     libbluetooth3 \
+    libdbus-1-3 \
     libsqlite3-0 \
     libffi8 \
     libssl3 \
@@ -64,6 +67,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     jq \
     vim-tiny \
+    nmap \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -76,7 +80,6 @@ RUN set -eux; \
             hcxtools \
             reaver \
             bully \
-            nmap \
             htop \
             iotop \
             && rm -rf /var/lib/apt/lists/* \
