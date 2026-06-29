@@ -1,11 +1,3 @@
-"""
-WiFi hardware abstraction layer.
-
-Concrete implementations live under this package. The rest of the
-codebase talks to ``WiFiBackend`` only, so the concrete selection
-resolves automatically at startup based on config + capability probe.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -112,7 +104,6 @@ class _ScapyBackend(WiFiBackend):
         def _pkt(pkt) -> Any:
             try:
                 if pkt.haslayer("Dot11Beacon") or pkt.haslayer("Dot11ProbeResp"):
-                    # These are scapy layers; we already import scapy.
                     bssid = pkt.addr3 if hasattr(pkt, "addr3") else ""
                     ssid = ""
                     if hasattr(pkt, "payload") and hasattr(pkt.payload, "info"):
@@ -152,14 +143,16 @@ class _ScapyBackend(WiFiBackend):
 # ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
-def create_wifi_backend(interface: str, strategy: str = "passive_only") -> WiFiBackend:
-    """Select the best available backend for ``interface``."""
-    import platform
-    arch = platform.machine()
-    if arch in ("x86_64", "x64", "i386", "i686", "AMD64"):
-        # On x86 we default to the original iw backend (it works for
-        # supported adapters like RTL8812AU / MT7921u). If iw is not
-        # present, the caller should fall back to scapy explicitly.
-        return _IWBackend(interface=interface, strategy=strategy)
-    # Default: Pi-style iw backend.
-    return _IWBackend(interface=interface, strategy=strategy)
+async def create_wifi_backend(interface: str, strategy: str = "passive_only") -> WiFiBackend:
+    """Select the best available backend for ``interface``.
+
+    Preference order:
+    1. ``iw`` backend (requires mac80211 + airckack-ng)
+    2. ``scapy`` backend (passive, no monitor mode required)
+    """
+    backend = _IWBackend(interface=interface, strategy=strategy)
+    try:
+        ok = await backend.set_mode("monitor")
+    except Exception:
+        ok = False
+    return backend if ok else _ScapyBackend(interface=interface)
