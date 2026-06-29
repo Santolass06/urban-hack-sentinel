@@ -99,7 +99,7 @@ Critérios de aceitação:
 
 ---
 
-## Sprint 4 — Estabilização de Documentação & Sinc EN/PT *(em curso)*
+## Sprint 4 — Estabilização de Documentação & Sinc EN/PT *(concluída)*
 
 **Objectivo**: tornar o projecto acessível a principiantes mantendo utilidade para utilizadores avançados; garantir que cada artefacto público é consistente, sanitizado e bilingue.
 

@@ -99,7 +99,7 @@ Acceptance criteria:
 
 ---
 
-## Sprint 4 — Documentation Stabilisation & EN/PT Sync *(active)*
+## Sprint 4 — Documentation Stabilisation & EN/PT Sync *(completed)*
 
 **Objective**: make the project approachable for beginners while keeping it useful for advanced users; ensure every public-facing artifact is consistent, sanitised, and bilingual.
 
