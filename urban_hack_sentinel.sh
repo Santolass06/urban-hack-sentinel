@@ -3,7 +3,7 @@
 # URBAN HACK SENTINEL v2
 # Auditoria Wi-Fi móvel em Raspberry Pi
 # Versão: Junho 2026
-# Autor: André Santos
+# Maintainers: Urban Hack Sentinel project
 # ===========================
 
 set -euo pipefail

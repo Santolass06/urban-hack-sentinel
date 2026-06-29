@@ -18,7 +18,7 @@ A technically accurate, plain-language story of why this project exists, what it
 
 This project began with a question: *How easy is it to break the wireless networks people use every day?*
 
-In 2024, while studying cybersecurity at FEUP, I tested a hypothesis. I put a Raspberry Pi, an Alfa AWUS036ACH Wi-Fi adapter, a power bank, and a GPS receiver into a backpack. I walked through Avenida da Boavista in Porto, scanning Wi-Fi networks and capturing WPA/WPA2 handshakes. The result was unsettling. Within a single afternoon I collected keys from networks that people assume to be private, using less than €150 in hardware and no specialised skill beyond what anyone can learn from public documentation.
+In 2024, while studying cybersecurity, I tested a hypothesis. I put a Raspberry Pi, an Alfa AWUS036ACH Wi-Fi adapter, a power bank, and a GPS receiver into a backpack. I walked through a main avenue in a medium-sized European city, scanning Wi-Fi networks and capturing WPA/WPA2 handshakes. The result was unsettling. Within a single afternoon I collected keys from networks that people assume to be private, using less than €150 in hardware and no specialised skill beyond what anyone can learn from public documentation.
 
 That experiment became a series of questions:
 
@@ -112,6 +112,6 @@ What comes next depends on what I need to learn next: real hardware validation o
 
 ## Acknowledgments
 
-This project exists because FEUP forces students to learn by building, because open-source security researchers document CVEs and exploits publicly, and because AI-assisted development tools make it possible for a single student to iterate faster than would have been possible five years ago.
+This project exists because a university forces students to learn by building, because open-source security researchers document CVEs and exploits publicly, and because AI-assisted development tools make it possible for a single student to iterate faster than would have been possible five years ago.
 
 If you are reading this and you are also learning: build something. Break it. Document why it broke. That is the only path that actually sticks.

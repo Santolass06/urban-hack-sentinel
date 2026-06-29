@@ -1,4 +1,4 @@
-# TUI Smoke Test & Custom Test Guide
+# Smoke Test TUI and Custom Test Guide
 
 Manual validation and guidance for writing custom tests against the Textual UI layer.
 
@@ -26,7 +26,7 @@ Manual validation and guidance for writing custom tests against the Textual UI l
 
 ## Smoke test steps
 
-1. `cd /home/andresantos/Desktop/Projects/urban-hack-sentinel`
+1. `cd <project-root>`
 2. `. .venv/bin/activate`
 3. `python -m urban_hs.ui.tui.app` (or `urban-hs-tui`)
 4. Confirm:

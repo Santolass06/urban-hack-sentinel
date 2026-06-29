@@ -91,7 +91,7 @@ fi
 # 7. Script syntax
 echo
 echo "7. Verificando sintaxe do script..."
-if bash -n /usr/local/bin/urban-hack-sentinel.sh 2>/dev/null || bash -n /home/andresantos/Desktop/Projects/urban-hack-sentinel/urban_hack_sentinel.sh; then
+if bash -n /usr/local/bin/urban-hack-sentinel.sh 2>/dev/null || bash -n "$(pwd)/urban_hack_sentinel.sh"; then
     echo "   ✓ Syntax OK"
 else
     echo "   ✗ Syntax ERROR"

@@ -26,7 +26,7 @@ Validação manual e orientação para desenvolver testes custom contra a camada
 
 ## Passos do smoke test
 
-1. `cd /home/andresantos/Desktop/Projects/urban-hack-sentinel`
+1. `cd <project-root>`
 2. `. .venv/bin/activate`
 3. `python -m urban_hs.ui.tui.app` (ou `urban-hs-tui`)
 4. Confirmar:

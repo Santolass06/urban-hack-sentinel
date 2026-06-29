@@ -544,7 +544,7 @@ def _load_device_quirks() -> Dict[str, Any]:
     # Try to load from config file
     config_paths = [
         Path("/etc/urban-hs/device_quirks.json"),
-        Path("/home/andresantos/Desktop/Projects/urban-hack-sentinel/config/device_quirks.json"),
+        Path("config/device_quirks.json"),
         Path(__file__).parent.parent.parent.parent / "config" / "device_quirks.json",
     ]
     

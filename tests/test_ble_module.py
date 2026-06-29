@@ -261,7 +261,7 @@ async def test_whisperpair_exploit_execute_all_strategies(exploit):
 
 def test_device_quirks_json_structure():
     """Test that device_quirks.json has correct structure."""
-    config_path = Path("/home/andresantos/Desktop/Projects/urban-hack-sentinel/config/device_quirks.json")
+    config_path = Path("config/device_quirks.json")
     if config_path.exists():
         with open(config_path) as f:
             data = json.load(f)

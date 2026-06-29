@@ -1,6 +1,6 @@
 [Unit]
 Description=Urban Hack Sentinel - Wireless Audit Daemon
-Documentation=https://github.com/andresantos/urban-hack-sentinel
+Documentation=https://github.com/<owner>/urban-hack-sentinel
 After=network-online.target
 Wants=network-online.target
 

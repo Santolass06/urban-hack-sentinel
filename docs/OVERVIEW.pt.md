@@ -18,7 +18,7 @@ Uma narrativa tecnicamente correcta e em linguagem simples sobre por que este pr
 
 Este projecto começou com uma pergunta: *quão fácil é quebrar as redes sem fios que as pessoas usam todos os dias?*
 
-Em 2024, durante os estudos em Cibersegurança na FEUP, testei uma hipótese. Coloquei um Raspberry Pi, um adaptador Wi-Fi Alfa AWUS036ACH, uma powerbank e um receptor GPS numa mochila. Caminhei pela Avenida da Boavista, no Porto, a fazer scan de redes Wi-Fi e a capturar handshakes WPA/WPA2. O resultado foi inquietante. Numa única tarde recolhi chaves de redes que as pessoas assumem como privadas, usando menos de €150 em hardware e nenhuma habilidade especial além do que qualquer pessoa pode aprender em documentação pública.
+Em 2024, durante os estudos em Cibersegurança, testei uma hipótese. Coloquei um Raspberry Pi, um adaptador Wi-Fi Alfa AWUS036ACH, uma powerbank e um receptor GPS numa mochila. Caminhei por uma avenida principal de uma cidade europeia de média dimensão, a fazer scan de redes Wi-Fi e a capturar handshakes WPA/WPA2. O resultado foi inquietante. Numa única tarde recolhi chaves de redes que as pessoas assumem como privadas, usando menos de €150 em hardware e nenhuma habilidade especial além do que qualquer pessoa pode aprender em documentação pública.der em documentação pública.
 
 Esse experimento originou uma série de perguntas:
 
@@ -112,6 +112,6 @@ O que vem a seguir depende do que preciso aprender de seguida: validação em ha
 
 ## Agradecimentos
 
-Este projecto existe porque a FEUP obriga os alunos a aprender construindo, porque investigadores de segurança open-source documentam CVEs e exploits publicamente, e porque ferramentas de desenvolvimento assistidas por IA permitem que um único estudante itere mais depressa do que seria possível há cinco anos.
+Este projecto existe porque uma universidade obriga os alunos a aprender construindo, porque investigadores de segurança open-source documentam CVEs e exploits publicamente, e porque ferramentas de desenvolvimento assistidas por IA permitem que um único estudante itere mais depressa do que seria possível há cinco anos.
 
 Se estás a ler isto e também estás a aprender: constrói alguma coisa. Quebra-a. Documenta por que é que ela quebrou. Esse é o único caminho que realmente fica.

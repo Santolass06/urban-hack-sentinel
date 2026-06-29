@@ -60,7 +60,7 @@
 ### Local installation (Pi / x86)
 
 ```bash
-git clone https://github.com/andresantos/urban-hack-sentinel
+git clone https://github.com/<owner>/urban-hack-sentinel
 cd urban-hack-sentinel
 
 python3 -m venv .venv

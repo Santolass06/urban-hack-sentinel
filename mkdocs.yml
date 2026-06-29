@@ -1,8 +1,8 @@
 site_name: Urban Hack Sentinel
 site_description: Unified wireless/Bluetooth/IoT auditing framework for Raspberry Pi
-site_author: André Santos
-site_url: https://github.com/Santolass06/urban-hack-sentinel
-repo_url: https://github.com/Santolass06/urban-hack-sentinel
+site_author: Urban Hack Sentinel Maintainers
+site_url: https://github.com/<owner>/urban-hack-sentinel
+repo_url: https://github.com/<owner>/urban-hack-sentinel
 repo_name: urban-hack-sentinel
 
 theme:
@@ -141,9 +141,7 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/Santolass06/urban-hack-sentinel
-    - icon: fontawesome/brands/twitter
-      link: https://twitter.com/andresantos
+      link: https://github.com/<owner>/urban-hack-sentinel
   analytics:
     provider: google
     property: G-XXXXXXXXXX

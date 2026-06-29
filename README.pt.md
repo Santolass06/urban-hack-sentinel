@@ -60,7 +60,7 @@ O **Urban Hack Sentinel v3** transforma um Raspberry Pi (ou máquina x86/64) num
 ### Instalação local (Pi / x86)
 
 ```bash
-git clone https://github.com/andresantos/urban-hack-sentinel
+git clone https://github.com/<owner>/urban-hack-sentinel
 cd urban-hack-sentinel
 
 python3 -m venv .venv

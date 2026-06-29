@@ -56,8 +56,8 @@ echo "Building Docker images..."
 docker buildx create --name urban-hs-builder --use 2>/dev/null || true
 docker buildx build \
     --platform linux/arm64,linux/amd64 \
-    -t ghcr.io/santolass06/urban-hack-sentinel:${VERSION} \
-    -t ghcr.io/santolass06/urban-hack-sentinel:latest \
+    -t ghcr.io/<owner>/urban-hack-sentinel:${VERSION} \
+    -t ghcr.io/<owner>/urban-hack-sentinel:latest \
     --push \
     -f docker/Dockerfile.arm64 \
     .

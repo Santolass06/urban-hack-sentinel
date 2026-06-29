@@ -1,5 +1,5 @@
 # Urban Hack Sentinel - Multi-arch Dockerfile
-# Build: docker buildx build --platform linux/arm64,linux/amd64 -t ghcr.io/santolass06/urban-hack-sentinel:latest --push .
+# Build: docker buildx build --platform linux/arm64,linux/amd64 -t ghcr.io/<owner>/urban-hack-sentinel:latest --push .
 
 # ============================================================
 # Build Stage

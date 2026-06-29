@@ -8,7 +8,7 @@ version = "3.0.0"
 description = "Unified wireless/Bluetooth/IoT/Network auditing framework for Raspberry Pi (ARM64)"
 readme = "README.md"
 license = {text = "MIT"}
-authors = [{name = "André Santos", email = "andresantos@example.com"}]
+authors = [{name = "Urban Hack Sentinel Maintainers", email = "maintainers@example.com"}]
 requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 4 - Beta",
