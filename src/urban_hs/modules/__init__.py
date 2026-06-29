@@ -16,10 +16,9 @@ Robustness rules
 
 from __future__ import annotations
 
-import importlib
-from typing import Dict, List, Type
+from typing import Dict
 
-from urban_hs.core.plugins import PluginMetadata, urban_plugin
+from urban_hs.core.plugins import PluginMetadata, PluginType, urban_plugin
 
 # Registry of available module plugins. Keys are the module name as
 # used in configuration (``modules.wifi.enabled = true``). Values are
@@ -39,7 +38,14 @@ _MODULE_REGISTRY: Dict[str, str] = {
     "esp32": "urban_hs.modules.esp32:ESP32Module",
     "bt_hid": "urban_hs.modules.bt_hid:BTHIDModule",
     "urban_hack": "urban_hs.modules.urban_hack:UrbanHackPlugin",
+    "example_sniffer": "urban_hs.modules.plugins.example_sniffer:ExampleSnifferPlugin",
+    "example_reporter": "urban_hs.modules.plugins.example_reporter:ExampleReporterPlugin",
 }
+
+
+def list_modules() -> Dict[str, str]:
+    """Return a snapshot of the module registry."""
+    return dict(_MODULE_REGISTRY)
 
 
 # Subpackages that are safe to re-export at this level. These are
@@ -53,6 +59,7 @@ from urban_hs.modules.wifi import (  # noqa: E402
 )
 
 __all__ = [
+    "list_modules",
     "WiFiScanner",
     "ScanStrategy",
     "CHANNELS_2GHZ",
