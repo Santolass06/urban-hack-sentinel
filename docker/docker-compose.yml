@@ -1,8 +1,17 @@
 version: '3.8'
 
+x-common: &common
+  cap_add:
+    - NET_ADMIN
+    - NET_RAW
+    - SYS_ADMIN
+  devices:
+    - /dev/net/tun
+  network_mode: host
+
 services:
   # ============================================================
-  # DEVELOPMENT ENVIRONMENT
+  # DEVELOPMENT ENVIRONMENT (x86/64 or arm64)
   # ============================================================
   dev:
     build:
@@ -20,13 +29,7 @@ services:
       - /var/lib/urban-hs:/var/lib/urban-hs
     working_dir: /app
     command: tail -f /dev/null
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
-      - SYS_ADMIN
-    devices:
-      - /dev/net/tun
-    network_mode: host
+    <<: *common
     restart: unless-stopped
 
   # ============================================================
@@ -45,17 +48,8 @@ services:
       - /etc/urban-hs:/etc/urban-hs:ro
       - /var/log/urban-hs:/var/log/urban-hs
       - /var/lib/urban-hs:/var/lib/urban-hs
-      # Hardware access
       - /dev/bus/usb:/dev/bus/usb
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
-      - SYS_ADMIN
-    devices:
-      - /dev/net/tun
-      - /dev/ttyACM0:/dev/ttyACM0  # GPS
-      - /dev/ttyACM1:/dev/ttyACM1  # GPS backup
-    network_mode: host
+    <<: *common
     restart: always
     deploy:
       resources:
@@ -65,7 +59,7 @@ services:
           memory: 512M
 
   # ============================================================
-  # REDIS (for pub/sub and caching)
+  # REDIS
   # ============================================================
   redis:
     image: redis:7-alpine
@@ -83,7 +77,7 @@ services:
       retries: 3
 
   # ============================================================
-  # GPSD (for GPS data)
+  # GPSD
   # ============================================================
   gpsd:
     image: ghcr.io/maxburns/gpsd:latest
@@ -98,7 +92,7 @@ services:
     privileged: true
 
   # ============================================================
-  # PROMETHEUS (metrics collection)
+  # PROMETHEUS
   # ============================================================
   prometheus:
     image: prom/prometheus:v2.50.0
@@ -115,31 +109,42 @@ services:
     restart: unless-stopped
 
   # ============================================================
-  # GRAFANA (visualization)
+  # GRAFANA
   # ============================================================
   grafana:
-    image: grafana/grafana:10.2.0
+    image: grafana/grafana:11.0.0
     container_name: urban-hs-grafana
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=urbanhs
-      - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
     ports:
       - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD:-admin}
+      - GF_SERVER_ROOT_URL=http://localhost:3000/
     restart: unless-stopped
     depends_on:
-      - prometheus
+      prometheus:
+        condition: service_healthy
+
+  # ============================================================
+  # NGINX (reverse proxy + static assets)
+  # ============================================================
+  nginx:
+    image: nginx:alpine
+    container_name: urban-hs-nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+    depends_on:
+      - dev
 
 volumes:
   redis-data:
   prometheus-data:
   grafana-data:
-
-networks:
-  default:
-    name: urban-hs-net
-    driver: bridge
