@@ -12,10 +12,12 @@ The ``run`` helper is registered as a console script in ``pyproject.toml``
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any, Dict
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from urban_hs.core import init_core, shutdown_core
 
@@ -71,9 +73,9 @@ async def system_info() -> Dict[str, Any]:
     try:
         from urban_hs.core.config import Config
 
-        cfg = Config()
+        Config()
     except Exception:
-        cfg = None
+        pass
 
     return {
         "version": "3.0.0",
@@ -152,10 +154,11 @@ async def ws_events(websocket: WebSocket) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# Static frontend mount (to be created in a later phase)
+# Static frontend
 # ---------------------------------------------------------------------------
-# from fastapi.staticfiles import StaticFiles
-# app.mount("/", StaticFiles(directory="src/urban_hs/ui/web", html=True), name="web")
+_WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+if _WEB_DIR.exists():
+    app.mount("/", StaticFiles(directory=str(_WEB_DIR), html=True), name="web")
 
 
 def run() -> None:
@@ -163,7 +166,7 @@ def run() -> None:
     import uvicorn
 
     uvicorn.run(
-        "urban_hs.ui.api.main:app",
+        "urban_hs.ui.api.main:run",
         host="0.0.0.0",
         port=int(os.environ.get("URBAN_HS_API_PORT", "8000")),
         reload=bool(os.environ.get("URBAN_HS_API_RELOAD")),
