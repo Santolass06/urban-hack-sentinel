@@ -57,6 +57,9 @@ def _build_app() -> FastAPI:
     from urban_hs.ui.api.routers.events import router as events_router
     application.include_router(events_router)
 
+    from urban_hs.ui.api.routers.attacks import router as attacks_router
+    application.include_router(attacks_router, prefix="/api/v1")
+
     if web_root.exists():
         @application.get("/", include_in_schema=False)
         async def _serve_index() -> FileResponse:
