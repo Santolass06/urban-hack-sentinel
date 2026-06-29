@@ -30,7 +30,6 @@ from textual.widgets import (
 
 from urban_hs import __version__
 
-
 # ---------------------------------------------------------------------------
 # Custom Textual message for event bus events
 # ---------------------------------------------------------------------------
@@ -122,14 +121,11 @@ class TUIApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.theme = "monokai" if self.theme == "default" else "default"
-        # Kick off event bus listener
+        self.theme = "monokai"
         asyncio.create_task(self._listen_event_bus())
-        # Prepare tables
         wifi_table = self.query_one("#wifi-table", DataTable)
         wifi_table.add_columns("BSSID", "SSID", "Encryption", "Signal", "Channel")
         wifi_table.cursor_type = "row"
-
         ble_table = self.query_one("#ble-table", DataTable)
         ble_table.add_columns("Address", "Name", "Type", "RSSI")
         ble_table.cursor_type = "row"
@@ -141,11 +137,11 @@ class TUIApp(App):
             bus = get_event_bus()
             while True:
                 event = await bus._queue.get()
-                self.post_message(EventMessage(event.type, event.payload))
+                self.post_message(self.EventMessage(event.type, event.payload))
         except Exception as exc:
-            self.post_message(EventMessage("event_bus.error", {"error": str(exc)}))
+            self.post_message(self.EventMessage("event_bus.error", {"error": str(exc)}))
 
-    def on_event_message(self, message: EventMessage) -> None:
+    def on_event_message(self, message: Any) -> None:
         log = self.query_one("#app-log", Log)
         log.write_line(f"[cyan]{message.event_type}[/cyan] {message.payload}")
         if message.event_type == "wifi.scan.completed":
@@ -206,24 +202,24 @@ class TUIApp(App):
             nets = await scanner.scan(duration=30)
             self._wifi_networks = [n.to_dict() for n in nets]
             self._refresh_wifi_table()
-            self.post_message(EventMessage(
+            self.post_message(self.EventMessage(
                 "wifi.scan.completed",
                 {"count": len(self._wifi_networks), "networks": self._wifi_networks},
             ))
         except Exception as exc:
-            self.post_message(EventMessage("wifi.scan.error", {"error": str(exc)}))
+            self.post_message(self.EventMessage("wifi.scan.error", {"error": str(exc)}))
 
     async def _wifi_interfaces(self) -> None:
         try:
             from urban_hs.ui.api.routers.wifi import list_wifi_interfaces
             result = await list_wifi_interfaces()
             ifaces = result.get("interfaces", [])
-            self.post_message(EventMessage(
+            self.post_message(self.EventMessage(
                 "wifi.interfaces.listed",
                 {"interfaces": ifaces},
             ))
         except Exception as exc:
-            self.post_message(EventMessage("wifi.interfaces.error", {"error": str(exc)}))
+            self.post_message(self.EventMessage("wifi.interfaces.error", {"error": str(exc)}))
 
     async def _ble_scan(self) -> None:
         try:
@@ -238,12 +234,12 @@ class TUIApp(App):
                 d.to_dict() if hasattr(d, "to_dict") else vars(d) for d in devices
             ]
             self._refresh_ble_table()
-            self.post_message(EventMessage(
+            self.post_message(self.EventMessage(
                 "ble.scan.completed",
                 {"count": len(self._ble_devices), "devices": self._ble_devices},
             ))
         except Exception as exc:
-            self.post_message(EventMessage("ble.scan.error", {"error": str(exc)}))
+            self.post_message(self.EventMessage("ble.scan.error", {"error": str(exc)}))
 
     def action_toggle_dark(self) -> None:
         self.theme = "monokai" if self.theme == "default" else "default"
