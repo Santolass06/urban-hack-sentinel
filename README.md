@@ -1,6 +1,6 @@
 # Urban Hack Sentinel v3
 
-> **Auditoria Wi-Fi/Bluetooth/IoT automatizada para Raspberry Pi**
+> **Auditoria Wi-Fi/Bluetooth/IoT automatizada para Raspberry Pi e x86/64**
 > Framework modular em Python 3.11+ com scanning WiFi, ataques WPA/WPA3, WPS, BLE, wardriving GPS, Metasploit integration, e dashboard web/TUI.
 
 ---
@@ -42,14 +42,14 @@
 ## 🚀 Quick Start
 
 ### Hardware Requirements
-| Component | Specification |
+|| Component | Specification ||
 |-----------|---------------|
-| **Pi** | Raspberry Pi 4/5 (4GB+ RAM recommended) |
-| **WiFi USB** | Monitor mode + injection capable (Alfa AWUS036ACH/AXML, mt7921u, rtl8812au) |
-| **Bluetooth** | Built-in Pi 5 or USB CSR 4.0/5.0 dongle |
-| **GPS (optional)** | u-blox USB (VK-172, etc.) |
-| **Storage** | SSD USB 256GB+ for pcaps/chroot |
-| **Power** | 5V 5A (27W) + UPS HAT recommended |
+| **Host** | Raspberry Pi 4/5 (ARM64) **ou** laptop/desktop x86/64 ||
+| **WiFi adapter** | Monitor mode + injection capable (Alfa AWUS036ACH/AXML, mt7921u, rtl8812au, Intel AX210 monitor patch) ||
+| **Bluetooth** | Built-in BLE 4.2+ (Pi 5, modern laptops) or USB CSR 4.0/5.0 dongle ||
+| **GPS (optional)** | u-blox USB (VK-172, etc.) ||
+| **Storage** | SSD USB 256GB+ for pcaps/chroot ||
+| **Power** | 5V 5A (27W) — recommended on desktop; UPS HAT on Pi ||
 
 ### Installation
 ```bash
@@ -461,6 +461,32 @@ class MyModule(EventHandler):
             networks = event.payload["networks"]
             # Custom processing...
 ```
+
+---
+
+## 🖥 User Interfaces
+
+The framework ships with three complementary interfaces:
+
+### 1. CLI (`urban-hs`)
+```bash
+urban-hs info
+urban-hs modules
+```
+
+### 2. Textual TUI (`urban-hs-tui`)
+```bash
+urban-hs-tui
+```
+Full-screen dashboard with WiFi/BLE/Network tabs, live logs, and
+DataTables for discovered devices.
+
+### 3. FastAPI + Web dashboard (`urban-hs-server`)
+```bash
+urban-hs-server --host 0.0.0.0 --port 8000
+```
+REST API + WebSocket stream at `http://localhost:8000/`. The browser
+UI (HTMX + Alpine.js) is served from `/`.
 
 ---
 

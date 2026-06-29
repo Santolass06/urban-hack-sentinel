@@ -1,6 +1,6 @@
 # Urban Hack Sentinel v3 Documentation
 
-Welcome to the official documentation for **Urban Hack Sentinel v3** - a unified wireless/Bluetooth/IoT auditing framework for Raspberry Pi.
+Welcome to the official documentation for **Urban Hack Sentinel v3** - a unified wireless/Bluetooth/IoT auditing framework for Raspberry Pi *and* x86/64.
 
 ## Quick Links
 
@@ -35,8 +35,8 @@ Welcome to the official documentation for **Urban Hack Sentinel v3** - a unified
 | S2 BLE | 100% | Fast Pair, WhisperPair, HFP Audio |
 | S3 Network/Camera | 100% | Nmap, Nuclei, Camera Enum/Vuln |
 | S4 Metasploit/Exploit | 100% | RPC, Exploits, Reporting |
-| S5 HID/Dashboard | 85% | HID complete, UI in progress |
-| S6 Polish | 80% | Concurrency, Memory, SQLite, Security, Docs |
+|| S5 HID/Dashboard | 90% | HID complete, UI (TUI + Web + API) shipped |
+|| S6 Polish | 80% | Concurrency, Memory, SQLite, Security, Docs |
 
 ## Quick Navigation
 
