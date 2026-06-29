@@ -80,6 +80,8 @@
         }
         .badge.ok { background: rgba(63,185,80,0.15); color: var(--green); }
         .badge.err { background: rgba(248,81,73,0.15); color: var(--red); }
+        .status-online { color: var(--green); }
+        .status-offline { color: var(--red); }
     </style>
 </head>
 <body>
@@ -90,7 +92,6 @@
         </div>
         <div class="row">
             <span class="badge" id="arch-badge">--</span>
-            <a href="/ui" style="color: var(--accent)">UI</a>
         </div>
     </header>
 
@@ -128,56 +129,89 @@
     </main>
 
     <script>
-        const API = 'http://localhost:8000';
-        async function api(path, opts = {}) {
-            const res = await fetch(API + path, {
+        const API = '/api/v1';
+        function api(path, opts = {}) {
+            return fetch(API + path, {
                 ...opts,
                 headers: {'Content-Type': 'application/json'}
-            });
-            return res.json().catch(() => ({}));
+            }).then(res => res.json().catch(() => ({})));
+        }
+
+        function appendLog(nodeId, message) {
+            const node = document.getElementById(nodeId);
+            if (!node) return;
+            const prefix = '[' + new Date().toLocaleTimeString() + '] ';
+            node.textContent = node.textContent === '(connecting…)' || node.textContent === '(idle)'
+                ? prefix + message
+                : node.textContent + '\n' + prefix + message;
         }
 
         async function wifiScan() {
             const out = document.getElementById('wifi-output');
             out.textContent = 'Scanning…';
             const iface = document.getElementById('wifi-iface').value || 'wlan1';
-            const j = await api('/api/v1/wifi/scan', {
-                method: 'POST',
-                body: JSON.stringify({interface: iface, strategy: 'passive_only'})
-            });
-            out.textContent = JSON.stringify(j, null, 2);
+            try {
+                const j = await api('/wifi/scan', {
+                    method: 'POST',
+                    body: JSON.stringify({interface: iface, strategy: 'passive_only'})
+                });
+                out.textContent = JSON.stringify(j, null, 2);
+            } catch (e) {
+                out.textContent = 'Error: ' + e.message;
+            }
         }
 
         async function wifiInterfaces() {
             const out = document.getElementById('wifi-output');
-            const j = await api('/api/v1/wifi/interfaces');
-            out.textContent = JSON.stringify(j, null, 2);
+            try {
+                const j = await api('/wifi/interfaces');
+                out.textContent = JSON.stringify(j, null, 2);
+            } catch (e) {
+                out.textContent = 'Error: ' + e.message;
+            }
         }
 
         async function bleScan() {
             const out = document.getElementById('ble-output');
             out.textContent = 'Scanning…';
             const dur = parseInt(document.getElementById('ble-duration').value || '10', 10);
-            const j = await api('/api/v1/ble/scan', {
-                method: 'POST',
-                body: JSON.stringify({duration: dur})
-            });
-            out.textContent = JSON.stringify(j, null, 2);
+            try {
+                const j = await api('/ble/scan', {
+                    method: 'POST',
+                    body: JSON.stringify({duration: dur})
+                });
+                out.textContent = JSON.stringify(j, null, 2);
+            } catch (e) {
+                out.textContent = 'Error: ' + e.message;
+            }
         }
 
-        (async function init() {
-            const info = await api('/api/v1/system/info');
-            document.getElementById('sys-info').textContent = JSON.stringify(info, null, 2);
-            document.getElementById('arch-badge').textContent = info.arch || '--';
+        async function init() {
+            try {
+                const info = await api('/info');
+                document.getElementById('sys-info').textContent = JSON.stringify(info, null, 2);
+                document.getElementById('arch-badge').textContent = info.machine || info.arch || '--';
 
-            const ws = new WebSocket('ws://' + location.host + '/ws/events');
-            const logs = document.getElementById('logs-output');
-            ws.onmessage = (ev) => {
-                const line = '[' + new Date().toLocaleTimeString() + '] ' + ev.data;
-                logs.textContent = logs.textContent === '(connecting…)' ? line : logs.textContent + '\n' + line;
-            };
-            ws.onclose = () => { logs.textContent += '\n[disconnected]'; };
-        })();
+                const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const ws = new WebSocket(protocol + '//' + location.host + '/api/v1/events');
+                const logs = document.getElementById('logs-output');
+                ws.onopen = () => appendLog('logs-output', 'Live feed connected');
+                ws.onmessage = (ev) => {
+                    try {
+                        const data = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
+                        appendLog('logs-output', data.type + ' | ' + JSON.stringify(data.payload || {}));
+                    } catch {
+                        appendLog('logs-output', ev.data);
+                    }
+                };
+                ws.onclose = () => appendLog('logs-output', 'Live feed disconnected');
+                ws.onerror = () => appendLog('logs-output', 'Live feed error');
+            } catch (e) {
+                document.getElementById('sys-info').textContent = 'Error loading system info';
+            }
+        }
+
+        init();
     </script>
 </body>
 </html>

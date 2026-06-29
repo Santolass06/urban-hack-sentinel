@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from urban_hs import __version__
+from urban_hs.core.event_bus import init_event_bus, shutdown_event_bus
 
 logger = logging.getLogger(__name__)
 
@@ -33,13 +34,16 @@ def _build_app() -> FastAPI:
         version=__version__,
     )
 
+    @application.on_event("startup")
+    async def _on_startup() -> None:
+        await init_event_bus()
+
+    @application.on_event("shutdown")
+    async def _on_shutdown() -> None:
+        await shutdown_event_bus()
+
     from urban_hs.ui.api.routers.system import router as system_router
     application.include_router(system_router, prefix="/api/v1")
-
-    # Root-level health endpoint (outside the /api/v1 namespace).
-    @application.get("/healthz", include_in_schema=False)
-    async def _root_health() -> dict[str, str]:
-        return {"status": "ok"}
 
     from urban_hs.ui.api.routers.wifi import router as wifi_router
     application.include_router(wifi_router, prefix="/api/v1/wifi")
@@ -49,6 +53,9 @@ def _build_app() -> FastAPI:
 
     from urban_hs.ui.api.routers.network import router as network_router
     application.include_router(network_router, prefix="/api/v1/network")
+
+    from urban_hs.ui.api.routers.events import router as events_router
+    application.include_router(events_router)
 
     if web_root.exists():
         @application.get("/", include_in_schema=False)
