@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Urban Hack Sentinel v3 — Web UI</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>
+        :root {
+            --bg: #0f1115;
+            --panel: #1a1d23;
+            --text: #e6e6e6;
+            --muted: #8b949e;
+            --accent: #58a6ff;
+            --green: #3fb950;
+            --red: #f85149;
+            --amber: #d29922;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: ui-sans-serif, system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+        header {
+            padding: 1rem 1.5rem;
+            background: var(--panel);
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .container { padding: 1.5rem; display: grid; gap: 1.5rem; }
+        .card {
+            background: var(--panel);
+            border: 1px solid #30363d;
+            border-radius: 0.5rem;
+            padding: 1rem 1.25rem;
+        }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+        button {
+            background: var(--accent);
+            color: #fff;
+            border: 0;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.35rem;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        button.secondary { background: #30363d; }
+        .terminal {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 0.8rem;
+            line-height: 1.4;
+            min-height: 220px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+        input, select {
+            background: #0d1117;
+            color: var(--text);
+            border: 1px solid #30363d;
+            padding: 0.35rem 0.5rem;
+            border-radius: 0.3rem;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.15rem 0.4rem;
+            border-radius: 0.3rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: #30363d;
+        }
+        .badge.ok { background: rgba(63,185,80,0.15); color: var(--green); }
+        .badge.err { background: rgba(248,81,73,0.15); color: var(--red); }
+    </style>
+</head>
+<body>
+    <header>
+        <div>
+            <strong>Urban Hack Sentinel v3</strong>
+            <span class="badge ok" id="status-badge">online</span>
+        </div>
+        <div class="row">
+            <span class="badge" id="arch-badge">--</span>
+            <a href="/ui" style="color: var(--accent)">UI</a>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="card">
+            <h2 style="margin-top:0">System</h2>
+            <div class="row">
+                <span id="sys-info">Loading…</span>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2 style="margin-top:0">WiFi</h2>
+            <div class="row">
+                <input id="wifi-iface" value="wlan1" placeholder="Interface (ex: wlan1)" />
+                <button onclick="wifiScan()">Scan</button>
+                <button class="secondary" onclick="wifiInterfaces()">List interfaces</button>
+            </div>
+            <pre class="terminal" id="wifi-output">(idle)</pre>
+        </section>
+
+        <section class="card">
+            <h2 style="margin-top:0">BLE</h2>
+            <div class="row">
+                <input id="ble-duration" type="number" value="10" style="width: 80px" />
+                <button onclick="bleScan()">Scan Fast Pair</button>
+            </div>
+            <pre class="terminal" id="ble-output">(idle)</pre>
+        </section>
+
+        <section class="card">
+            <h2 style="margin-top:0">Live Logs</h2>
+            <pre class="terminal" id="logs-output">(connecting…)</pre>
+        </section>
+    </main>
+
+    <script>
+        const API = 'http://localhost:8000';
+        async function api(path, opts = {}) {
+            const res = await fetch(API + path, {
+                ...opts,
+                headers: {'Content-Type': 'application/json'}
+            });
+            return res.json().catch(() => ({}));
+        }
+
+        async function wifiScan() {
+            const out = document.getElementById('wifi-output');
+            out.textContent = 'Scanning…';
+            const iface = document.getElementById('wifi-iface').value || 'wlan1';
+            const j = await api('/api/v1/wifi/scan', {
+                method: 'POST',
+                body: JSON.stringify({interface: iface, strategy: 'passive_only'})
+            });
+            out.textContent = JSON.stringify(j, null, 2);
+        }
+
+        async function wifiInterfaces() {
+            const out = document.getElementById('wifi-output');
+            const j = await api('/api/v1/wifi/interfaces');
+            out.textContent = JSON.stringify(j, null, 2);
+        }
+
+        async function bleScan() {
+            const out = document.getElementById('ble-output');
+            out.textContent = 'Scanning…';
+            const dur = parseInt(document.getElementById('ble-duration').value || '10', 10);
+            const j = await api('/api/v1/ble/scan', {
+                method: 'POST',
+                body: JSON.stringify({duration: dur})
+            });
+            out.textContent = JSON.stringify(j, null, 2);
+        }
+
+        (async function init() {
+            const info = await api('/api/v1/system/info');
+            document.getElementById('sys-info').textContent = JSON.stringify(info, null, 2);
+            document.getElementById('arch-badge').textContent = info.arch || '--';
+
+            const ws = new WebSocket('ws://' + location.host + '/ws/events');
+            const logs = document.getElementById('logs-output');
+            ws.onmessage = (ev) => {
+                const line = '[' + new Date().toLocaleTimeString() + '] ' + ev.data;
+                logs.textContent = logs.textContent === '(connecting…)' ? line : logs.textContent + '\n' + line;
+            };
+            ws.onclose = () => { logs.textContent += '\n[disconnected]'; };
+        })();
+    </script>
+</body>
+</html>

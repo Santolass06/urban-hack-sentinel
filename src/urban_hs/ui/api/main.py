@@ -19,6 +19,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from urban_hs.core import init_core, shutdown_core
 
+from urban_hs.ui.api.routers import wifi as wifi_router
+from urban_hs.ui.api.routers import ble as ble_router
 
 app = FastAPI(
     title="Urban Hack Sentinel API",
@@ -83,7 +85,7 @@ async def system_info() -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Device registry (very thin wrapper over storage for now)
+# Device registry
 # ---------------------------------------------------------------------------
 @app.get("/api/v1/devices")
 async def list_devices(limit: int = 100) -> Dict[str, Any]:
@@ -97,6 +99,18 @@ async def list_devices(limit: int = 100) -> Dict[str, Any]:
         return {"devices": [dict(r) for r in rows]}
     except Exception as exc:
         return {"devices": [], "error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# WiFi router
+# ---------------------------------------------------------------------------
+app.include_router(wifi_router.router, prefix="/api/v1/wifi", tags=["wifi"])
+
+
+# ---------------------------------------------------------------------------
+# BLE router
+# ---------------------------------------------------------------------------
+app.include_router(ble_router.router, prefix="/api/v1/ble", tags=["ble"])
 
 
 # ---------------------------------------------------------------------------
