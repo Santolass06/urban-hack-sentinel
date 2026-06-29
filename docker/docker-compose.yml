@@ -10,18 +10,17 @@ x-common: &common
   network_mode: host
 
 services:
-  # ============================================================
-  # DEVELOPMENT ENVIRONMENT (x86/64 or arm64)
-  # ============================================================
   dev:
     build:
       context: ..
-      dockerfile: docker/Dockerfile.arm64
+      dockerfile: docker/Dockerfile.${TARGETARCH:-arm64}
       target: builder
+      args:
+        TARGETARCH: ${TARGETARCH:-arm64}
     container_name: urban-hs-dev
     environment:
       - URBAN_HS_LOG_LEVEL=DEBUG
-      - PYTHONPATH=/app/src
+      - PYTHONPATH=/opt/urban-hs/src
     volumes:
       - ../:/app:cached
       - ../scripts:/app/scripts:ro
@@ -32,14 +31,13 @@ services:
     <<: *common
     restart: unless-stopped
 
-  # ============================================================
-  # PRODUCTION RUNTIME
-  # ============================================================
   prod:
     build:
       context: ..
-      dockerfile: docker/Dockerfile.arm64
+      dockerfile: docker/Dockerfile.${TARGETARCH:-arm64}
       target: runtime
+      args:
+        TARGETARCH: ${TARGETARCH:-arm64}
     container_name: urban-hs-prod
     environment:
       - URBAN_HS_LOG_LEVEL=INFO
@@ -58,9 +56,6 @@ services:
         reservations:
           memory: 512M
 
-  # ============================================================
-  # REDIS
-  # ============================================================
   redis:
     image: redis:7-alpine
     container_name: urban-hs-redis
@@ -76,9 +71,6 @@ services:
       timeout: 5s
       retries: 3
 
-  # ============================================================
-  # GPSD
-  # ============================================================
   gpsd:
     image: ghcr.io/maxburns/gpsd:latest
     container_name: urban-hs-gpsd
@@ -91,9 +83,6 @@ services:
     restart: unless-stopped
     privileged: true
 
-  # ============================================================
-  # PROMETHEUS
-  # ============================================================
   prometheus:
     image: prom/prometheus:v2.50.0
     container_name: urban-hs-prometheus
@@ -108,9 +97,6 @@ services:
       - "9090:9090"
     restart: unless-stopped
 
-  # ============================================================
-  # GRAFANA
-  # ============================================================
   grafana:
     image: grafana/grafana:11.0.0
     container_name: urban-hs-grafana
@@ -127,9 +113,6 @@ services:
       prometheus:
         condition: service_healthy
 
-  # ============================================================
-  # NGINX (reverse proxy + static assets)
-  # ============================================================
   nginx:
     image: nginx:alpine
     container_name: urban-hs-nginx

@@ -1,0 +1,94 @@
+# x86_64 runtime overlay for Urban Hack Sentinel.
+#
+# Use with the common builder/runtime base from Dockerfile.arm64:
+#   docker build -f docker/Dockerfile.arm64 --target runtime -t urban-hs:arm64 .
+#   docker build -f docker/Dockerfile.amd64 --target runtime -t urban-hs:amd64 .
+#
+# Or via buildx (multi-arch):
+#   docker buildx build --platform linux/amd64,linux/arm64 \
+#     -f docker/Dockerfile.arm64 -t urban-hack-sentinel:latest .
+
+FROM python:3.11-slim AS runtime
+
+ARG TARGETARCH=amd64
+
+# x86_64-specific runtime tools.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpcap0.8 \
+    libbluetooth3 \
+    libdbus-1-3 \
+    libsqlite3-0 \
+    libffi8 \
+    libssl3 \
+    iproute2 \
+    wireless-tools \
+    ethtool \
+    tcpdump \
+    bluez \
+    bluez-tools \
+    usbutils \
+    curl \
+    jq \
+    vim-tiny \
+    nmap \
+    hashcat \
+    aircrack-ng \
+    hcxtools \
+    reaver \
+    bully \
+    htop \
+    iotop \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user
+RUN groupadd -r -g 1000 urbanhs && \
+    useradd -r -u 1000 -g urbanhs -d /home/urbanhs -s /bin/bash urbanhs
+
+# Create directories
+RUN mkdir -p \
+    /opt/urban-hs \
+    /var/lib/urban-hs \
+    /var/log/urban-hs/jsonl \
+    /var/lib/urban-hs/evidence \
+    /var/lib/urban-hs/reports \
+    /var/lib/urban-hs/credentials \
+    /var/lib/urban-hs/artifacts \
+    /var/lib/urban-hs/hashes \
+    /var/lib/urban-hs/pcaps \
+    /etc/urban-hs \
+    && chown -R urbanhs:urbanhs /var/lib/urban-hs /var/log/urban-hs /opt/urban-hs
+
+COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder /app/src /opt/urban-hs/src
+COPY --from=builder /app/scripts /opt/urban-hs/scripts
+
+# Fix ownership + editable-install path for runtime.
+RUN chown -R urbanhs:urbanhs /opt/urban-hs/src /opt/urban-hs/scripts \
+    && sed -i 's|^/app/src|/opt/urban-hs/src|' /opt/venv/lib/python3.11/site-packages/urban_hs.pth
+
+ENV PATH="/opt/venv/bin:$PATH"
+ENV PYTHONPATH=/opt/urban-hs/src
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Default configuration
+ENV URBAN_HS_CONFIG=/etc/urban-hs/config.yaml
+ENV URBAN_HS_LOG_LEVEL=INFO
+ENV URBAN_HS_LOG_DIR=/var/log/urban-hs
+ENV URBAN_HS_DATA_DIR=/var/lib/urban-hs
+
+USER urbanhs
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python3 -c "import sys; sys.path.insert(0, '/opt/urban-hs/src'); from urban_hs.core import create_health_checker; import asyncio; hc = create_health_checker(); r = asyncio.run(hc.run_checks()); overall = asyncio.run(hc.get_overall_status(r)); exit(0 if overall.value == 'healthy' else 1)" || exit 1
+
+ENTRYPOINT ["python3", "-m", "urban_hs"]
+CMD ["--help"]
+
+LABEL org.opencontainers.image.title="Urban Hack Sentinel"
+LABEL org.opencontainers.image.description="WiFi/BLE/Network security auditing framework (x86_64)"
+LABEL org.opencontainers.image.vendor="Urban Hack Sentinel Team"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.source="https://github.com/Santolass06/urban-hack-sentinel"
+LABEL org.opencontainers.image.documentation="https://github.com/Santolass06/urban-hack-sentinel/blob/main/README.md"

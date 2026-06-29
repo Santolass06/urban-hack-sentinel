@@ -96,10 +96,10 @@ class TestAPI:
 
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            r = await client.get("/api/v1/system/info")
+            r = await client.get("/api/v1/info")
         assert r.status_code == 200
         body = r.json()
-        assert body["arch"] == platform.machine()
+        assert body.get("machine") == platform.machine()
 
     @pytest.mark.asyncio
     async def test_wifi_interfaces(self) -> None:
