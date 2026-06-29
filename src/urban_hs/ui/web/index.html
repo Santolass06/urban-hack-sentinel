@@ -50,6 +50,7 @@
             font-weight: 600;
         }
         button.secondary { background: #30363d; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
         .terminal {
             background: #0d1117;
             border: 1px solid #30363d;
@@ -59,6 +60,7 @@
             font-size: 0.8rem;
             line-height: 1.4;
             min-height: 220px;
+            max-height: 360px;
             overflow-y: auto;
             white-space: pre-wrap;
         }
@@ -82,6 +84,18 @@
         .badge.err { background: rgba(248,81,73,0.15); color: var(--red); }
         .status-online { color: var(--green); }
         .status-offline { color: var(--red); }
+        .attack-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; }
+        .attack-card {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 0.4rem;
+            padding: 0.6rem 0.7rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+        .attack-card h3 { margin: 0; font-size: 0.95rem; }
+        .attack-card p { margin: 0; color: var(--muted); font-size: 0.8rem; }
     </style>
 </head>
 <body>
@@ -92,6 +106,7 @@
         </div>
         <div class="row">
             <span class="badge" id="arch-badge">--</span>
+            <span class="badge" id="job-badge">job: --</span>
         </div>
     </header>
 
@@ -101,6 +116,12 @@
             <div class="row">
                 <span id="sys-info">Loading…</span>
             </div>
+        </section>
+
+        <section class="card">
+            <h2 style="margin-top:0">Attacks</h2>
+            <div id="attacks-root">Loading inventory…</div>
+            <div class="terminal" id="attack-output">(idle)</div>
         </section>
 
         <section class="card">
@@ -123,13 +144,14 @@
         </section>
 
         <section class="card">
-            <h2 style="margin-top:0">Live Logs</h2>
+            <h2 style="margin-top:0">Live Feed</h2>
             <pre class="terminal" id="logs-output">(connecting…)</pre>
         </section>
     </main>
 
     <script>
         const API = '/api/v1';
+        let attackJobs = {};
         function api(path, opts = {}) {
             return fetch(API + path, {
                 ...opts,
@@ -144,6 +166,77 @@
             node.textContent = node.textContent === '(connecting…)' || node.textContent === '(idle)'
                 ? prefix + message
                 : node.textContent + '\n' + prefix + message;
+            node.scrollTop = node.scrollHeight;
+        }
+
+        function setJobBadge(jobId) {
+            document.getElementById('job-badge').textContent = jobId ? 'job: ' + jobId : 'job: --';
+        }
+
+        async function loadAttacks() {
+            try {
+                const j = await api('/attacks');
+                const root = document.getElementById('attacks-root');
+                if (!j.attacks.length) {
+                    root.textContent = 'No attacks available.';
+                    return;
+                }
+                const grid = document.createElement('div');
+                grid.className = 'attack-grid';
+                j.attacks.forEach(a => {
+                    const card = document.createElement('div');
+                    card.className = 'attack-card';
+                    card.innerHTML = '<h3>' + escapeHtml(a.name) + '</h3>' +
+                        '<p>' + escapeHtml(a.description || '') + '</p>' +
+                        '<div class="row"><button onclick="runAttack(\'' + escapeJs(a.name) + '\')">Run</button>' +
+                        '<button class="secondary" onclick="dryRun(\'' + escapeJs(a.name) + '\')">Dry run</button></div>';
+                    grid.appendChild(card);
+                });
+                root.innerHTML = '';
+                root.appendChild(grid);
+            } catch (e) {
+                appendLog('attack-output', 'Error loading attacks: ' + (e.message || e));
+            }
+        }
+
+        async function runAttack(name) {
+            appendLog('attack-output', 'Running ' + name);
+            try {
+                const j = await api('/attacks/' + encodeURIComponent(name) + '/execute', {
+                    method: 'POST',
+                    body: JSON.stringify({params: {}})
+                });
+                setJobBadge(j.job_id);
+                appendLog('attack-output', 'started ' + name + ' job=' + j.job_id);
+            } catch (e) {
+                appendLog('attack-output', 'Error: ' + (e.message || e));
+            }
+        }
+
+        async function dryRun(name) {
+            appendLog('attack-output', 'Dry run ' + name);
+            try {
+                const j = await api('/attacks/' + encodeURIComponent(name) + '/execute', {
+                    method: 'POST',
+                    body: JSON.stringify({params: {}, dry_run: true})
+                });
+                setJobBadge(j.job_id);
+                appendLog('attack-output', 'dry-run ' + name + ' job=' + j.job_id);
+            } catch (e) {
+                appendLog('attack-output', 'Error: ' + (e.message || e));
+            }
+        }
+
+        function escapeHtml(str) {
+            return String(str || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function escapeJs(str) {
+            return String(str || '').replace(/'/g, "\\'");
         }
 
         async function wifiScan() {
@@ -157,7 +250,7 @@
                 });
                 out.textContent = JSON.stringify(j, null, 2);
             } catch (e) {
-                out.textContent = 'Error: ' + e.message;
+                out.textContent = 'Error: ' + (e.message || e);
             }
         }
 
@@ -167,7 +260,7 @@
                 const j = await api('/wifi/interfaces');
                 out.textContent = JSON.stringify(j, null, 2);
             } catch (e) {
-                out.textContent = 'Error: ' + e.message;
+                out.textContent = 'Error: ' + (e.message || e);
             }
         }
 
@@ -182,7 +275,7 @@
                 });
                 out.textContent = JSON.stringify(j, null, 2);
             } catch (e) {
-                out.textContent = 'Error: ' + e.message;
+                out.textContent = 'Error: ' + (e.message || e);
             }
         }
 
@@ -191,15 +284,23 @@
                 const info = await api('/info');
                 document.getElementById('sys-info').textContent = JSON.stringify(info, null, 2);
                 document.getElementById('arch-badge').textContent = info.machine || info.arch || '--';
+                await loadAttacks();
 
                 const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
                 const ws = new WebSocket(protocol + '//' + location.host + '/api/v1/events');
                 const logs = document.getElementById('logs-output');
+                const attackOut = document.getElementById('attack-output');
                 ws.onopen = () => appendLog('logs-output', 'Live feed connected');
                 ws.onmessage = (ev) => {
                     try {
                         const data = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
                         appendLog('logs-output', data.type + ' | ' + JSON.stringify(data.payload || {}));
+                        if (data.type && data.type.startsWith('attack.')) {
+                            appendLog('attack-output', data.type + ' | ' + JSON.stringify(data.payload || {}));
+                            if (data.type === 'attack.completed' || data.type === 'attack.error') {
+                                setJobBadge('');
+                            }
+                        }
                     } catch {
                         appendLog('logs-output', ev.data);
                     }
