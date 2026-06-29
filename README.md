@@ -1,29 +1,34 @@
 # Urban Hack Sentinel v3
 
-> **Auditoria Wi-Fi/Bluetooth/IoT automatizada para Raspberry Pi e x86/64**
-> Framework modular em Python 3.11+ com scanning WiFi, ataques WPA/WPA3, WPS, BLE, wardriving GPS, Metasploit integration, dashboard web/TUI/CLI, e camada de abstracção de hardware (HAL).
+> Automated Wi-Fi/Bluetooth/IoT auditing platform for Raspberry Pi and x86/64.
+> Modular Python 3.11+ framework with Wi-Fi scanning, WPA/WPA3 attacks, WPS, BLE, GPS wardriving, Metasploit integration, web/TUI/CLI dashboards, and a Hardware Abstraction Layer (HAL).
 
 ---
 
-## 📚 Índice
+## 📚 Index
 
-- [O que faz](#-o-que-faz-esta-aplicação)
-- [Instalação](#instalação)
+- [About](#about)
+- [Installation](#installation)
 - [Docker](#docker)
-- [CLI, TUI e API](#cli-tui-e-api)
-- [Hardware suportado](#hardware-suportado)
-- [Arquitectura](#arquitectura)
+- [Usage](#usage)
+- [Hardware](#hardware)
+- [Architecture](#architecture)
+- [Testing](#testing)
+- [Troubleshooting](#troubleshooting)
+- [Documentation](#documentation)
+- [Project Status](#project-status)
 
 ---
 
-## 🎯 O que faz esta aplicação
+## About
 
-**Urban Hack Sentinel v3** transforma um Raspberry Pi (ou máquina x86/64) numa plataforma completa de auditoria wireless/Bluetooth/IoT/Network que opera continuamente:
+**Urban Hack Sentinel v3** turns a Raspberry Pi (or x86/64 machine) into a continuous-operation wireless/Bluetooth/IoT/network auditing platform.
 
-### Core Capabilities
-|| Capability | Descrição ||
+### Capabilities
+
+| Capability | Description |
 |------------|-------------|
-| **WiFi Scanner** | Passive/active scan 2.4/5/6 GHz via `iw` JSON + `airodump-ng` fallback |
+| **Wi-Fi Scanner** | Passive/active scan 2.4/5/6 GHz via `iw` JSON + `airodump-ng` fallback |
 | **PMKID Attack** | Client-less PMKID capture (WPA2/WPA3) via `hcxdumptool` + `hcxpcapngtool` |
 | **Handshake Capture** | Deauth + 4-way handshake via `aireplay-ng` + `airodump-ng` |
 | **WPS Pixie Dust** | Offline PIN attack via `reaver --pixie-dust` |
@@ -43,15 +48,17 @@
 
 ---
 
-## Instalação
+## Installation
 
-### Pré-requisitos
+### Prerequisites
+
 - Python 3.11+
-- Linux (kernel 6.x recomendado)
-- Adaptador WiFi com modo monitor (ex: Alfa AWUS036ACH)
-- Bluetooth BLE 4.2+ (built-in no Pi 5 ou dongle USB)
+- Linux (kernel 6.x recommended)
+- Wi-Fi adapter with monitor mode (ex: Alfa AWUS036ACH)
+- Bluetooth BLE 4.2+ (built-in on Pi 5 or USB dongle)
 
-### Instalação local (Pi / x86)
+### Local installation (Pi / x86)
+
 ```bash
 git clone https://github.com/andresantos/urban-hack-sentinel
 cd urban-hack-sentinel
@@ -77,29 +84,38 @@ sudo vim /etc/urban-hs/config.env
 
 ## Docker
 
-Suporta build multi-arquitectura (`linux/amd64,linux/arm64`).
+Multi-architecture builds supported (`linux/amd64`, `linux/arm64`).
 
 ```bash
-# Build multi-arch
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -t urban-hack-sentinel:latest -f docker/Dockerfile.arm64 .
+# Build for current host
+docker build -t urban-hack-sentinel:latest -f docker/Dockerfile.arm64 .
+
+# Build for specific arch
+docker build -t urban-hack-sentinel:latest -f docker/Dockerfile.amd64 .
+
+# Multi-arch build + push (requires buildx + registry)
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t ghcr.io/<user>/urban-hack-sentinel:latest \
+  --push
 
 # Run ARM64
-docker run --rm --network=host \
-  urban-hack-sentinel:latest urban-hs info
+docker run --rm --network=host urban-hack-sentinel:latest urban-hs info
 
 # Run x86_64
-docker run --rm --platform linux/amd64 --network=host \
-  urban-hack-sentinel:latest urban-hs info
+docker run --rm --platform linux/amd64 --network=host urban-hack-sentinel:latest urban-hs info
 ```
 
-> Nota: A flag `--network=host` é usada para expor portas directamente e evitar conflitos de bind em `0.0.0.0:8000`.
+> **Note:** `--network=host` exposes ports directly and avoids bind conflicts on `0.0.0.0:8000`.
+
+See [docker/MULTIARCH.md](docker/MULTIARCH.md) for local cross-compilation and QEMU setup.
 
 ---
 
-## CLI, TUI e API
+## Usage
 
 ### CLI (`urban-hs`)
+
 ```bash
 urban-hs info
 urban-hs modules
@@ -107,117 +123,162 @@ urban-hs run
 ```
 
 ### Textual TUI (`urban-hs-tui`)
+
 ```bash
 urban-hs-tui
 ```
-Dashboard full-screen com abas para WiFi, BLE, Network e terminal integrado.
+
+Full-screen dashboard with tabs for Wi-Fi, BLE, Network, and an integrated terminal.
 
 ### FastAPI + Web dashboard (`urban-hs-server`)
+
 ```bash
 urban-hs-server --host 0.0.0.0 --port 8000
 ```
-REST API + WebSocket em `http://localhost:8000/`. O frontend estático (HTMX + Alpine.js) é servido em `/`.
 
-### Endpoints principais
-| Método | Path | Descrição |
-|--------|------|-----------|
-| GET | `/healthz` | Health check |
-| GET | `/api/v1/info` | Info do sistema |
-| GET | `/api/v1/wifi/interfaces` | Interfaces WiFi |
-| POST | `/api/v1/wifi/scan` | Iniciar scan WiFi |
-| GET | `/api/v1/wifi/jobs/{job_id}` | Estado do job |
-| GET | `/api/v1/ble/status` | Status BLE |
-| GET | `/api/v1/ble/scan` | Scan BLE |
-| POST | `/api/v1/network/scan` | Scan de network (nmap) |
-| GET | `/api/v1/network/jobs/{job_id}` | Estado do job |
+REST API + WebSocket at `http://localhost:8000/`. Static frontend (HTMX + Alpine.js) served at `/`.
+
+### Key Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/healthz` | Health check |
+| `GET` | `/api/v1/info` | System info |
+| `GET` | `/api/v1/modules` | Module inventory |
+| `POST` | `/api/v1/modules/{name}/execute` | Execute a module |
+| `GET` | `/api/v1/wifi/interfaces` | Wi-Fi interfaces |
+| `POST` | `/api/v1/wifi/scan` | Queue Wi-Fi scan |
+| `GET` | `/api/v1/wifi/jobs/{job_id}` | Job status |
+| `GET` | `/api/v1/ble/status` | BLE status |
+| `POST` | `/api/v1/ble/scan` | Queue BLE scan |
+| `POST` | `/api/v1/network/scan` | Queue network scan (nmap) |
+| `GET` | `/api/v1/network/jobs/{job_id}` | Job status |
+| `WS` | `/api/v1/events` | Real-time event stream |
 
 ---
 
-## Hardware suportado
+## Hardware
 
-| Componente | Suporte | Notas |
-|------------|---------|-------|
-| Raspberry Pi 5 (ARM64) | ✅ | WiFi via Alfa AWUS036ACH (wlan1); Bluetooth integrado para BLE básico |
-| x86/64 (Intel/AMD) | ✅ | WiFi via `iw` (chipsets nativos) ou scapy fallback |
+| Component | Support | Notes |
+|-----------|---------|-------|
+| Raspberry Pi 5 (ARM64) | ✅ | Wi-Fi via Alfa AWUS036ACH (`wlan1`); integrated Bluetooth for basic BLE |
+| x86/64 (Intel/AMD) | ✅ | Wi-Fi via `iw` (native chipsets) or scapy fallback |
 | Alfa AWUS036ACH (MT7612U) | ✅ | Monitor mode + injection, `iw` backend |
-| Intel AX210 | ✅ | Monitor patch necessário para modo monitor |
-| Adaptador CSR BLE 4.0/5.0 | ✅ | Via bleak backend |
-| GPS u-blox | 🔄 | gpsd + export KML/CSV |
+| Intel AX210 | ✅ | Monitor patch required for monitor mode |
+| CSR BLE 4.0/5.0 adapter | ✅ | Via bleak backend |
+| u-blox GPS | 🔄 | gpsd + KML/CSV export |
 
-> Restrição: Apenas o adaptador Alfa AWUS036ACH foi testado até ao momento. Outros chipsets funcionam via scapy fallback mas sem garantia de modo monitor.
+> **Restriction:** Only the Alfa AWUS036ACH has been fully tested. Other chipsets work via scapy fallback but monitor mode is not guaranteed.
 
 ---
 
-## Arquitectura
+## Architecture
 
 ```
 urban_hs/
-├── core/                    # Infra-estrutura partilhada
+├── core/                    # Shared infrastructure
 │   ├── event_bus.py         # Async pub/sub
 │   ├── config.py            # Pydantic v2
 │   ├── storage.py           # SQLite WAL + JSONL
 │   └── plugins.py           # Plugin API
 │
 ├── hal/                     # Hardware Abstraction Layer
-│   ├── wifi/                # WiFi backend (iw / scapy)
+│   ├── wifi/                # Wi-Fi backend (iw / scapy)
 │   ├── ble/                 # BLE backend (bleak)
-│   └── platform.py          # Detecção de plataforma (ARM64/x86)
+│   └── platform.py          # Platform detection (ARM64/x86)
 │
 ├── modules/
-│   ├── wifi/                # Scanner + Ataques WiFi
+│   ├── wifi/                # Scanner + Wi-Fi attacks
 │   ├── ble/                 # Fast Pair + WhisperPair
 │   ├── network/             # Nmap + Nuclei
 │   ├── metasploit/          # MSF RPC
 │   ├── hid/                 # DuckyScript + injector
 │   ├── mqtt/                # MQTT attack suite
-│   ├── camera/              # Descoberta de câmeras
-│   └── ...
+│   ├── camera/              # Camera discovery
+│   ├── credential/          # Credential handling
+│   ├── exploit/             # Exploit chains
+│   ├── reporting/           # Report generation (PDF, JSON, HTML)
+│   └── plugins/             # Example/reference plugins
 │
 ├── ui/
 │   ├── api/                 # FastAPI + WebSocket
 │   ├── tui/                 # Textual TUI
-│   └── web/                 # Frontend estático
+│   └── web/                 # Static frontend (HTMX + Alpine.js)
 │
 ├── cli/
 │   └── main.py              # Typer CLI
 │
+├── chroot/                  # Chroot/jail helpers
 └── tests/                   # pytest
 ```
 
 ---
 
-## 🧪 Testing
+## Testing
+
+### Quick run
 
 ```bash
-# Unit tests
+# All tests
+pytest tests/ -v
+
+# Unit tests only
 pytest tests/ -v -m unit
 
-### Testes de HAL (mock)
-`pytest tests/test_hal.py -v`
+# HAL tests (mocked hardware)
+pytest tests/test_hal.py -v
 
-### Smoke tests
-`pytest tests/test_api_smoke.py tests/test_cli.py -q`
+# API smoke tests
+pytest tests/test_api_smoke.py -q
+
+# CLI smoke tests
+pytest tests/test_cli.py -q
 ```
 
+### Code coverage
+
+```bash
+pytest --cov=src/urban_hs --cov-report=term-missing
+```
+
+Coverage thresholds are enforced in CI. Current baseline includes HAL, API integration, CLI, event contract, and TUI smoke tests.
+
+### Writing custom tests
+
+- Place test files under `tests/` using the `test_*.py` naming convention.
+- Use `@pytest.mark.unit` for pure logic and `@pytest.mark.integration` for tests that require hardware.
+- Fixtures and helpers are shared via `tests/conftest.py`.
+- Hardware-dependent tests should mock the HAL layer (`urban_hs.hal.*`) to keep CI green.
+- For async tests, prefer `pytest-asyncio` with `@pytest.mark.anyio` or `async def` test functions.
+
 ---
 
-## 🛠 Troubleshooting
+## Troubleshooting
 
-- **`ModuleNotFoundError: No module named 'dbus' no container**: Certificar que o Dockerfile instala `libdbus-1-dev` no builder e `libdbus-1-3` + `dbus` no runtime.
-- **Permission denied em `/var/log/urban-hs`**: `sudo chown -R 1000:1000 /var/log/urban-hs /var/lib/urban-hs`
-- **Port 8000 already in use**: Usar `--network=host` ou mudar porta com `--port 8001`.
-- **BLE scan sem devices**: Verificar `bluetoothctl` e grupo `bluetooth`; em algumas distros requer `sudo`.
+| Issue | Solution |
+|-------|----------|
+| `ModuleNotFoundError: No module named 'dbus'` in container | Ensure `libdbus-1-dev` is installed in the builder and `libdbus-1-3` + `dbus` in the runtime image. |
+| Permission denied on `/var/log/urban-hs` | `sudo chown -R 1000:1000 /var/log/urban-hs /var/lib/urban-hs` |
+| Port 8000 already in use | Use `--network=host` or change port with `--port 8001`. |
+| BLE scan returns no devices | Check `bluetoothctl` and `bluetooth` group membership; some distros require `sudo`. |
+| Monitor mode not available | Verify adapter chipset compatibility; use `iw list` to check for monitor mode support. |
 
 ---
 
-## 📄 Documentação adicional
-## 📄 Documentação adicional
-- `docs/index.md` — Índice central da documentação
-- `docs/PLAN.md` — Estado actual, fases e critérios de aceitação
-- `docs/API.md` — Referência REST + WebSocket
-- `docs/SMOKE_TUI.md` — Checklist de smoke test da TUI no Pi
-- `docs/archive/` — Documentos legados descontinuados
+## Documentation
 
-## 🚧 Estado do Projecto
-- Fases 0-9 concluídas no branch `andreas/catarinus`
-- Próxima entrega: **fase 10** — UI interactiva de selecção de ataques
+- [Project index](docs/index.md) — Central documentation hub
+- [Execution plan](docs/PLAN.md) — Current state, phases, and acceptance criteria
+- [Phase 10 details](docs/PLAN_PHASE10.md) — Attack-selection UI tasks and mockups
+- [API reference](docs/API.md) — REST + WebSocket contracts
+- [TUI smoke test](docs/SMOKE_TUI.md) — Manual checklist for TUI on Pi
+- [Docker multi-arch](docker/MULTIARCH.md) — Local `linux/amd64` / `linux/arm64` builds
+- [Archive](docs/archive/) — Legacy/discontinued documents
+
+---
+
+## Project Status
+
+- Phases **0–10** completed on branch `andreas/catarinus`
+- Stack: HAL + API + TUI + Web UI + Tests + CI
+- Next focus: real hardware validation (Alfa AWUS036ACH, Pi 5) and custom module expansion
