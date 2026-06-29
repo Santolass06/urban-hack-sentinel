@@ -2,8 +2,9 @@
 
 ## Quick Links
 - [README](../README.md) — Instalação, Docker, CLI, API, TUI, troubleshooting
-- [Plano x86 + UI](PLAN_X86_UI.md) — Estratégia de portabilidade x86 e UI interativa
-- [Plano de execução](PLAN_IMPLEMENTATION_2026-06-29.md) — Fases faseadas com critérios de aceitação
+- [Plano de execução](PLAN.md) — Estado actual, fases e critérios de aceitação
+- [API Reference](API.md) — REST + WebSocket
+- [Docker multi-arch](docker/MULTIARCH.md) — Build local `linux/amd64`, `linux/arm64`
 
 ## Módulos
 - `urban_hs.modules.wifi` — Scanning, PMKID, handshake, WPS, deauth
@@ -26,5 +27,7 @@
 pytest tests/ -v
 ```
 
-## Análise de integração
-- `INTEGRATION_ANALYSIS.md` — WPair + Stryker → Urban Hack Sentinel
+## Smoke tests
+- `docs/SMOKE_TUI.md`
+- `tests/test_api_smoke.py`
+- `tests/test_hal.py`

@@ -192,11 +192,11 @@ urban_hs/
 # Unit tests
 pytest tests/ -v -m unit
 
-# Testes de HAL (mock)
-pytest tests/test_hal.py -v
+### Testes de HAL (mock)
+`pytest tests/test_hal.py -v`
 
-# Testes de integração (requer hardware + .venv)
-pytest tests/ -v -m integration --hardware
+### Smoke tests
+`pytest tests/test_api_smoke.py tests/test_cli.py -q`
 ```
 
 ---
@@ -211,12 +211,13 @@ pytest tests/ -v -m integration --hardware
 ---
 
 ## 📄 Documentação adicional
+## 📄 Documentação adicional
+- `docs/index.md` — Índice central da documentação
+- `docs/PLAN.md` — Estado actual, fases e critérios de aceitação
+- `docs/API.md` — Referência REST + WebSocket
+- `docs/SMOKE_TUI.md` — Checklist de smoke test da TUI no Pi
+- `docs/archive/` — Documentos legados descontinuados
 
-- `docs/PLAN_X86_UI.md` — Plano de portabilidade x86 + UI interativa
-- `docs/PLAN_IMPLEMENTATION_2026-06-29.md` — Plano de execução faseado
-- `docs/index.md` — Índice de documentação
-- `INTEGRATION_ANALYSIS.md` — Análise de integração WPair + Stryker
-
----
-
-**Próximo passo**: Consumir `docs/PLAN_IMPLEMENTATION_2026-06-29.md` para fechar as fases 0-8 restantes.
+## 🚧 Estado do Projecto
+- Fases 0-9 concluídas no branch `andreas/catarinus`
+- Próxima entrega: **fase 10** — UI interactiva de selecção de ataques
