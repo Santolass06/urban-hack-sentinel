@@ -186,23 +186,47 @@ Acceptance criteria:
 
 ---
 
-## Sprint 8 — Security Hardening & Forensics
+## Sprint 8A — Security Hardening *(in progress)*
 
-**Objective**: make the platform safe to expose on a LAN and safe to use for evidence collection.
+**Objective**: reduzir a superfície de ataque e garantir execução segura dos módulos, sem depender de decisões de auth/PKI externas.
 
-Tasks:
-1. API authentication — token Bearer or htpasswd (configurable).
-2. RBAC roles — `admin`, `operator`, `viewer`.
-3. Evasion / stealth — passive-only mode, MAC OUI spoof pool, scan-rate limiter (Poisson), channel dwell time randomisation.
-4. Forensics — automated evidence report (Markdown/PDF), GPG signature per artefact, SHA256 evidence log, chain of custody fields.
-5. GDPR compliance — MAC anonymisation option, retention policy, right-to-erasure command.
-6. Log rotation, LUKS storage option, watchdog systemd integration.
+**Dependencies**: nenhuma decisão de auth pendente.
 
-Acceptance criteria:
-- [ ] API without a valid token returns `401/403`.
-- [ ] Viewer role can read but not trigger attacks.
-- [ ] Evidence bundle can be verified as unaltered by checking GPG signatures and hashes.
-- [ ] MAC-anonymised exports remove the ability to reconstruct the original MAC.
+### Tasks
+1. API hardening — rate limiting por IP, headers de segurança (`HSTS`, `CSP`, `nosniff`), IP allowlist para endpoints sensíveis, remoção de headers de fingerprinting.
+2. Evasion / stealth — passive-only mode, MAC OUI spoof pool, scan-rate limiter (Poisson), channel dwell time randomisation.
+3. Runtime confinement — aplicar seccomp profiles e capability dropping por módulo; fallback gracioso se `libseccomp`/`libcap` não estiver disponível.
+4. Binary integrity — manifest SHA256 dos binários externos (`iw`, `airodump-ng`, `hcxdumptool`, `nmap`, `reaver`); startup check com allowlist por módulo.
+5. Log hygiene — log rotation real (tamanho + idade), sem PII por omissão, separação entre audit log e operational log.
+6. Tooling / docs — modos `lab`, `field`, `airgap` (feature flags por ambiente), guia de hardening EN + PT.
+
+### Acceptance criteria
+- [ ] API rejeita tráfego não autorizado para endpoints `/execute` e `/scan`;
+- [ ] Passive-only mode respeita dwell times aleatórios sem sondas activas;
+- [ ] Módulos falham de forma explicita se binário esperado não existir ou hash não coincidir;
+- [ ] Logs não incluem MACs brutos por omissão sem necessidade de reconfiguração.
+
+---
+
+## Sprint 8B — Forensics & Evidence Integrity *(pending)*
+
+**Objective**: garantir que todos os artefactos são verificáveis, com cadeia de custódia imutável e comandos claros para verificar/selar/eliminar dados.
+
+**Dependencies**: 8A fechada.
+
+### Tasks
+1. MAC anonymisation — redactor central para `devices`, `wifi_networks`, `ble_devices`, endpoints e exports WiGLE/Kismet/JSONL.
+2. Retention policy — aplicar TTL por sessão/artefacto; comando de right-to-erasure (hard-delete seguro + verificação).
+3. Evidence bundle — wrapper que usa `EvidenceLogger` + `GPGSigner`; hash SHA256/BLAKE2b em todos os artefactos.
+4. Verify / seal — `urban-hs verify --session <id>`, `urban-hs seal --session <id>`, `urban-hs audit-trail --session <id>`.
+5. Audit trail — registar quem, quando, quê, hash do comando + params, resultado; sem PII.
+6. Docs + migration guide — EN + PT, incluindo fluxo de verificação para laboratório e para admissibilidade forense.
+
+### Acceptance criteria
+- [ ] MAC-anonymised exports não permitem reconstrução do MAC original;
+- [ ] `verify --session` confirma GPG, integridade e consistência da cadeia;
+- [ ] `seal --session` move artefactos para storage só-leitura/append-only;
+- [ ] `audit-trail` produz timeline legível para relatório final.
 
 ---
 
