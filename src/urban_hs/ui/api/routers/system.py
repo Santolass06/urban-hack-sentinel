@@ -20,6 +20,7 @@ async def healthz() -> dict[str, str]:
 async def system_info() -> dict[str, str]:
     try:
         import platform
+
         from urban_hs import __version__
         return {
             "version": __version__,

@@ -5,8 +5,9 @@ IP camera discovery and enumeration.
 import asyncio
 import re
 import socket
-import structlog
 from typing import Any, Dict, List, Optional
+
+import structlog
 
 try:
     import aiohttp

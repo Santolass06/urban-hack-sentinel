@@ -6,9 +6,10 @@ import asyncio
 import ipaddress
 import os
 import re
-import structlog
 import xml.etree.ElementTree as ET
-from typing import Any, Dict, List, Optional, Union
+from typing import List, Optional, Union
+
+import structlog
 
 from urban_hs.modules.network.types import HostInfo, PortInfo, ScanType
 

@@ -9,16 +9,12 @@ Provides:
 """
 
 import asyncio
-import os
-import structlog
-import subprocess
-import tempfile
-import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable, Union, AsyncGenerator
+from typing import Any, List, Optional, Union
+
+import structlog
 
 try:
     import uinput
@@ -324,7 +320,7 @@ class USBGadgetInjector:
     async def start(self) -> bool:
         """Initialize USB gadget HID."""
         try:
-            from urban_hs.modules.hid import USBGadgetManager, HIDReportDescriptors, HIDConfig
+            from urban_hs.modules.hid import HIDReportDescriptors, USBGadgetManager
             
             self._gadget = USBGadgetManager()
             
@@ -498,7 +494,7 @@ class HIDInjector:
     async def execute_ducky(self, script_path: str, layout: str = "us") -> bool:
         """Execute DuckyScript file."""
         try:
-            from urban_hs.modules.hid import DuckyCompiler, load_ducky_file
+            from urban_hs.modules.hid import DuckyCompiler
             compiler = DuckyCompiler(KeyboardLayout(layout))
             script = compiler.compile_file(script_path)
             

@@ -5,14 +5,14 @@ resource limits, and callback-based output handling.
 
 import asyncio
 import os
-import signal
 import shlex
-import structlog
+import signal
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List, Optional, Callable, Union
+from typing import Any, AsyncIterator, Dict, List, Optional, Union
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 

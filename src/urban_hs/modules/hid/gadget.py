@@ -10,14 +10,12 @@ Manages Linux USB gadget subsystem via ConfigFS for:
 - Composite devices
 """
 
-import asyncio
-import os
-import structlog
-import subprocess
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable, Union
+from typing import Any, Dict, List, Optional
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 

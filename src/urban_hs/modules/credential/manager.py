@@ -11,19 +11,18 @@ Handles credentials from various sources:
 """
 
 import asyncio
-import hashlib
 import json
 import os
-import re
-import structlog
 import subprocess
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable, Union, Set
+from typing import Any, Callable, Dict, List, Optional, Set
 from uuid import uuid4
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 

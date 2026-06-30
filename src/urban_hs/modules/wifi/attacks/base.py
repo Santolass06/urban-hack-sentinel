@@ -3,13 +3,14 @@ WiFi Attack base classes and shared types.
 """
 
 import asyncio
-import structlog
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 

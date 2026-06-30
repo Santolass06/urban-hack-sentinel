@@ -3,16 +3,15 @@ WiFi Managers - Handshake management, MAC changing, Geo mapping.
 """
 
 import asyncio
-import json
-import os
 import shutil
-import structlog
 import subprocess
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Dict, List, Optional
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 
@@ -471,8 +470,8 @@ class GeoMapper:
 
     async def _read_gpsd(self) -> None:
         """Read GPS data from gpsd."""
-        import socket
         import json
+        import socket
 
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

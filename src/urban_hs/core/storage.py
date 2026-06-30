@@ -10,14 +10,13 @@ Provides:
 
 import asyncio
 import json
-import os
-import structlog
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List, Optional, Tuple, Union
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 import aiosqlite
+import structlog
 
 try:
     import redis.asyncio as redis
@@ -738,6 +737,7 @@ class Storage:
     async def log_jsonl(self, table: str, record: Dict[str, Any]) -> None:
         """Append record to JSONL log file for table."""
         import aiofiles
+
         from urban_hs.core.config import get_config
         log_dir = Path(get_config().storage.resolve_jsonl_dir())
         log_dir.mkdir(parents=True, exist_ok=True)

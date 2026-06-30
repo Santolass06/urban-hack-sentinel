@@ -11,12 +11,11 @@ Commands
 from __future__ import annotations
 
 import asyncio
-import os
 import platform
 import shutil
 import signal
 import sys
-from typing import List, Optional
+from typing import Optional
 
 import typer
 from rich.console import Console

@@ -5,14 +5,11 @@ CVE-2025-36911 (WhisperPair): Fast Pair Key-Based Pairing Authentication Bypass
 Allows unauthorized pairing with Fast Pair devices, leading to microphone access via HFP.
 """
 
-import asyncio
 import json
-import os
-import structlog
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable, Set
-from uuid import UUID
+from typing import Any, Callable, Dict, List, Optional
+
+import structlog
 
 from urban_hs.hal.types import BLEDevice, BLEDeviceType
 
@@ -189,7 +186,6 @@ class WhisperPairTester:
 
                 # Build test KBP request
                 import secrets
-                import struct
                 
                 # Parse address
                 addr_bytes = bytes.fromhex(address.replace(":", ""))
@@ -270,7 +266,6 @@ class WhisperPairExploit:
         - Byte 18: Additional flags for retroactive/extended
         """
         import secrets
-        import struct
         
         # Parse target address
         target_bytes = bytes.fromhex(target_address.replace(":", ""))

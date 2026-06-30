@@ -8,13 +8,12 @@ Supports:
 - Encoder for hid_injector integration
 """
 
-import re
-import structlog
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, Callable
-from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Optional, Union
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 

@@ -19,21 +19,17 @@ Requires:
 """
 
 import asyncio
-import os
-import structlog
-import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable, Tuple
-from uuid import UUID
+from typing import Any, Callable, Dict, List, Optional
 
-from dbus_fast.aio import MessageBus
+import structlog
 from dbus_fast import DBusError
+from dbus_fast.aio import MessageBus
 from dbus_fast.constants import BusType
 
-from urban_hs.modules.hid import DuckyCompiler, KeyboardLayout, HIDInjector, InjectionMode, DuckyCommand, DuckyCommandType
+from urban_hs.modules.hid import DuckyCommandType, DuckyCompiler, HIDInjector, KeyboardLayout
 
 logger = structlog.get_logger(__name__)
 

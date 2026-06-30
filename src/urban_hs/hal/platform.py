@@ -12,7 +12,6 @@ Usage::
 
 from __future__ import annotations
 
-import os
 import platform
 from dataclasses import dataclass
 from enum import Enum

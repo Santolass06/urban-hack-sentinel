@@ -5,9 +5,10 @@ Router vulnerability scanner using RouterSploit and Hydra.
 import asyncio
 import os
 import re
-import structlog
 import tempfile
 from typing import Any, Dict, List, Optional
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 

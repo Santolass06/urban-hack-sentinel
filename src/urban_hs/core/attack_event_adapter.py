@@ -8,7 +8,6 @@ one contract.
 
 from __future__ import annotations
 
-import uuid
 from typing import Set
 
 from urban_hs.core.event_bus import Event, EventHandler, EventPriority, get_event_bus

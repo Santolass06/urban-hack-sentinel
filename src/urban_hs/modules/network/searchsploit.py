@@ -5,8 +5,9 @@ SearchSploit integration for ExploitDB searches.
 import asyncio
 import json
 import re
-import structlog
 from typing import Any, Dict, List, Optional
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 

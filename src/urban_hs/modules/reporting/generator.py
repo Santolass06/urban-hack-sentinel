@@ -10,20 +10,18 @@ Generates professional penetration testing reports with:
 """
 
 import asyncio
-import base64
 import hashlib
 import json
 import os
-import structlog
-import subprocess
-import tempfile
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable, Union
+from typing import Any, Callable, Dict, List, Optional
 from uuid import uuid4
+
+import structlog
 
 try:
     from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -32,7 +30,7 @@ except ImportError:
     JINJA2_AVAILABLE = False
 
 try:
-    from weasyprint import HTML, CSS
+    from weasyprint import CSS, HTML
     WEASYPRINT_AVAILABLE = True
 except ImportError:
     WEASYPRINT_AVAILABLE = False

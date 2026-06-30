@@ -58,7 +58,7 @@ async def start_wifi_scan(interface: str = "wlan1", strategy: str = "passive_onl
         try:
             from urban_hs.core import get_event_bus
             from urban_hs.core.event_bus import Event
-            from urban_hs.modules.wifi import WiFiScanner, ScanStrategy
+            from urban_hs.modules.wifi import ScanStrategy, WiFiScanner
 
             bus = get_event_bus()
             await bus.publish(Event(

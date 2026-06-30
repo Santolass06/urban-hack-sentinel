@@ -11,16 +11,14 @@ Tests for:
 """
 
 import asyncio
-import json
-import os
 import random
-import structlog
-import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable, Set, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set
+
+import structlog
 
 if TYPE_CHECKING:
     import paho.mqtt.client as mqtt

@@ -4,9 +4,10 @@ Nuclei vulnerability scanner wrapper.
 
 import asyncio
 import json
-import structlog
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urlparse
+
+import structlog
 
 from urban_hs.modules.network.types import Severity, Vulnerability
 

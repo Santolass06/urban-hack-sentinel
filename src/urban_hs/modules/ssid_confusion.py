@@ -23,14 +23,15 @@ CVE-2023-52425: SSID Confusion in 802.11r
 
 import asyncio
 import shutil
-import structlog
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
-from urban_hs.modules.network import NmapScanner, ScanType
+import structlog
+
+from urban_hs.modules.network import NmapScanner
 
 logger = structlog.get_logger(__name__)
 
@@ -99,7 +100,7 @@ class SSIDConfusionDetector:
     async def scan_networks(self, target_network: str = "192.168.1.0/24") -> List[SSIDConfusionTarget]:
         """Scan for WiFi networks and extract SSID confusion indicators."""
         # Use airodump-ng for detailed WiFi info
-        from urban_hs.modules.wifi import WiFiScanner, ScanStrategy
+        from urban_hs.modules.wifi import WiFiScanner
         scanner = WiFiScanner(interface=self.interface)
 
         networks = await scanner.manager.scan(duration=self.scan_timeout)

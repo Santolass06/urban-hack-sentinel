@@ -9,14 +9,15 @@ Provides:
 """
 
 import asyncio
-import structlog
 import time
+from collections import defaultdict
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Callable, Awaitable, Set
-from collections import defaultdict
-from contextlib import asynccontextmanager
+from typing import Any, Dict, List, Optional, Set
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 

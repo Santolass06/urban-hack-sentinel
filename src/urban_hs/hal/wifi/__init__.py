@@ -42,7 +42,7 @@ class _IWBackend(WiFiBackend):
         self.strategy = strategy
 
     async def scan(self, channels=None, duration=30) -> List[NetworkInfo]:
-        from urban_hs.modules.wifi.scanner import WiFiScanner, ScanStrategy
+        from urban_hs.modules.wifi.scanner import ScanStrategy, WiFiScanner
 
         scanner = WiFiScanner(
             interface=self.interface,

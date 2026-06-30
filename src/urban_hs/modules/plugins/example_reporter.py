@@ -6,8 +6,6 @@ Demonstrates how to implement a reporting module as an UrbanPlugin.
 
 from __future__ import annotations
 
-from typing import Any, Dict
-
 from urban_hs.core.plugins import PluginType, UrbanPlugin, urban_plugin
 
 

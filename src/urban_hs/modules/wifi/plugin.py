@@ -3,23 +3,23 @@ WiFi Module Plugin - Integrates WiFi scanning and attacks into the core system.
 """
 
 import asyncio
-import structlog
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Callable, Set
+from typing import Any, Callable, Dict, List, Optional, Set
 
-from urban_hs.core import get_event_bus, Event, get_config, get_storage, get_process_manager
-from urban_hs.core.event_bus import EventHandler, Event
-from urban_hs.modules.wifi.scanner import WiFiScanner, NetworkInfo, ScanStrategy, CHANNELS_2GHZ, CHANNELS_5GHZ
+import structlog
+
+from urban_hs.core import Event, get_config, get_event_bus, get_storage
+from urban_hs.core.event_bus import Event, EventHandler
 from urban_hs.modules.wifi.attacks import (
+    AttackResult,
+    DeauthAttack,
     HandshakeAttack,
     PMKIDAttack,
-    WPSPixieAttack,
     WPSPinAttack,
-    DeauthAttack,
-    AttackResult,
-    AttackStatus,
+    WPSPixieAttack,
 )
-from urban_hs.modules.wifi.managers import HandshakeManager, MACChanger, GeoMapper
+from urban_hs.modules.wifi.managers import GeoMapper, HandshakeManager, MACChanger
+from urban_hs.modules.wifi.scanner import NetworkInfo, ScanStrategy, WiFiScanner
 
 logger = structlog.get_logger(__name__)
 

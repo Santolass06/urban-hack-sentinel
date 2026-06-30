@@ -6,20 +6,14 @@ Provides native msfconsole interaction via subprocess with resource script auto-
 
 import asyncio
 import os
-import structlog
 import tempfile
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable, Union
 from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Union
 
-from urban_hs.modules.metasploit.rpc import (
-    MsfModuleType,
-    MsfSession,
-    MsfModule,
-)
+import structlog
 
 logger = structlog.get_logger(__name__)
 

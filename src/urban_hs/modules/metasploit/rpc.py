@@ -6,15 +6,14 @@ Supports module search/execution, session management, and meterpreter interactio
 """
 
 import asyncio
-import msgpack
-import structlog
 import ssl
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable, Union
-from urllib.parse import urlparse
+from typing import Any, Dict, List, Optional
+
+import msgpack
+import structlog
 
 try:
     import aiohttp

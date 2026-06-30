@@ -34,7 +34,7 @@ async def start_network_scan(
 
     from urban_hs.core import get_event_bus
     from urban_hs.core.event_bus import Event
-    from urban_hs.modules.network import ScanType, NetworkModule
+    from urban_hs.modules.network import NetworkModule, ScanType
 
     bus = get_event_bus()
     module = NetworkModule()

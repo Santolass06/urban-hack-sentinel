@@ -12,14 +12,13 @@ CVE-2025-27840: ESP32 Hidden HCI Commands
 """
 
 import asyncio
-import os
 import shutil
-import structlog
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable, Set, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+
+import structlog
 
 if TYPE_CHECKING:
     import aiohttp
@@ -31,8 +30,6 @@ except ImportError:
     AIOHTTP_AVAILABLE = False
     aiohttp = None
 
-from urban_hs.modules.network import NmapScanner, ScanType
-from urban_hs.modules.ble import FastPairScanner
 
 logger = structlog.get_logger(__name__)
 
@@ -347,7 +344,6 @@ class ESP32Detector:
 
     def _extract_chip_model(self, text: str) -> Optional[str]:
         """Extract chip model from HTTP response."""
-        import re
         text_lower = text.lower()
         if 'esp32-s3' in text_lower:
             return 'ESP32-S3'

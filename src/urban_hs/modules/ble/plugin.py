@@ -3,25 +3,18 @@ BLE Module Plugin - Integrates Fast Pair scanning and WhisperPair exploit.
 """
 
 import asyncio
-import structlog
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Callable
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional
 
-from urban_hs.core import get_event_bus, Event, get_config, get_storage
-from urban_hs.core.event_bus import EventHandler, Event
+import structlog
+
+from urban_hs.core import Event, get_event_bus, get_storage
+from urban_hs.core.event_bus import Event, EventHandler
 from urban_hs.modules.ble import (
-    FastPairScanner,
-    WhisperPairTester,
-    WhisperPairExploit,
     BLEDevice,
-    BLEDeviceType,
-    FAST_PAIR_SERVICE_UUID,
-    MODEL_ID_UUID,
-    KEY_BASED_PAIRING_UUID,
-    PASSKEY_UUID,
-    ACCOUNT_KEY_UUID,
-    get_device_quirks,
-    DEVICE_QUIRKS,
+    FastPairScanner,
+    WhisperPairExploit,
+    WhisperPairTester,
 )
 
 logger = structlog.get_logger(__name__)

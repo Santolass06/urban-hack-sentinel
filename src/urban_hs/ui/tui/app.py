@@ -11,7 +11,7 @@ Registered as ``urban-hs-tui`` in ``pyproject.toml``.
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
@@ -292,7 +292,7 @@ class TUIApp(App):
 
     async def _wifi_scan(self) -> None:
         try:
-            from urban_hs.modules.wifi import WiFiScanner, ScanStrategy
+            from urban_hs.modules.wifi import ScanStrategy, WiFiScanner
 
             scanner = WiFiScanner(interface="wlan1", strategy=ScanStrategy.PASSIVE_ONLY)
             nets = await scanner.scan(duration=30)

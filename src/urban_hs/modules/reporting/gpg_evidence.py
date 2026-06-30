@@ -8,19 +8,17 @@ Provides GPG signing for all captured artifacts with:
 - Verification utilities
 """
 
-import asyncio
 import hashlib
 import json
 import os
-import structlog
-import subprocess
-import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable, Union, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
+
+import structlog
 
 try:
     import gnupg as gpg_module

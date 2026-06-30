@@ -14,15 +14,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import hashlib
 import re
-import structlog
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Set
-from urllib.parse import urljoin, urlparse
 from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
+
+import structlog
 
 # Optional imports with graceful fallback
 try:

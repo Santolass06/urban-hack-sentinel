@@ -10,18 +10,25 @@ Provides:
 import asyncio
 import os
 import platform
-import structlog
 import time
-import psutil
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable, Awaitable
-from urllib.parse import urlparse
+from typing import Any, Awaitable, Callable, Dict, List, Optional
+
+import psutil
+import structlog
 
 try:
-    from prometheus_client import Counter, Gauge, Histogram, CollectorRegistry, generate_latest, CONTENT_TYPE_LATEST
+    from prometheus_client import (
+        CONTENT_TYPE_LATEST,
+        CollectorRegistry,
+        Counter,
+        Gauge,
+        Histogram,
+        generate_latest,
+    )
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False

@@ -14,18 +14,15 @@ Tool: https://github.com/vanhoefm/fragattacks
 
 import asyncio
 import os
-import structlog
-import subprocess
 import shutil
-import tempfile
-import time
+import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable, Tuple
+from typing import Callable, List, Optional
 
-from urban_hs.modules.wifi.attacks import BaseAttack, AttackResult, AttackStatus, DeauthAttack
+import structlog
 
 logger = structlog.get_logger(__name__)
 

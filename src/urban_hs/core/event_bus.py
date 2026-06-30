@@ -6,14 +6,13 @@ Supports typed events, dead letter queue, and subscriber priorities.
 """
 
 import asyncio
-import logging
 import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Set, Type, TypeVar
+from typing import Any, Dict, List, Optional, Set, TypeVar
 from weakref import WeakSet
 
 import structlog

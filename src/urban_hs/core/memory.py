@@ -11,16 +11,15 @@ Provides:
 import asyncio
 import gc
 import json
-import sys
 import time
 import tracemalloc
 import weakref
-from collections import defaultdict
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, AsyncIterator, Dict, List, Optional, Callable, Type, TypeVar, Generic
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, AsyncIterator, Callable, Dict, Generic, List, Optional, TypeVar
 
 import structlog
 
@@ -158,9 +157,10 @@ class PCAPStreamingParser(StreamingParser[Dict[str, Any]]):
         # In a real implementation, we'd use RawPcapReader with a buffer
         # This is a placeholder for the streaming logic
         try:
-            from scapy.utils import RawPcapReader
-            from scapy.layers.dot11 import Dot11
             import io
+
+            from scapy.layers.dot11 import Dot11
+            from scapy.utils import RawPcapReader
             
             # Combine buffered chunks
             combined = b"".join(self._packet_buffer)

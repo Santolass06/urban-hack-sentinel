@@ -91,8 +91,8 @@ class _BlueZBackend(BLEBackend):
 
     async def start(self) -> None:
         try:
-            from dbus_fast.aio import MessageBus
             from dbus_fast import BusType
+            from dbus_fast.aio import MessageBus
 
             self._bus = MessageBus(bus_type=BusType.SYSTEM)
             await self._bus.connect()

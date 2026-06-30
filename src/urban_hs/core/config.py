@@ -7,7 +7,7 @@ Supports YAML/TOML/ENV sources, secrets via keyring, hot-reload via watchfiles.
 import asyncio
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 import keyring
 import structlog
@@ -15,7 +15,7 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from watchfiles import awatch
 
-from urban_hs.core.event_bus import Event, EventBus, get_event_bus
+from urban_hs.core.event_bus import Event, get_event_bus
 
 logger = structlog.get_logger(__name__)
 

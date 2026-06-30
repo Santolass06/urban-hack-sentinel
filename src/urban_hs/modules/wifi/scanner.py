@@ -12,16 +12,15 @@ Outputs structured NetworkInfo objects with encryption, signal, vendor, etc.
 import asyncio
 import json
 import os
-import re
-import structlog
-import subprocess
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List, Optional, Set
+from typing import Any, AsyncIterator, Dict, List, Optional
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 

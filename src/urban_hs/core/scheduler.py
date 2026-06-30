@@ -10,15 +10,14 @@ Provides:
 """
 
 import asyncio
-import structlog
 import time
 import uuid
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Callable, Awaitable, Set
-from functools import partial
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Set
+
+import structlog
 
 try:
     from croniter import croniter

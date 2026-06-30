@@ -3,11 +3,12 @@ Deauthentication and Kr00k attacks.
 """
 
 import asyncio
-import structlog
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, List, Optional
+from typing import Callable, List, Optional
+
+import structlog
 
 from urban_hs.modules.wifi.attacks.base import AttackResult, AttackStatus, BaseAttack
 

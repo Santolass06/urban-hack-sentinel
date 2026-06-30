@@ -3,11 +3,12 @@ WPA/WPA2 WiFi attacks: Handshake capture and PMKID.
 """
 
 import asyncio
-import structlog
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
+
+import structlog
 
 from urban_hs.modules.wifi.attacks.base import AttackResult, AttackStatus, BaseAttack
 

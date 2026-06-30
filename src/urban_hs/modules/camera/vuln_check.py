@@ -8,20 +8,16 @@ Provides:
 - Vulnerability verification
 """
 
-import asyncio
 import json
-import re
-import structlog
-import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
 from enum import Enum
-from urllib.parse import urlparse
+from typing import Any, Dict, List, Optional
 
-from urban_hs.modules.network import NucleiRunner, Vulnerability, Severity
+import structlog
+
 from urban_hs.modules.exploit.runner import ExploitRunner, ExploitSource, ExploitTarget
+from urban_hs.modules.network import NucleiRunner
 
 logger = structlog.get_logger(__name__)
 
