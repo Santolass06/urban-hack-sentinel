@@ -12,7 +12,9 @@ from typing import Any, Dict
 
 from fastapi import APIRouter
 
-router = APIRouter()
+from urban_hs.ui.api.auth import require_auth
+
+router = APIRouter(dependencies=[require_auth()])
 
 
 @router.post("/scan")

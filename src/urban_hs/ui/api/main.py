@@ -12,9 +12,12 @@ The ``run`` helper is registered as a console script in
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import AsyncIterator
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -22,6 +25,13 @@ from urban_hs import __version__
 from urban_hs.core.event_bus import init_event_bus, shutdown_event_bus
 
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    await init_event_bus()
+    yield
+    await shutdown_event_bus()
 
 
 def _build_app() -> FastAPI:
@@ -32,15 +42,19 @@ def _build_app() -> FastAPI:
         title="Urban Hack Sentinel API",
         description="REST + WebSocket control plane.",
         version=__version__,
+        lifespan=_lifespan,
     )
 
-    @application.on_event("startup")
-    async def _on_startup() -> None:
-        await init_event_bus()
+    from urban_hs.core.config import get_config
+    cfg = get_config()
 
-    @application.on_event("shutdown")
-    async def _on_shutdown() -> None:
-        await shutdown_event_bus()
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=cfg.api.cors_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
 
     from urban_hs.ui.api.routers.system import router as system_router
     application.include_router(system_router, prefix="/api/v1")
@@ -59,6 +73,19 @@ def _build_app() -> FastAPI:
 
     from urban_hs.ui.api.routers.attacks import router as attacks_router
     application.include_router(attacks_router, prefix="/api/v1")
+
+    from urban_hs.ui.api.auth import require_auth
+    from fastapi import APIRouter
+
+    auth_router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+
+    @auth_router.post("/token")
+    async def create_token() -> dict[str, str]:
+        from urban_hs.ui.api.auth import create_access_token
+        token = create_access_token(subject="api-user", expires_minutes=cfg.api.jwt_expire_minutes)
+        return {"access_token": token, "token_type": "bearer"}
+
+    application.include_router(auth_router)
 
     @application.get("/healthz", include_in_schema=False)
     async def _healthz_root() -> dict[str, str]:

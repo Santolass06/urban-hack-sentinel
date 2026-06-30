@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from urban_hs.ui.api.auth import require_auth
+
 router = APIRouter()
 
 
@@ -14,7 +16,7 @@ async def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@router.get("/info")
+@router.get("/info", dependencies=[require_auth()])
 async def system_info() -> dict[str, str]:
     try:
         import platform

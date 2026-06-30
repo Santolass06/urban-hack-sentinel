@@ -18,8 +18,9 @@ from pydantic import BaseModel, Field
 from urban_hs.core.event_bus import Event, EventPriority, get_event_bus
 from urban_hs.core.process_mgr import ProcessLimits, ProcessManager
 from urban_hs.modules import list_modules
+from urban_hs.ui.api.auth import require_auth
 
-router = APIRouter()
+router = APIRouter(dependencies=[require_auth()])
 
 _process_manager = ProcessManager()
 
