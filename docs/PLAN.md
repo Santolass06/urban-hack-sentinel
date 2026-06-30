@@ -10,10 +10,10 @@
 ## Table of Contents
 
 1. [Completed Foundation (Sprints 0-3)](#completed-foundation-sprints-0-3)
-2. [Sprint 4 — Documentation Stabilisation & EN/PT Sync](#sprint-4--documentation-stabilisation--enpt-sync) *(active)*
-3. [Sprint 5 — GPS Pipeline + Wardrive Mode](#sprint-5--gps-pipeline--wardrive-mode)
-4. [Sprint 6 — Real Module Validation (Nuclei, RouterScan, Bettercap, HFP)](#sprint-6--real-module-validation-nuclei-routerscan-bettercap-hfp)
-5. [Sprint 7 — Advanced WiFi Attacks](#sprint-7--advanced-wifi-attacks)
+2. [Sprint 4 — Documentation Stabilisation & EN/PT Sync](#sprint-4--documentation-stabilisation--enpt-sync) *(completed)*
+3. [Sprint 5 — GPS Pipeline + Wardrive Mode](#sprint-5--gps-pipeline--wardrive-mode) *(completed)*
+4. [Sprint 6 — Real Module Validation (Nuclei, RouterScan, Bettercap, HFP)](#sprint-6--real-module-validation-nuclei-routerscan-bettercap-hfp) *(completed)*
+5. [Sprint 7 — Advanced WiFi Attacks](#sprint-7--advanced-wifi-attacks) *(completed)*
 6. [Sprint 8 — Security Hardening & Forensics](#sprint-8--security-hardening--forensics)
 7. [Sprint 9 — Testing Hardening + Coverage Enforcement](#sprint-9--testing-hardening--coverage-enforcement)
 8. [Sprint 10 — Web UI Maps, PWA, Offline](#sprint-10--web-ui-maps-pwa-offline)
@@ -163,23 +163,26 @@ Note: HFP and Bettercap still require their real software/hardware stacks; the m
 
 ---
 
-## Sprint 7 — Advanced WiFi Attacks
+## Sprint 7 — Advanced WiFi Attacks *(completed)*
 
 **Objective**: modern WiFi security assessment capabilities beyond WPA2-PMKID/handshake/WPS.
 
-Tasks:
-1. WPA3-SAE detection and PMKID capture (`hcxdumptool` SAE support).
-2. 802.11r Fast Transition — capture PMK-R0/R1 via forced reassociation.
-3. Downgrade attack — force mixed-mode AP to WPA2 for easier capture.
-4. OWE (Opportunistic Wireless Encryption) detection and handshake capture.
-5. PMF (802.11w) — detect `MFPC`, `MFPR`, SA Query support; document deauth limitations.
-6. Wi-Fi 6/6E/7 — parse `he_capab`, `eht_capab`, 6 GHz channel list, 320 MHz width flags.
-7. MLO (Multi-Link Operation) — correlate multiple BSSIDs belonging to the same AP across bands.
+Done:
+- Scanner extended capability parsing now reports WPA3-SAE detection, OWE flags, 802.11r Fast Transition indicators, HE/EHT presence, 6 GHz band inference, 320 MHz width flags, and MLO-related BSSIDs.
+- WPA3-SAE PMKID capture path enabled through `hcxdumptool` SAE flows; module keeps existing behaviour for WPA2 while adding SAE-aware capture handling.
+- 802.11r Fast Transition support: forced-reassociation flow documented and wired through the WiFi attacks layer so the operator can target over-the-air FT materials.
+- Downgrade attack flow added to the attack framework for mixed-mode hosts, with explicit confirmation and dry-run guardrails.
+- OWE detection and handshake capture encapsulated in the WiFi module extensions.
+- PMF (802.11w) handling: detection for `MFPC` / `MFPR` and SA Query support; deauth limitations documented in module docstrings.
+- Wi-Fi 6/6E/7 parsing extended for `he_capab`, `eht_capab`, 6 GHz channel lists, and related 320 MHz width flags.
+- MLO correlation: multi-BSSID correlation logic added to the scanner/event plumbing.
+- UI wiring added so operators can select 802.11r, downgrade, OWE, and PMF-related actions through the existing attack endpoints.
+- Documentation now explains the legal/ethical boundary for each new attack type before execution.
 
 Acceptance criteria:
-- [ ] Scanner reports WPA3, OWE, PMF, HE, EHT flags.
-- [ ] Operator can choose 802.11r or downgrade attacks from the UI.
-- [ ] Documentation explains the legal/ethical boundary for each new attack.
+- [x] Scanner reports WPA3, OWE, PMF, HE, EHT flags.
+- [x] Operator can choose 802.11r or downgrade attacks from the UI.
+- [x] Documentation explains the legal/ethical boundary for each new attack.
 
 ---
 

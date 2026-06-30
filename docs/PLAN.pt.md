@@ -148,42 +148,41 @@ Critérios de aceitação:
 
 ---
 
-## Sprint 6 — Validação Real dos Módulos (Nuclei, RouterScan, Bettercap, HFP)
 ## Sprint 6 — Validação de Módulos Reais (Nuclei, RouterScan, Bettercap, HFP) *(concluída)*
 
-**Objectivo**: transformar os wrappers existentes em integrações funcionais com as ferramentas subjacentes.
+**Objectivo**: transformar os *wrappers* existentes em integrações funcionais com as ferramentas subjacentes.
 
 Realizado:
 - `NucleiRunner` já estava completo e integrado no `NetworkModule`.
 - `RouterScanner.brute_force_credentials` (Hydra) estava funcional e foi mantido.
-- `RouterScanner.scan_router` estava como *stub* e agora:
-  - gera um script temporário para o RouterSploit;
-  - trata o output como texto bruto para não bloquear o pipeline;
-  - faz `cleanup` do ficheiro temporário.
-- Módulo `BettercapBLEClient` criado (`bettercap -iface ... -eval ...` via REST) para complementar `bleak`; eventos `ble.discovered` e `scan.completed` no event bus.
-- Módulo `HFPAudioCapture` colocado em `src/urban_hs/modules/ble/hfp.py`, reaproveitando o comportamento já existente no projecto e documentando a necessidade de `bluealsa`.
+- `RouterScanner.scan_router` estava como *stub* e agora gera um script temporário para o RouterSploit, executa-o e faz `cleanup` do ficheiro temporário.
+- Módulo `BettercapBLEClient` criado para enumerar BLE/GATT via REST do bettercap, com eventos `ble.discovered` e `scan.completed` no *event bus*.
+- Módulo `HFPAudioCapture` colocado em `src/urban_hs/modules/ble/hfp.py`, documentando a dependência de `bluealsa`/BlueZ.
 
-Nota: HFP e Bettercap continuam dependentes do software e hardware reais (`bettercap`, `bluealsa`, headset pareado); os módulos estão prontos, mas o uso em campo só é possível com esses pré-requisitos instalados.
+Nota: HFP e Bettercap dependem dos stacks reais de software/hardware; os módulos estão prontos, mas o uso em campo requer `bettercap`, `bluealsa` e um *headset* pareado.
 
 ---
 
-## Sprint 7 — Ataques Avançados a WiFi
+## Sprint 7 — Ataques Avançados a WiFi *(concluída)*
 
 **Objectivo**: capacidades modernas de avaliação de segurança WiFi além de WPA2-PMKID, *handshake*, WPS e deauth.
 
-Tasks:
-1. Detecção WPA3-SAE e captura de PMKID (`hcxdumptool` com suporte SAE).
-2. 802.11r Fast Transition — capturar PMK-R0/R1 via reassociação forçada.
-3. Ataque de *downgrade* — forçar AP em modo misto a descer para WPA2.
-4. OWE (Opportunistic Wireless Encryption) — detectar e capturar *handshake*.
-5. PMF (802.11w) — detectar `MFPC`, `MFPR`, suporte SA Query; documentar limitações do deauth.
-6. Wi-Fi 6/6E/7 — *parse* de `he_capab`, `eht_capab`, lista de canais 6 GHz, *flags* de 320 MHz.
-7. MLO (Multi-Link Operation) — correlacionar múltiplos BSSIDs do mesmo AP em diferentes bandas.
+Realizado:
+- O *scanner* passou a reportar detecção de WPA3-SAE, *flags* OWE, indicadores de 802.11r Fast Transition, presença HE/EHT, inferência de banda 6 GHz, *flags* de 320 MHz e BSSIDs relacionados com MLO.
+- Captura de PMKID para WPA3-SAE habilitada via fluxos SAE do `hcxdumptool`, mantendo o comportamento WPA2 existente.
+- Suporte a 802.11r Fast Transition documentado e ligado à camada de ataques WiFi, permitindo ao operador forçar reassociação e capturar materiais PMK-R0/R1.
+- Fluxo de *downgrade* adicionado para hosts em modo misto, com confirmação explícita e protecções de `dry-run`.
+- Detecção OWE e captura de *handshake* encapsulada nas extensões do módulo WiFi.
+- PMF (802.11w): detecção de `MFPC` / `MFPR` e suporte SA Query; limitações do deauth documentadas nos *docstrings* dos módulos.
+- *Parsing* de Wi-Fi 6/6E/7 estendido para `he_capab`, `eht_capab`, lista de canais 6 GHz e *flags* relacionadas com 320 MHz.
+- Correlação MLO: lógica de correlação multi-BSSID adicionada ao *scanner* e ao *event bus*.
+- *UI* actualizada para o operador poder escolher acções relacionadas com 802.11r, *downgrade*, OWE e PMF através dos endpoints existentes.
+- Documentação passa a explicar a fronteira legal/ética de cada ataque novo antes da execução.
 
 Critérios de aceitação:
-- [ ] O scanner reporta *flags* WPA3, OWE, PMF, HE e EHT.
-- [ ] O operador pode escolher ataques 802.11r ou *downgrade* a partir da UI.
-- [ ] A documentação explica a fronteira legal/ética de cada ataque novo.
+- [x] O *scanner* reporta *flags* WPA3, OWE, PMF, HE e EHT.
+- [x] O operador pode escolher ataques 802.11r ou *downgrade* a partir da UI.
+- [x] A documentação explica a fronteira legal/ética de cada ataque novo.
 
 ---
 
