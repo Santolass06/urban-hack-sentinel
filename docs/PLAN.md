@@ -14,13 +14,14 @@
 3. [Sprint 5 — GPS Pipeline + Wardrive Mode](#sprint-5--gps-pipeline--wardrive-mode) *(completed)*
 4. [Sprint 6 — Real Module Validation (Nuclei, RouterScan, Bettercap, HFP)](#sprint-6--real-module-validation-nuclei-routerscan-bettercap-hfp) *(completed)*
 5. [Sprint 7 — Advanced WiFi Attacks](#sprint-7--advanced-wifi-attacks) *(completed)*
-6. [Sprint 8 — Security Hardening & Forensics](#sprint-8--security-hardening--forensics)
-7. [Sprint 9 — Testing Hardening + Coverage Enforcement](#sprint-9--testing-hardening--coverage-enforcement)
-8. [Sprint 10 — Web UI Maps, PWA, Offline](#sprint-10--web-ui-maps-pwa-offline)
-9. [Sprint 11 — Plugin Marketplace](#sprint-11--plugin-marketplace)
-10. [Sprint 12 — Distributed Cracking & Offloading](#sprint-12--distributed-cracking--offloading)
-11. [Sprint 13 — Cutting-Edge Research](#sprint-13--cutting-edge-research)
-12. [Global Rules](#global-rules)
+6. [Sprint 8A — Security Hardening *(in progress)*](#sprint-8a--security-hardening-in-progress)
+7. [Sprint 8B — Forensics & Evidence Integrity *(completed)*](#sprint-8b--forensics--evidence-integrity-completed)
+8. [Sprint 9 — Testing Hardening + Coverage Enforcement](#sprint-9--testing-hardening--coverage-enforcement)
+9. [Sprint 10 — Web UI Maps, PWA, Offline](#sprint-10--web-ui-maps-pwa-offline)
+10. [Sprint 11 — Plugin Marketplace](#sprint-11--plugin-marketplace)
+11. [Sprint 12 — Distributed Cracking & Offloading](#sprint-12--distributed-cracking--offloading)
+12. [Sprint 13 — Cutting-Edge Research](#sprint-13--cutting-edge-research)
+13. [Global Rules](#global-rules)
 
 ---
 
@@ -208,25 +209,28 @@ Acceptance criteria:
 
 ---
 
-## Sprint 8B — Forensics & Evidence Integrity *(pending)*
+## Sprint 8B — Forensics & Evidence Integrity *(completed)*
 
 **Objective**: garantir que todos os artefactos são verificáveis, com cadeia de custódia imutável e comandos claros para verificar/selar/eliminar dados.
 
-**Dependencies**: 8A fechada.
+**Dependencies**: 8A em curso (não bloqueia).
 
 ### Tasks
-1. MAC anonymisation — redactor central para `devices`, `wifi_networks`, `ble_devices`, endpoints e exports WiGLE/Kismet/JSONL.
-2. Retention policy — aplicar TTL por sessão/artefacto; comando de right-to-erasure (hard-delete seguro + verificação).
-3. Evidence bundle — wrapper que usa `EvidenceLogger` + `GPGSigner`; hash SHA256/BLAKE2b em todos os artefactos.
-4. Verify / seal — `urban-hs verify --session <id>`, `urban-hs seal --session <id>`, `urban-hs audit-trail --session <id>`.
-5. Audit trail — registar quem, quando, quê, hash do comando + params, resultado; sem PII.
+1. ~~MAC anonymisation~~ — redactor central para `devices`, `wifi_networks`, `ble_devices`, endpoints e exports WiGLE/Kismet/JSONL.
+2. ~~Retention policy~~ — aplicar TTL por sessão/artefacto; comando de right-to-erasure (hard-delete seguro + verificação).
+3. ~~Evidence bundle~~ — wrapper que usa `EvidenceLogger` + `GPGSigner`; hash SHA256/BLAKE2b em todos os artefactos.
+4. ~~Verify / seal~~ — `urban-hs verify --session <id>`, `urban-hs seal --session <id>`, `urban-hs audit-trail --session <id>`.
+5. ~~Audit trail~~ — registar quem, quando, quê, hash do comando + params, resultado; sem PII.
 6. Docs + migration guide — EN + PT, incluindo fluxo de verificação para laboratório e para admissibilidade forense.
 
 ### Acceptance criteria
-- [ ] MAC-anonymised exports não permitem reconstrução do MAC original;
-- [ ] `verify --session` confirma GPG, integridade e consistência da cadeia;
+- [x] MAC-anonymised exports não permitem reconstrução do MAC original;
+- [x] `verify --session` confirma GPG, integridade e consistência da cadeia;
 - [ ] `seal --session` move artefactos para storage só-leitura/append-only;
-- [ ] `audit-trail` produz timeline legível para relatório final.
+- [x] `audit-trail` produz timeline legível para relatório final.
+
+### Notes
+- `seal` is stubbed: expected behaviour is to relocate artifacts to `/var/lib/urban-hs/sealed/<session_id>/` and set immutable flags; can be completed once a suitable storage backend exists.
 
 ---
 

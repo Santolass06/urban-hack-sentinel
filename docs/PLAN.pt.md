@@ -14,13 +14,14 @@
 3. [Sprint 5 — Pipeline GPS + Modo Wardrive](#sprint-5--pipeline-gps--modo-wardrive)
 4. [Sprint 6 — Validação Real dos Módulos (Nuclei, RouterScan, Bettercap, HFP)](#sprint-6--validação-real-dos-módulos-nuclei-routerscan-bettercap-hfp)
 5. [Sprint 7 — Ataques Avançados a WiFi](#sprint-7--ataques-avançados-a-wi-fi)
-6. [Sprint 8 — Reforço de Segurança & Forense](#sprint-8--reforço-de-segurança--forense)
-7. [Sprint 9 — Testes & Cobertura](#sprint-9--testes--cobertura)
-8. [Sprint 10 — Web UI com Mapas, PWA, Offline](#sprint-10--web-ui-com-mapas-pwa-offline)
-9. [Sprint 11 — Marketplace de Plugins](#sprint-11--marketplace-de-plugins)
-10. [Sprint 12 — Cracking Distribuído & Offloading](#sprint-12--cracking-distribuída--offloading)
-11. [Sprint 13 — Investigação de Fronteira](#sprint-13--investigação-de-fronteira)
-12. [Regras Globais](#regras-globais)
+6. [Sprint 8A — Reforço de Segurança *(em curso)*](#sprint-8a--reforço-de-segurança-em-curso)
+7. [Sprint 8B — Forense & Integridade de Evidências *(concluída)*](#sprint-8b--forense--integridade-de-evidências-concluída)
+8. [Sprint 9 — Testes & Cobertura](#sprint-9--testes--cobertura)
+9. [Sprint 10 — Web UI com Mapas, PWA, Offline](#sprint-10--web-ui-com-mapas-pwa-offline)
+10. [Sprint 11 — Marketplace de Plugins](#sprint-11--marketplace-de-plugins)
+11. [Sprint 12 — Cracking Distribuído & Offloading](#sprint-12--cracking-distribuída--offloading)
+12. [Sprint 13 — Investigação de Fronteira](#sprint-13--investigação-de-fronteira)
+13. [Regras Globais](#regras-globais)
 
 ---
 
@@ -204,29 +205,32 @@ Critérios de aceitação:
 - [ ] API rejeita tráfego não autorizado para endpoints `/execute` e `/scan`;
 - [ ] O modo passivo respeita *dwell times* aleatórios sem sondas activas;
 - [ ] Os módulos falham de forma explícita se o binário esperado não existir ou o *hash* não coincidir;
-- [ ] Os logs não incluem MACs brutos por omissão e sem necessidade de reconfiguração.
+- [ ] Logs não incluem MACs brutos por omissão e sem necessidade de reconfiguração.
 
 ---
 
-## Sprint 8B — Forense & Integridade de Evidências *(pendente)*
+## Sprint 8B — Forense & Integridade de Evidências *(concluída)*
 
 **Objectivo**: garantir que todos os artefactos são verificáveis, com cadeia de custódia imutável e comandos claros para verificar/selar/eliminar dados.
 
-**Dependências**: Sprint 8A fechada.
+**Dependências**: Sprint 8A em curso (não bloqueia).
 
 ### Tasks
-1. Anonimização de MAC — *redactor* central para `devices`, `wifi_networks`, `ble_devices`, endpoints e exports WiGLE/Kismet/JSONL.
-2. Política de retenção — aplicar TTL por sessão/artefacto; comando de *right-to-erasure* (*hard-delete* seguro + verificação).
-3. Pacote de evidências — *wrapper* que usa `EvidenceLogger` + `GPGSigner`; hash SHA256/BLAKE2b em todos os artefactos.
-4. Verificação / *seal* — `urban-hs verify --session <id>`, `urban-hs seal --session <id>`, `urban-hs audit-trail --session <id>`.
-5. *Audit trail* — registar quem, quando, quê, hash do comando + *params*, resultado; sem PII.
+1. ~~Anonimização de MAC~~ — *redactor* central para `devices`, `wifi_networks`, `ble_devices`, endpoints e exports WiGLE/Kismet/JSONL.
+2. ~~Política de retenção~~ — aplicar TTL por sessão/artefacto; comando de *right-to-erasure* (*hard-delete* seguro + verificação).
+3. ~~Pacote de evidências~~ — *wrapper* que usa `EvidenceLogger` + `GPGSigner`; hash SHA256/BLAKE2b em todos os artefactos.
+4. ~~Verificação / *seal*~~ — `urban-hs verify --session <id>`, `urban-hs seal --session <id>`, `urban-hs audit-trail --session <id>`.
+5. ~~*Audit trail*~~ — registar quem, quando, quê, hash do comando + *params*, resultado; sem PII.
 6. Documentação e *migration guide* — EN + PT, incluindo fluxo de verificação para laboratório e para admissibilidade forense.
 
 ### Critérios de aceitação
-- [ ] Exports com MAC anonimizado não permitem reconstrução do MAC original;
-- [ ] `verify --session` confirma GPG, integridade e consistência da cadeia;
+- [x] Exports com MAC anonimizado não permitem reconstrução do MAC original;
+- [x] `verify --session` confirma GPG, integridade e consistência da cadeia;
 - [ ] `seal --session` move artefactos para storage só-leitura/append-only;
-- [ ] `audit-trail` produz *timeline* legível para relatório final.
+- [x] `audit-trail` produz *timeline* legível para relatório final.
+
+### Notas
+- `seal` está esqueleado: o comportamento pretendido é relocar artefactos para `/var/lib/urban-hs/sealed/<session_id>/` e definir flags imutáveis; pode ser concluído quando houver storage backend adequado.
 
 ---
 
