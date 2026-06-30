@@ -613,13 +613,67 @@ class RouterScanner:
     async def scan_router(
         self,
         target_ip: str,
-        ports: List[int] = None,
-        modules: List[str] = None,
+        ports: Optional[List[int]] = None,
+        modules: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
-        """Run RouterSploit against target."""
-        # This would run routersploit modules
-        # Implementation depends on routersploit's Python API or CLI
-        return []
+        """Run RouterSploit modules against target."""
+        if not modules:
+            modules = ["scanners/autopwn"]
+        script_path = self._build_routersploit_script(target_ip, ports, modules)
+        cmd = [
+            self.routersploit_path,
+            "-s",
+            script_path,
+        ]
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=600)
+            if proc.returncode != 0:
+                logger.error("RouterSploit scan failed", returncode=proc.returncode, stderr=stderr.decode()[:500])
+                return []
+            return self._parse_routersploit_output(stdout.decode())
+        except asyncio.TimeoutError:
+            logger.error("RouterSploit scan timeout", target_ip=target_ip)
+            return []
+        except Exception as exc:
+            logger.error("RouterSploit scan error", error=str(exc))
+            return []
+        finally:
+            try:
+                os.unlink(script_path)
+            except OSError:
+                pass
+
+    def _build_routersploit_script(
+        self,
+        target_ip: str,
+        ports: Optional[List[int]] = None,
+        modules: Optional[List[str]] = None,
+    ) -> str:
+        modules = modules or ["scanners/autopwn"]
+        targets = [f"{target_ip}:{port}" for port in (ports or [80, 443, 8080, 8443])]
+        lines = ["use {}".format(modules[0])]
+        for target in targets:
+            lines.append("set target {}".format(target))
+        lines.extend(["run", "exit"])
+        handle, path = tempfile.mkstemp(suffix=".rsf", prefix="routersploit_")
+        with os.fdopen(handle, "w") as fh:
+            fh.write("\n".join(lines) + "\n")
+        return path
+
+    @staticmethod
+    def _parse_routersploit_output(output: str) -> List[Dict[str, Any]]:
+        findings: List[Dict[str, Any]] = []
+        for raw_line in output.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            findings.append({"raw": line})
+        return findings
 
     async def brute_force_credentials(
         self,
@@ -631,11 +685,11 @@ class RouterScanner:
     ) -> List[Dict[str, Any]]:
         """Run Hydra credential brute force."""
         port = port or self._default_port(service)
-        
+
         with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as uf:
             uf.write("\n".join(username_list))
             user_file = uf.name
-        
+
         with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as pf:
             pf.write("\n".join(password_list))
             pass_file = pf.name
@@ -650,17 +704,17 @@ class RouterScanner:
                 "-v",
                 f"{service}://{target_ip}:{port}",
             ]
-            
+
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=3600)
-            
+
             results = []
             stdout_str = stdout.decode()
-            
+
             # Parse hydra output for successful logins using regex
             # Output format: [22][ssh] host: 192.168.1.1   login: admin   password: 12345
             import re
@@ -675,9 +729,9 @@ class RouterScanner:
                         "username": username,
                         "password": password,
                     })
-            
+
             return results
-            
+
         finally:
             os.unlink(user_file)
             os.unlink(pass_file)

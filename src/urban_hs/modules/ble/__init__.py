@@ -18,13 +18,14 @@ from urban_hs.modules.ble.fastpair import (
     DEVICE_QUIRKS,
 )
 from urban_hs.modules.ble.exploit_chain import (
+    AccountKeyManager,
     BlueZBondingManager,
     BondedDevice,
     BondingStatus,
-    AccountKeyManager,
     HFPAudioCapture,
     WhisperPairFullExploit,
 )
+from urban_hs.modules.ble.bettercap import BettercapBLEClient, BettercapBLEDevice
 
 __all__ = [
     "FastPairScanner",
@@ -46,4 +47,6 @@ __all__ = [
     "AccountKeyManager",
     "HFPAudioCapture",
     "WhisperPairFullExploit",
+    "BettercapBLEClient",
+    "BettercapBLEDevice",
 ]

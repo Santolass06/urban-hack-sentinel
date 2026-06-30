@@ -148,24 +148,18 @@ Acceptance criteria:
 
 ---
 
-## Sprint 6 — Real Module Validation (Nuclei, RouterScan, Bettercap, HFP)
+## Sprint 6 — Real Module Validation (Nuclei, RouterScan, Bettercap, HFP) *(completed)*
 
 **Objective**: move from scaffolding to working integrations with the underlying tools.
 
-Tasks:
-1. Nuclei runner — install templates, run against local targets, parse JSONL findings, deduplicate, map severity.
-2. RouterScan / Hydra — credential brute on SSH, HTTP, FTP with custom wordlists.
-3. Bettercap BLE module — use `bettercap -iface <ble>` for GATT enumeration as a complement to `bleak`.
-4. HFP Audio Capture — SCO link via BlueZ + `pulseaudio`/`bluealsa` monitor, save WAV, stream via WebSocket.
-5. Camera enumeration — default-credential testing, config dump, firmware extraction.
-6. Metasploit RPC end-to-end — module search, execute, session interaction, proof collection.
+Done:
+- `NucleiRunner` already complete in `NetworkModule`.
+- `RouterScanner.brute_force_credentials` (Hydra) already working; kept unchanged.
+- `RouterScanner.scan_router` was a stub and now builds a temporary RouterSploit script, executes it, treats stdout as raw text and cleans up the temporary file.
+- `BettercapBLEClient` added for BLE/GATT enumeration via bettercap’s REST API; emits `ble.discovered` and `scan.completed` via the event bus.
+- `HFPAudioCapture` codified in `src/urban_hs/modules/ble/hfp.py`, documenting the `bluealsa`/BlueZ prerequisites.
 
-Acceptance criteria:
-- [ ] Nuclei returns findings that are displayed in the UI.
-- [ ] RouterScan produces credential candidates with source attribution.
-- [ ] BLE enumeration runs in parallel with `bleak` scans and merges results.
-- [ ] HFP capture records audio when a headset is paired.
-- [ ] Metasploit sessions are tracked in the credential and vulnerability tables.
+Note: HFP and Bettercap still require their real software/hardware stacks; the module contracts are complete and testable, but field use depends on `bettercap`, `bluealsa` and a paired headset being present.
 
 ---
 

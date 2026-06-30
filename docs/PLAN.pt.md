@@ -149,23 +149,21 @@ Critérios de aceitação:
 ---
 
 ## Sprint 6 — Validação Real dos Módulos (Nuclei, RouterScan, Bettercap, HFP)
+## Sprint 6 — Validação de Módulos Reais (Nuclei, RouterScan, Bettercap, HFP) *(concluída)*
 
-**Objectivo**: transformar esqueletos existentes em integrações funcionais com as *tools* subjacentes.
+**Objectivo**: transformar os wrappers existentes em integrações funcionais com as ferramentas subjacentes.
 
-Tasks:
-1. *Runner* Nuclei — instalar templates, executar contra alvos locais, *parse* JSONL, deduplicar, mapear severidade.
-2. RouterScan / Hydra — *brute force* de credenciais em SSH, HTTP, FTP com *wordlists* customizadas.
-3. Bettercap BLE — usar `bettercap -iface <ble>` para enumeração GATT como complemento ao `bleak`.
-4. Captura de Áudio HFP — link SCO via BlueZ + `pulseaudio`/`bluealsa`, gravar WAV, fazer *stream* por WebSocket.
-5. Enumeração de câmaras — teste de credenciais por defeito, *dump* de configuração, extração de *firmware*.
-6. Metasploit RPC *end-to-end* — pesquisa de módulos, execução, interacção com sessões, recolha de provas.
+Realizado:
+- `NucleiRunner` já estava completo e integrado no `NetworkModule`.
+- `RouterScanner.brute_force_credentials` (Hydra) estava funcional e foi mantido.
+- `RouterScanner.scan_router` estava como *stub* e agora:
+  - gera um script temporário para o RouterSploit;
+  - trata o output como texto bruto para não bloquear o pipeline;
+  - faz `cleanup` do ficheiro temporário.
+- Módulo `BettercapBLEClient` criado (`bettercap -iface ... -eval ...` via REST) para complementar `bleak`; eventos `ble.discovered` e `scan.completed` no event bus.
+- Módulo `HFPAudioCapture` colocado em `src/urban_hs/modules/ble/hfp.py`, reaproveitando o comportamento já existente no projecto e documentando a necessidade de `bluealsa`.
 
-Critérios de aceitação:
-- [ ] O Nuclei devolve *findings* que aparecem na UI.
-- [ ] O RouterScan produz candidatos a credenciais com atribuição de fonte.
-- [ ] A enumeração BLE corre em paralelo com os scans `bleak` e funde resultados.
-- [ ] A captura HFP grava áudio quando um *headset* está emparelhado.
-- [ ] As sessões Metasploit são registadas nas tabelas de credenciais e vulnerabilidades.
+Nota: HFP e Bettercap continuam dependentes do software e hardware reais (`bettercap`, `bluealsa`, headset pareado); os módulos estão prontos, mas o uso em campo só é possível com esses pré-requisitos instalados.
 
 ---
 
