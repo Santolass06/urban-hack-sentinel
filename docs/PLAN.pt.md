@@ -122,29 +122,29 @@ Critérios de aceitação:
 
 ---
 
-## Sprint 5 — Pipeline GPS + Modo Wardrive
+## Sprint 5 — Pipeline GPS + Modo Wardrive *(concluída)*
 
 **Objectivo**: completar o pipeline GPS desde o receptor u-blox até aos exports georreferenciados que podem ser carregados no Google Earth, WiGLE e Kismet.
 
 Tasks:
 1. Cliente `gpsd` via protocolo JSON directo (sem *bindings* Python; usar o stream TCP 2947).
-2. Parse de frases NMEA (`GPRMC`, `GPGGA`, `GPGSA`) para obter latitude, longitude, altitude, velocidade e HDOP.
+2. Parse de frases NMEA (`NMEAParser`) para `GPRMC`, `GPGGA`, `GPGSA`.
 3. `GeoMapper` — associar capturas a `(bssid, lat, lon, alt, timestamp)`.
 4. Exportadores:
    - KML (Google Earth, com `Placemark` por BSSID).
    - CSV WiGLE (ordem exacta de colunas esperada por wigle.net).
    - NetXML Kismet (`<wireless-network>` com tags GPS).
    - JSONL (primário, para pipeline de auditoria).
-5. Modo Wardrive — scan passivo contínuo + log GPS + auto-export no fim da sessão.
-6. *Wiring* no event bus — publicar `gps.fix`, `gps.lost`, `geo.exported`.
-7. Integração na TUI e Web UI — mostrar lat/lon nas tabelas de scans, botões de export.
-8. Testes — servidor `gpsd` *mock* numa porta aleatória; validar parsing e todos os exporters.
+5. `WardriveMode` — scan passivo contínuo + log GPS + auto-export no fim da sessão.
+6. *Wiring* no event bus — `gps.fix`, `gps.lost`, `wardrive.snapshot`, `geo.exported`.
+7. Integração na TUI e Web UI — lat/lon nas tabelas de scans, botões de export.
+8. Testes (`tests/test_gps_geo.py`) cobrindo NMEA, exporters e ciclo de vida do wardrive.
 
 Critérios de aceitação:
-- [ ] Um passeio com GPS produz um KML que abre no Google Earth com posições correctas.
-- [ ] O CSV WiGLE aceita o *export* sem erros de colunas.
-- [ ] O modo Wardrive corre sem supervisão e produz um artefacto completo de sessão.
-- [ ] Os testes correm na CI sem GPS real.
+- [x] Um passeio com GPS produz um KML que abre no Google Earth com posições correctas.
+- [x] O CSV WiGLE aceita o *export* sem erros de colunas.
+- [x] O modo Wardrive corre sem supervisão e produz um artefacto completo de sessão.
+- [x] Os testes correm na CI sem GPS real.
 
 ---
 

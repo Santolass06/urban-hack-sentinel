@@ -122,29 +122,29 @@ Acceptance criteria:
 
 ---
 
-## Sprint 5 — GPS Pipeline + Wardrive Mode
+## Sprint 5 — GPS Pipeline + Wardrive Mode *(completed)*
 
 **Objective**: complete the GPS pipeline from u-blox receiver to geotagged exports that can be loaded into Google Earth, WiGLE, and Kismet.
 
 Tasks:
-1. `gpsd` JSON protocol client — replace the socket stub with a real reader (no Python `gpsd` bindings required; use the direct TCP JSON stream).
-2. NMEA sentence parser (GPRMC, GPGGA, GPGSA) for lat/lon/alt/speed/HDOP.
+1. `gpsd` JSON protocol client — real TCP socket reader without Python `gpsd` bindings.
+2. NMEA sentence parser (`NMEAParser`) for `GPRMC`, `GPGGA`, `GPGSA`.
 3. `GeoMapper` — link snapshots to `(bssid, lat, lon, alt, timestamp)`.
 4. Exporters:
-   - KML (Google Earth, with `Placemark` per BSSID).
-   - WiGLE CSV (exact column order expected by wigle.net).
-   - Kismet netxml (`<wireless-network>` with GPS tags).
-   - JSONL (first-class, for audit pipeline).
-5. Wardrive mode: continuous passive scan + GPS logging + auto-export at end of session.
-6. Event bus wiring — publish `gps.fix`, `gps.lost`, `geo.exported`.
-7. TUI and Web UI integration — show lat/lon in scan tables, offer export buttons.
-8. Tests: mock gpsd server on a random port, validate parsing and all exporters.
+   - KML (Google Earth `Placemark` per BSSID).
+   - WiGLE CSV (column order matching wigle.net).
+   - Kismet netXML (`<wireless-network>` with GPS tags).
+   - JSONL (primary audit pipeline).
+5. `WardriveMode` — continuous passive scan + GPS logging + auto-export.
+6. Event bus wiring — `gps.fix`, `gps.lost`, `wardrive.snapshot`, `geo.exported`.
+7. TUI and Web UI integration — lat/lon in scan tables, export buttons.
+8. Tests (`tests/test_gps_geo.py`) covering NMEA, exports, and wardrive lifecycle.
 
 Acceptance criteria:
-- [ ] A walk with GPS produces a KML that opens in Google Earth with correct positions.
-- [ ] WiGLE CSV accepts the export without column errors.
-- [ ] Wardrive mode can run unattended and produce a complete session artefact.
-- [ ] Tests run in CI without a real GPS dongle.
+- [x] A walk with GPS produces a KML that opens in Google Earth with correct positions.
+- [x] WiGLE CSV accepts the export without column errors.
+- [x] Wardrive mode runs unattended and produces a complete session artefact.
+- [x] Tests run in CI without a real GPS dongle.
 
 ---
 

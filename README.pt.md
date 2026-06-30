@@ -166,7 +166,7 @@ API REST + WebSocket em `http://localhost:8000/`. Frontend estático (HTMX + Alp
 | Alfa AWUS036ACH (MT7612U) | ✅ | Modo monitor + injeção, backend `iw` |
 | Intel AX210 | ✅ | Patch de monitor necessário para modo monitor |
 | Adaptador CSR BLE 4.0/5.0 | ✅ | Via backend bleak |
-| u-blox GPS | 🔄 | gpsd + exportação KML/CSV |
+| u-blox GPS | ✅ | gpsd + parser NMEA + exportação KML/CSV/netXML/JSONL + modo wardrive |
 
 > **Restrição:** Apenas o adaptador Alfa AWUS036ACH foi totalmente testado. Outros chipsets funcionam via fallback scapy, mas o modo monitor não é garantido.
 
