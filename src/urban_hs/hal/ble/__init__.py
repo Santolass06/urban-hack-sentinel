@@ -1,34 +1,17 @@
 """
 Bluetooth hardware abstraction layer.
 
-Currently wraps the existing ``FastPairScanner`` (bleak-based) and
-provides a future ``BlueZDBusBackend`` for faster HCI interaction on
-desktop Linux.
+Provides BLEBackend implementations:
+- _BleakBackend: bleak-based (works on Raspberry Pi and most systems)
+- _BlueZBackend: D-Bus direct (faster on desktop Linux with BlueZ 5.50+)
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-
-try:
-    from urban_hs.modules.ble.fastpair import BLEDevice  # type: ignore[attr-defined]
-except Exception:
-    @dataclass
-    class BLEDevice:  # type: ignore[no-redef]
-        address: str
-        name: Optional[str] = None
-        rssi: int = -100
-        device_type: str = "STANDARD_BLE"
-        fast_pair_model_id: Optional[str] = None
-        fast_pair_in_pairing_mode: bool = False
-        has_account_key_filter: bool = False
-
-        def to_dict(self) -> Dict[str, Any]:
-            return {k: getattr(self, k) for k in self.__dataclass_fields__.keys()}
+from urban_hs.hal.types import BLEDevice, BLEDeviceType
 
 
 class BLEBackend(ABC):

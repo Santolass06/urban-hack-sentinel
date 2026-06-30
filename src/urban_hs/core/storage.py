@@ -18,7 +18,11 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple, Union
 
 import aiosqlite
-import redis.asyncio as redis
+
+try:
+    import redis.asyncio as redis
+except ImportError:
+    redis = None  # type: ignore[assignment]
 
 logger = structlog.get_logger(__name__)
 
@@ -261,7 +265,10 @@ class Storage:
 
         # Initialize Redis
         try:
-            self._redis = redis.from_url(self.redis_url, decode_responses=True)
+            if redis is not None and self.redis_url:
+                self._redis = redis.from_url(self.redis_url, decode_responses=True)
+            else:
+                self._redis = None
         except Exception as e:
             logger.warning("Failed to connect to Redis, continuing without cache", error=str(e))
             self._redis = None
