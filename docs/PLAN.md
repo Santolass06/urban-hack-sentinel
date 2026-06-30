@@ -14,14 +14,15 @@
 3. [Sprint 5 — GPS Pipeline + Wardrive Mode](#sprint-5--gps-pipeline--wardrive-mode) *(completed)*
 4. [Sprint 6 — Real Module Validation (Nuclei, RouterScan, Bettercap, HFP)](#sprint-6--real-module-validation-nuclei-routerscan-bettercap-hfp) *(completed)*
 5. [Sprint 7 — Advanced WiFi Attacks](#sprint-7--advanced-wifi-attacks) *(completed)*
-6. [Sprint 8A — Security Hardening *(in progress)*](#sprint-8a--security-hardening-in-progress)
+6. [Sprint 8A — Security Hardening *(completed)*](#sprint-8a--security-hardening-completed)
 7. [Sprint 8B — Forensics & Evidence Integrity *(completed)*](#sprint-8b--forensics--evidence-integrity-completed)
-8. [Sprint 9 — Testing Hardening + Coverage Enforcement](#sprint-9--testing-hardening--coverage-enforcement)
-9. [Sprint 10 — Web UI Maps, PWA, Offline](#sprint-10--web-ui-maps-pwa-offline)
-10. [Sprint 11 — Plugin Marketplace](#sprint-11--plugin-marketplace)
-11. [Sprint 12 — Distributed Cracking & Offloading](#sprint-12--distributed-cracking--offloading)
-12. [Sprint 13 — Cutting-Edge Research](#sprint-13--cutting-edge-research)
-13. [Global Rules](#global-rules)
+8. [Sprint 9 — Module Completion Pass *(completed)*](#sprint-9--module-completion-pass-completed)
+9. [Sprint 10 — Testing Hardening + Coverage Enforcement](#sprint-10--testing-hardening--coverage-enforcement)
+10. [Sprint 11 — Web UI Maps, PWA, Offline](#sprint-11--web-ui-maps-pwa-offline)
+11. [Sprint 12 — Plugin Marketplace](#sprint-12--plugin-marketplace)
+12. [Sprint 13 — Distributed Cracking & Offloading](#sprint-13--distributed-cracking--offloading)
+13. [Sprint 14 — Cutting-Edge Research](#sprint-14--cutting-edge-research)
+14. [Global Rules](#global-rules)
 
 ---
 
@@ -239,6 +240,32 @@ Security hardening baseline delivered in `src/urban_hs/core/security.py`:
 
 ---
 
+## Sprint 9 — Module Completion Pass *(completed)*
+
+**Objective**: close all partial or scaffold modules introduced through Sprints 0-8 into executable, documented, testable features with the same deliverable standard as the WiFi/BLE core.
+
+In-scope scope: `wifi`, `ble`, `network`, `camera`, `credential`, `exploit`, `hid`, `metasploit`, `mqtt`, `esp32`, `bt_hid`, `ssid_confusion`, `reporting`, and `urban_hack` modules.
+
+### Order of execution (sequential)
+1. `wifi`: `plugin.py`, `fragattacks.py`, registry/attacks/managers alignment.
+2. `ble`: `exploit_chain.py`, `plugin.py`.
+3. `camera`: `enumeration.py`, `vuln_check.py`.
+4. `credential`: `manager.py`.
+5. `exploit`: `runner.py`.
+6. `hid`: `ducky.py`, `gadget.py`, `injector.py`.
+7. `metasploit`: `rpc.py`, `console.py`.
+8. `mqtt.py`, `esp32.py`, `bt_hid.py`, `ssid_confusion.py`.
+9. `urban_hack.py` orchestrator.
+10. `reporting/generator.py`.
+
+### Definition of functional
+- At least one happy-path execution runs under test or with realistic mocks.
+- No `raise NotImplementedError`, no empty `pass`-only public paths for core flows.
+- Contract test `tests/test_<module>_contract.py` present for each module.
+- Docs updated EN + PT.
+
+---
+
 ## Sprint 9 — Testing Hardening + Coverage Enforcement
 
 **Objective**: move from smoke tests to a rigorous, maintainable test suite that gives confidence before every release.
@@ -259,21 +286,23 @@ Acceptance criteria:
 
 ---
 
-## Sprint 10 — Web UI Maps, PWA, Offline
+## Sprint 10 — Testing Hardening + Coverage Enforcement
 
-**Objective**: make the browser interface useful in the field with low bandwidth and intermittent connectivity.
+**Objective**: move from smoke tests to a rigorous, maintainable test suite that gives confidence before every release.
 
 Tasks:
-1. Leaflet map — display networks on OpenStreetMap using the GPS pipeline.
-2. Clustering + heatmap — show dense urban scans without crashing the browser.
-3. Offline-first PWA — service worker, cached assets, queue actions when offline.
-4. Real-time charting — signal strength over time, attack success/fail rates.
-5. Dark/light theme, responsive layout, accessibility (keyboard navigation, ARIA).
+1. Coverage baseline — run `pytest --cov=urban_hs` and set the floor at **85%**.
+2. Per-module contract tests — every module in `src/urban_hs/modules/...` has a companion `tests/test_<module>_contract.py`.
+3. Custom test framework — helpers for `gpsd` mock, `mac80211_hwsim` reusable fixtures, HAL adapter matrix (`x86_scapy` vs `arm_iw`).
+4. Integration tests — run real binaries in Docker (`airodump-ng`, `hcxdumptool`, `reaver`, `nmap`, `nuclei`) against intentionally vulnerable containers.
+5. Concurrency / load tests — parallel attacks, event bus under pressure, TUI + Web UI connected simultaneously.
+6. Security tests — path traversal, input fuzzing, secret leakage in logs, privilege checks.
+7. CI matrix — add `ubuntu-latest` + `arm64` runner if available; fail build on coverage drop.
 
 Acceptance criteria:
-- [ ] A wardrive session produces a map viewable without reloading.
-- [ ] UI works when the operator loses network and reconnects later.
-- [ ] All charts update via WebSocket without page refresh.
+- [ ] PR cannot merge if coverage drops below 85%.
+- [ ] Every new module must include `test_<module>_contract.py` and `test_<module>_execute.py`.
+- [ ] A new contributor can run `make test` and see green locally.
 
 ---
 
