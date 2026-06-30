@@ -138,6 +138,40 @@ urban-hs-server --host 0.0.0.0 --port 8000
 
 REST API + WebSocket at `http://localhost:8000/`. Static frontend (HTMX + Alpine.js) served at `/`.
 
+### Authentication
+
+All API endpoints (except `/healthz` and `/auth/token`) require a Bearer token:
+
+```bash
+# Get a token
+TOKEN=$(curl -s -X POST http://localhost:8000/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "changeme"}' | jq -r '.access_token')
+
+# Use the token
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/info
+```
+
+### Exploit Runner — Autonomous Execution
+
+The Exploit Runner (`modules/exploit/runner.py`) can autonomously:
+1. Search ExploitDB for matching exploits
+2. Download and execute them against target services
+3. Collect proof-of-concept output
+
+```python
+from urban_hs.modules.exploit.runner import ExploitRunner
+
+runner = ExploitRunner()
+proof = await runner.run_exploit(
+    exploit_id="42315",
+    target_ip="192.168.1.100",
+    target_port=8080,
+    target_service="http",
+)
+print(proof.output)
+```
+
 ### Key Endpoints
 
 | Method | Path | Description |
@@ -178,30 +212,44 @@ REST API + WebSocket at `http://localhost:8000/`. Static frontend (HTMX + Alpine
 urban_hs/
 ├── core/                    # Shared infrastructure
 │   ├── event_bus.py         # Async pub/sub
-│   ├── config.py            # Pydantic v2
-│   ├── storage.py           # SQLite WAL + JSONL
+│   ├── config.py            # Pydantic v2 + StorageConfig
+│   ├── storage.py           # SQLite WAL + Redis cache (optional)
 │   └── plugins.py           # Plugin API
 │
 ├── hal/                     # Hardware Abstraction Layer
 │   ├── wifi/                # Wi-Fi backend (iw / scapy)
-│   ├── ble/                 # BLE backend (bleak)
+│   ├── ble/                 # BLE backend (bleak / BlueZ D-Bus)
+│   ├── types.py             # Shared types (BLEDevice, etc.)
 │   └── platform.py          # Platform detection (ARM64/x86)
 │
 ├── modules/
-│   ├── wifi/                # Scanner + Wi-Fi attacks
+│   ├── wifi/
+│   │   ├── attacks/         # Handshake, PMKID, WPS, Deauth, Kr00k
+│   │   │   ├── base.py      # BaseAttack, AttackResult, AttackStatus
+│   │   │   ├── wpa.py       # HandshakeAttack, PMKIDAttack
+│   │   │   ├── wps.py       # WPSPixieAttack, WPSPinAttack
+│   │   │   └── deauth.py    # DeauthAttack, Kr00kAttack
+│   │   ├── scanner.py       # AirodumpScanBackend, WiFiScanner
+│   │   └── managers.py      # HandshakeManager, MACRandomizer
 │   ├── ble/                 # Fast Pair + WhisperPair
-│   ├── network/             # Nmap + Nuclei
+│   ├── network/             # Nmap + Nuclei + Camera + Router
+│   │   ├── types.py         # ScanType, Severity, PortInfo, HostInfo, Vulnerability
+│   │   ├── scanner.py       # NmapScanner
+│   │   ├── nuclei.py        # NucleiRunner
+│   │   ├── searchsploit.py  # SearchSploitIntegration
+│   │   ├── router.py        # RouterScanner
+│   │   └── camera.py        # CameraDiscovery
 │   ├── metasploit/          # MSF RPC
-│   ├── hid/                 # DuckyScript + injector
-│   ├── mqtt/                # MQTT attack suite
-│   ├── camera/              # Camera discovery
-│   ├── credential/          # Credential handling
-│   ├── exploit/             # Exploit chains
+│   ├── credential/          # Credential handling + validation
+│   ├── exploit/             # Exploit Runner (autonomous execution)
 │   ├── reporting/           # Report generation (PDF, JSON, HTML)
 │   └── plugins/             # Example/reference plugins
 │
 ├── ui/
-│   ├── api/                 # FastAPI + WebSocket
+│   ├── api/
+│   │   ├── auth.py          # Bearer token auth middleware
+│   │   ├── main.py          # FastAPI app + CORS + rate limiting
+│   │   └── routers/         # WiFi, BLE, Network, Attacks, System
 │   ├── tui/                 # Textual TUI
 │   └── web/                 # Static frontend (HTMX + Alpine.js)
 │
@@ -209,7 +257,7 @@ urban_hs/
 │   └── main.py              # Typer CLI
 │
 ├── chroot/                  # Chroot/jail helpers
-└── tests/                   # pytest
+└── tests/                   # pytest (99 tests)
 ```
 
 ---
@@ -219,29 +267,32 @@ urban_hs/
 ### Quick run
 
 ```bash
-# All tests
-pytest tests/ -v
+# All tests (excluding hardware-dependent)
+pytest tests/ -v --ignore=tests/test_ble_module.py --ignore=tests/test_e2e.py
 
 # Unit tests only
 pytest tests/ -v -m unit
 
-# HAL tests (mocked hardware)
-pytest tests/test_hal.py -v
-
-# API smoke tests
-pytest tests/test_api_smoke.py -q
-
-# CLI smoke tests
-pytest tests/test_cli.py -q
+# Specific test files
+pytest tests/test_attacks_base.py -v        # Attack types and base classes
+pytest tests/test_attacks_submodules.py -v  # WPA/WPS/Deauth with mocks
+pytest tests/test_network_module.py -v      # Network types and scanner
+pytest tests/test_api_integration.py -v     # API with auth
+pytest tests/test_hal.py -v                 # HAL tests (mocked)
 ```
 
 ### Code coverage
 
 ```bash
-pytest --cov=src/urban_hs --cov-report=term-missing
+pytest --cov=src/urban_hs --cov-report=term-missing \
+  --ignore=tests/test_ble_module.py --ignore=tests/test_e2e.py
 ```
 
-Coverage thresholds are enforced in CI. Current baseline includes HAL, API integration, CLI, event contract, and TUI smoke tests.
+Current coverage: **19%** (99 tests). Key covered areas:
+- `network/types.py`: 100%
+- `wifi/attacks/base.py`: 90%
+- `ui/api/main.py`: 98%
+- `core/config.py`: 76%
 
 ### Writing custom tests
 
