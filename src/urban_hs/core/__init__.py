@@ -218,9 +218,9 @@ __all__ = [
 async def init_core(
     config_file: Optional[str] = None,
     log_level: str = "INFO",
-    jsonl_dir: str = "/var/log/urban-hs/jsonl",
-    sqlite_path: str = "/var/lib/urban-hs/urban.db",
-    redis_url: str = "redis://localhost:6379/0",
+    jsonl_dir: Optional[str] = None,
+    sqlite_path: Optional[str] = None,
+    redis_url: Optional[str] = None,
     **kwargs,
 ) -> Dict[str, Any]:
     """
@@ -231,22 +231,32 @@ async def init_core(
     import os
     from pathlib import Path
     
+    # Initialize config first to get paths
+    config = await init_config(config_file=config_file)
+    
+    # Resolve paths from config
+    if jsonl_dir is None:
+        jsonl_dir = config.storage.resolve_jsonl_dir()
+    if sqlite_path is None:
+        sqlite_path = config.storage.resolve_sqlite_path()
+    if redis_url is None:
+        redis_url = config.storage.redis_url
+    
     # Ensure directories exist
-    Path("/var/lib/urban-hs").mkdir(parents=True, exist_ok=True)
-    Path("/var/log/urban-hs/jsonl").mkdir(parents=True, exist_ok=True)
-    Path("/var/log/urban-hs").mkdir(parents=True, exist_ok=True)
-    Path("/var/lib/urban-hs/hashes").mkdir(parents=True, exist_ok=True)
-    Path("/var/lib/urban-hs/pcaps").mkdir(parents=True, exist_ok=True)
+    Path(config.storage.data_root).mkdir(parents=True, exist_ok=True)
+    Path(jsonl_dir).mkdir(parents=True, exist_ok=True)
+    Path(config.storage.log_root).mkdir(parents=True, exist_ok=True)
+    Path(config.storage.resolve_hashes_dir()).mkdir(parents=True, exist_ok=True)
+    Path(config.storage.resolve_pcaps_dir()).mkdir(parents=True, exist_ok=True)
     
     # Setup logging first
-    setup_logging(level=log_level, jsonl_dir="/var/log/urban-hs/jsonl")
+    setup_logging(level=log_level, jsonl_dir=jsonl_dir)
     
     logger = get_logger("core.init")
     logger.info("Initializing core services")
     
     # Initialize services
     bus = await init_event_bus()
-    config = await init_config(config_file=config_file)
     storage = await init_storage(
         sqlite_path=sqlite_path,
         redis_url=redis_url,

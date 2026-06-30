@@ -75,15 +75,17 @@ class ChrootProcessManager:
     def __init__(self, config: Optional[ChrootConfig] = None):
         self.config = config or ChrootConfig()
         self._active_processes: Dict[int, asyncio.subprocess.Process] = {}
+        from urban_hs.core.config import get_config
+        cfg = get_config()
         self._default_binds = {
             "/proc": "/proc",
             "/sys": "/sys",
             "/dev": "/dev",
             "/dev/pts": "/dev/pts",
             "/run": "/run",
-            "/var/lib/urban-hs/data": "/data",
-            "/var/lib/urban-hs/artifacts": "/artifacts",
-            "/var/lib/urban-hs/logs": "/logs",
+            f"{cfg.storage.data_root}/data": "/data",
+            f"{cfg.storage.resolve_artifact_root()}": "/artifacts",
+            f"{cfg.storage.log_root}/logs": "/logs",
         }
 
     def _build_nsenter_cmd(self, cmd: List[str]) -> List[str]:

@@ -214,12 +214,19 @@ class Storage:
 
     def __init__(
         self,
-        sqlite_path: str = "/var/lib/urban-hs/urban.db",
-        redis_url: str = "redis://localhost:6379/0",
+        sqlite_path: Optional[str] = None,
+        redis_url: Optional[str] = None,
         wal_mode: bool = True,
         journal_size: int = 10000,
         pool_size: int = 5,
     ):
+        if sqlite_path is None or redis_url is None:
+            from urban_hs.core.config import get_config
+            cfg = get_config()
+            if sqlite_path is None:
+                sqlite_path = cfg.storage.resolve_sqlite_path()
+            if redis_url is None:
+                redis_url = cfg.storage.redis_url
         self.sqlite_path = Path(sqlite_path)
         self.redis_url = redis_url
         self.wal_mode = wal_mode
@@ -724,7 +731,8 @@ class Storage:
     async def log_jsonl(self, table: str, record: Dict[str, Any]) -> None:
         """Append record to JSONL log file for table."""
         import aiofiles
-        log_dir = Path("/var/log/urban-hs/jsonl")
+        from urban_hs.core.config import get_config
+        log_dir = Path(get_config().storage.resolve_jsonl_dir())
         log_dir.mkdir(parents=True, exist_ok=True)
         log_file = log_dir / f"{table}.jsonl"
         

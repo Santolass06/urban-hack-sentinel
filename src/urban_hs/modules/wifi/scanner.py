@@ -242,7 +242,10 @@ class IWScanBackend(ScanBackend):
 class AirodumpScanBackend(ScanBackend):
     """Passive scan using airodump-ng with channel hopping."""
 
-    def __init__(self, output_dir: str = "/var/log/urban-hs/wifi_scans"):
+    def __init__(self, output_dir: Optional[str] = None):
+        if output_dir is None:
+            from urban_hs.core.config import get_config
+            output_dir = get_config().storage.resolve_wifi_scans_dir()
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -369,16 +372,19 @@ class ScanManager:
         self,
         interface: str,
         strategy: ScanStrategy = ScanStrategy.PASSIVE_ONLY,
-        output_dir: str = "/var/log/urban-hs/wifi_scans",
+        output_dir: Optional[str] = None,
     ):
         self.interface = interface
         self.strategy = strategy
+        if output_dir is None:
+            from urban_hs.core.config import get_config
+            output_dir = get_config().storage.resolve_wifi_scans_dir()
         self.output_dir = output_dir
         
         self.backends = {
             ScanStrategy.DIRECT: IWScanBackend(),
             ScanStrategy.MODE_SWITCH: IWScanBackend(),
-            ScanStrategy.PASSIVE_ONLY: AirodumpScanBackend(),
+            ScanStrategy.PASSIVE_ONLY: AirodumpScanBackend(output_dir=output_dir),
         }
         
         # Known networks cache
@@ -476,7 +482,7 @@ class WiFiScanner:
         self,
         interface: str,
         strategy: ScanStrategy = ScanStrategy.PASSIVE_ONLY,
-        output_dir: str = "/var/log/urban-hs/wifi_scans",
+        output_dir: Optional[str] = None,
     ):
         self.manager = ScanManager(interface, strategy, output_dir)
 

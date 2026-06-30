@@ -190,7 +190,7 @@ class AuditSession:
 @dataclass
 class ReportConfig:
     """Report generation configuration."""
-    output_dir: str = "/var/lib/urban-hs/reports"
+    output_dir: Optional[str] = None
     template_dir: str = "/opt/urban-hs/templates/reports"
     gpg_key_id: Optional[str] = None
     gpg_passphrase_provider: Optional[Callable[[], str]] = None
@@ -227,6 +227,9 @@ class ReportGenerator:
     
     def __init__(self, config: Optional[ReportConfig] = None):
         self.config = config or ReportConfig()
+        if self.config.output_dir is None:
+            from urban_hs.core.config import get_config
+            self.config.output_dir = get_config().storage.resolve_reports_dir()
         self.report_dir = Path(self.config.output_dir)
         self.report_dir.mkdir(parents=True, exist_ok=True)
         

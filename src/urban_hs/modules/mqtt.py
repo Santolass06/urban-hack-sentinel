@@ -91,10 +91,13 @@ class MQTTAttackSuite:
     
     def __init__(
         self,
-        output_dir: str = "/var/lib/urban-hs/mqtt_attacks",
+        output_dir: Optional[str] = None,
         timeout: int = 30,
         scan_timeout: int = 60,
     ):
+        if output_dir is None:
+            from urban_hs.core.config import get_config
+            output_dir = get_config().storage.resolve_mqtt_attacks_dir()
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.timeout = timeout

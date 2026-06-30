@@ -240,22 +240,22 @@ class TestWiFiScanner:
     """Test WiFi scanner main class."""
     
     @pytest.mark.asyncio
-    async def test_scanner_initialization(self):
+    async def test_scanner_initialization(self, tmp_path):
         """Test scanner initialization."""
-        scanner = WiFiScanner(interface="wlan0")
+        scanner = WiFiScanner(interface="wlan0", output_dir=str(tmp_path / "scans"))
         assert scanner.manager.interface == "wlan0"
         assert scanner.manager.strategy == ScanStrategy.PASSIVE_ONLY
     
     @pytest.mark.asyncio
-    async def test_scanner_with_custom_strategy(self):
+    async def test_scanner_with_custom_strategy(self, tmp_path):
         """Test scanner with custom strategy."""
-        scanner = WiFiScanner(interface="wlan0", strategy=ScanStrategy.DIRECT)
+        scanner = WiFiScanner(interface="wlan0", strategy=ScanStrategy.DIRECT, output_dir=str(tmp_path / "scans"))
         assert scanner.manager.strategy == ScanStrategy.DIRECT
     
     @pytest.mark.asyncio
-    async def test_scan_networks(self):
+    async def test_scan_networks(self, tmp_path):
         """Test network scanning."""
-        scanner = WiFiScanner(interface="wlan0", strategy=ScanStrategy.DIRECT)
+        scanner = WiFiScanner(interface="wlan0", strategy=ScanStrategy.DIRECT, output_dir=str(tmp_path / "scans"))
         
         with patch('asyncio.create_subprocess_exec') as mock_exec:
             mock_proc = AsyncMock()
@@ -271,9 +271,9 @@ class TestWiFiScanner:
             assert networks[0].bssid == "aa:bb:cc:dd:ee:ff"
     
     @pytest.mark.asyncio
-    async def test_continuous_scan(self):
+    async def test_continuous_scan(self, tmp_path):
         """Test continuous scan iterator."""
-        scanner = WiFiScanner(interface="wlan0", strategy=ScanStrategy.DIRECT)
+        scanner = WiFiScanner(interface="wlan0", strategy=ScanStrategy.DIRECT, output_dir=str(tmp_path / "scans"))
         
         with patch('asyncio.create_subprocess_exec') as mock_exec:
             mock_proc = AsyncMock()
@@ -312,8 +312,8 @@ class TestHandshakeAttack:
     """Test HandshakeAttack class."""
     
     @pytest.fixture
-    def attack(self):
-        return HandshakeAttack(interface="wlan0")
+    def attack(self, tmp_path):
+        return HandshakeAttack(interface="wlan0", output_dir=str(tmp_path / "handshakes"))
     
     @pytest.mark.asyncio
     async def test_attack_initialization(self, attack):
@@ -323,7 +323,7 @@ class TestHandshakeAttack:
         assert attack.output_dir.exists()
     
     @pytest.mark.asyncio
-    async def test_execute_with_mock(self, attack):
+    async def test_execute_with_mock(self, attack, tmp_path):
         """Test attack initialization (execute test skipped - requires full mocking)."""
         # Test that attack can be instantiated and has correct defaults
         assert attack.interface == "wlan0"
@@ -334,6 +334,7 @@ class TestHandshakeAttack:
         # Test that attack can be created with custom parameters
         custom_attack = HandshakeAttack(
             interface="wlan1",
+            output_dir=str(tmp_path / "custom_handshakes"),
             deauth_count=15,
             attack_timeout=30
         )
@@ -350,8 +351,8 @@ class TestPMKIDAttack:
     """Test PMKIDAttack class."""
     
     @pytest.fixture
-    def attack(self):
-        return PMKIDAttack(interface="wlan0")
+    def attack(self, tmp_path):
+        return PMKIDAttack(interface="wlan0", output_dir=str(tmp_path / "pmkid"))
     
     @pytest.mark.asyncio
     async def test_attack_initialization(self, attack):
@@ -386,12 +387,12 @@ class TestWPSAttacks:
     """Test WPS attacks."""
     
     @pytest.fixture
-    def pixie_attack(self):
-        return WPSPixieAttack(interface="wlan0")
+    def pixie_attack(self, tmp_path):
+        return WPSPixieAttack(interface="wlan0", output_dir=str(tmp_path / "wps"))
     
     @pytest.fixture
-    def pin_attack(self):
-        return WPSPinAttack(interface="wlan0")
+    def pin_attack(self, tmp_path):
+        return WPSPinAttack(interface="wlan0", output_dir=str(tmp_path / "wps"))
     
     @pytest.mark.asyncio
     async def test_pixie_initialization(self, pixie_attack):
@@ -427,8 +428,8 @@ class TestDeauthAttack:
     """Test DeauthAttack class."""
     
     @pytest.fixture
-    def attack(self):
-        return DeauthAttack(interface="wlan0")
+    def attack(self, tmp_path):
+        return DeauthAttack(interface="wlan0", output_dir=str(tmp_path / "deauth"))
     
     @pytest.mark.asyncio
     async def test_attack_initialization(self, attack):

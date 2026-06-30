@@ -43,7 +43,7 @@ class FragAttackConfig:
     """Configuration for FragAttacks."""
     interface: str = "wlan0"
     monitor_interface: Optional[str] = None
-    output_dir: str = "/var/lib/urban-hs/wifi_attacks/fragattacks"
+    output_dir: Optional[str] = None
     attack_timeout: int = 120
     attack_types: Optional[List[FragAttackType]] = None
     target_bssid: str = ""
@@ -78,6 +78,9 @@ class FragAttacksWrapper:
     """
 
     def __init__(self, config: FragAttackConfig):
+        if config.output_dir is None:
+            from urban_hs.core.config import get_config
+            config.output_dir = str(Path(get_config().storage.resolve_wifi_attacks_dir()) / "fragattacks")
         self.config = config
         self.results: List[FragAttackResult] = []
         self._running = False

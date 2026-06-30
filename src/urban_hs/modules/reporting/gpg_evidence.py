@@ -371,9 +371,12 @@ class EvidenceLogger:
     
     def __init__(
         self,
-        log_dir: str = "/var/lib/urban-hs/evidence",
+        log_dir: Optional[str] = None,
         gpg_signer: Optional[GPGSigner] = None,
     ):
+        if log_dir is None:
+            from urban_hs.core.config import get_config
+            log_dir = get_config().storage.resolve_evidence_dir()
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         
@@ -520,10 +523,13 @@ class ChainOfCustodyManager:
     def __init__(
         self,
         session_id: str,
-        base_dir: str = "/var/lib/urban-hs/evidence",
+        base_dir: Optional[str] = None,
         gpg_signer: Optional[GPGSigner] = None,
     ):
         self.session_id = session_id
+        if base_dir is None:
+            from urban_hs.core.config import get_config
+            base_dir = get_config().storage.resolve_evidence_dir()
         self.base_dir = Path(base_dir) / session_id
         self.base_dir.mkdir(parents=True, exist_ok=True)
         

@@ -69,10 +69,19 @@ class HandshakeManager:
 
     def __init__(
         self,
-        handshake_dir: str = "/var/lib/urban-hs/wifi_attacks/handshakes",
-        hash_dir: str = "/var/lib/urban-hs/wifi_attacks/hashes",
-        cracked_dir: str = "/var/lib/urban-hs/wifi_attacks/cracked",
+        handshake_dir: Optional[str] = None,
+        hash_dir: Optional[str] = None,
+        cracked_dir: Optional[str] = None,
     ):
+        if handshake_dir is None or hash_dir is None or cracked_dir is None:
+            from urban_hs.core.config import get_config
+            cfg = get_config()
+            if handshake_dir is None:
+                handshake_dir = str(Path(cfg.storage.resolve_wifi_attacks_dir()) / "handshakes")
+            if hash_dir is None:
+                hash_dir = str(Path(cfg.storage.resolve_hashes_dir()))
+            if cracked_dir is None:
+                cracked_dir = str(Path(cfg.storage.resolve_wifi_attacks_dir()) / "cracked")
         self.handshake_dir = Path(handshake_dir)
         self.hash_dir = Path(hash_dir)
         self.cracked_dir = Path(cracked_dir)

@@ -86,10 +86,13 @@ class BaseAttack(ABC):
     def __init__(
         self,
         interface: str,
-        output_dir: str = "/var/lib/urban-hs/wifi_attacks",
+        output_dir: Optional[str] = None,
         attack_timeout: int = 60,
     ):
         self.interface = interface
+        if output_dir is None:
+            from urban_hs.core.config import get_config
+            output_dir = get_config().storage.resolve_wifi_attacks_dir()
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.attack_timeout = attack_timeout
@@ -176,10 +179,13 @@ class HandshakeAttack(BaseAttack):
     def __init__(
         self,
         interface: str,
-        output_dir: str = "/var/lib/urban-hs/wifi_attacks/handshakes",
+        output_dir: Optional[str] = None,
         attack_timeout: int = 60,
         deauth_count: int = 10,
     ):
+        if output_dir is None:
+            from urban_hs.core.config import get_config
+            output_dir = str(Path(get_config().storage.resolve_wifi_attacks_dir()) / "handshakes")
         super().__init__(interface, output_dir, attack_timeout)
         self.deauth_count = deauth_count
 
@@ -306,9 +312,12 @@ class PMKIDAttack(BaseAttack):
     def __init__(
         self,
         interface: str,
-        output_dir: str = "/var/lib/urban-hs/wifi_attacks/pmkid",
+        output_dir: Optional[str] = None,
         attack_timeout: int = 60,
     ):
+        if output_dir is None:
+            from urban_hs.core.config import get_config
+            output_dir = str(Path(get_config().storage.resolve_wifi_attacks_dir()) / "pmkid")
         super().__init__(interface, output_dir, attack_timeout)
 
     async def execute(
@@ -425,10 +434,15 @@ class WPSPixieAttack(BaseAttack):
     def __init__(
         self,
         interface: str,
-        output_dir: str = "/var/lib/urban-hs/wifi_attacks/wps",
+        output_dir: Optional[str] = None,
         attack_timeout: int = 180,
     ):
+        if output_dir is None:
+            from urban_hs.core.config import get_config
+            output_dir = str(Path(get_config().storage.resolve_wifi_attacks_dir()) / "wps")
         super().__init__(interface, output_dir, attack_timeout)
+
+
 
     async def execute(
         self,
@@ -534,9 +548,12 @@ class WPSPinAttack(BaseAttack):
     def __init__(
         self,
         interface: str,
-        output_dir: str = "/var/lib/urban-hs/wifi_attacks/wps",
+        output_dir: Optional[str] = None,
         attack_timeout: int = 300,
     ):
+        if output_dir is None:
+            from urban_hs.core.config import get_config
+            output_dir = str(Path(get_config().storage.resolve_wifi_attacks_dir()) / "wps")
         super().__init__(interface, output_dir, attack_timeout)
 
     async def execute(
@@ -635,9 +652,12 @@ class DeauthAttack(BaseAttack):
     def __init__(
         self,
         interface: str,
-        output_dir: str = "/var/lib/urban-hs/wifi_attacks/deauth",
+        output_dir: Optional[str] = None,
         attack_timeout: int = 30,
     ):
+        if output_dir is None:
+            from urban_hs.core.config import get_config
+            output_dir = str(Path(get_config().storage.resolve_wifi_attacks_dir()) / "deauth")
         super().__init__(interface, output_dir, attack_timeout)
 
     async def execute(
@@ -742,11 +762,14 @@ class Kr00kAttack(BaseAttack):
     def __init__(
         self,
         interface: str,
-        output_dir: str = "/var/lib/urban-hs/wifi_attacks/kr00k",
+        output_dir: Optional[str] = None,
         attack_timeout: int = 60,
         deauth_count: int = 10,
         capture_after_deauth: int = 10,  # seconds to capture after deauth
     ):
+        if output_dir is None:
+            from urban_hs.core.config import get_config
+            output_dir = str(Path(get_config().storage.resolve_wifi_attacks_dir()) / "kr00k")
         super().__init__(interface, output_dir, attack_timeout)
         self.deauth_count = deauth_count
         self.capture_after_deauth = capture_after_deauth

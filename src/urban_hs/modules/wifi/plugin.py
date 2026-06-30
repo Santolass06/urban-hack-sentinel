@@ -88,7 +88,7 @@ class WiFiPlugin:
         self.scanner = WiFiScanner(
             interface=self.config.interface,
             strategy=strategy,
-            output_dir="/var/log/urban-hs/wifi_scans",
+            output_dir=get_config().storage.resolve_wifi_scans_dir(),
         )
 
         self.handshake_mgr = HandshakeManager()

@@ -204,11 +204,14 @@ class CredentialManager:
     
     def __init__(
         self,
-        storage_path: str = "/var/lib/urban-hs/credentials",
+        storage_path: Optional[str] = None,
         hashcat_path: str = "hashcat",
         potentiometer_path: str = "/usr/share/wordlists",
         default_rules: str = "/usr/share/hashcat/rules/best64.rule",
     ):
+        if storage_path is None:
+            from urban_hs.core.config import get_config
+            storage_path = get_config().storage.resolve_credentials_dir()
         self.storage_path = Path(storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
         

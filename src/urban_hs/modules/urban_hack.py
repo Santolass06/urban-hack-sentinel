@@ -123,7 +123,7 @@ class UrbanHackPlugin:
             self.wifi_scanner = WiFiScanner(
                 interface=self.config.wifi_interface,
                 strategy=strategy,
-                output_dir="/var/log/urban-hs/wifi_scans",
+                output_dir=get_config().storage.resolve_wifi_scans_dir(),
             )
             self.handshake_mgr = HandshakeManager()
             self.wifi_mac_changer = MACChanger(self.config.wifi_interface)

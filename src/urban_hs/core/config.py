@@ -110,20 +110,68 @@ class HIDUSBConfig(BaseSettings):
     keyboard_layouts: List[str] = Field(default_factory=lambda: ["us", "gb", "de", "fr", "es", "it", "ru"])
     default_vid: str = "0x1d6b"
     default_pid: str = "0x0104"
-    mass_storage_images_dir: str = "/var/lib/urban-hs/mass_storage"
+    mass_storage_images_dir: str = ""  # Defaults to {data_root}/mass_storage if empty
 
 
 class StorageConfig(BaseSettings):
-    sqlite_path: str = "/var/lib/urban-hs/urban.db"
+    data_root: str = "/var/lib/urban-hs"
+    log_root: str = "/var/log/urban-hs"
+    sqlite_path: str = ""  # Defaults to {data_root}/urban.db if empty
     sqlite_wal_mode: bool = True
     sqlite_journal_size: int = 10000
     redis_url: str = "redis://localhost:6379/0"
     redis_max_connections: int = 20
-    artifact_root: str = "/var/lib/urban-hs/artifacts"
-    log_root: str = "/var/log/urban-hs"
+    artifact_root: str = ""  # Defaults to {data_root}/artifacts if empty
+    wifi_attacks_dir: str = ""  # Defaults to {data_root}/wifi_attacks if empty
+    wifi_scans_dir: str = ""  # Defaults to {log_root}/wifi_scans if empty
+    evidence_dir: str = ""  # Defaults to {data_root}/evidence if empty
+    reports_dir: str = ""  # Defaults to {data_root}/reports if empty
+    credentials_dir: str = ""  # Defaults to {data_root}/credentials if empty
+    hashes_dir: str = ""  # Defaults to {data_root}/hashes if empty
+    pcaps_dir: str = ""  # Defaults to {data_root}/pcaps if empty
+    mqtt_attacks_dir: str = ""  # Defaults to {data_root}/mqtt_attacks if empty
+    jsonl_dir: str = ""  # Defaults to {log_root}/jsonl if empty
     max_artifact_size_mb: int = 500
     artifact_retention_days: int = 90
     log_retention_days: int = 30
+
+    def resolve_sqlite_path(self) -> str:
+        return self.sqlite_path or f"{self.data_root}/urban.db"
+
+    def resolve_artifact_root(self) -> str:
+        return self.artifact_root or f"{self.data_root}/artifacts"
+
+    def resolve_wifi_attacks_dir(self) -> str:
+        return self.wifi_attacks_dir or f"{self.data_root}/wifi_attacks"
+
+    def resolve_wifi_scans_dir(self) -> str:
+        return self.wifi_scans_dir or f"{self.log_root}/wifi_scans"
+
+    def resolve_evidence_dir(self) -> str:
+        return self.evidence_dir or f"{self.data_root}/evidence"
+
+    def resolve_reports_dir(self) -> str:
+        return self.reports_dir or f"{self.data_root}/reports"
+
+    def resolve_credentials_dir(self) -> str:
+        return self.credentials_dir or f"{self.data_root}/credentials"
+
+    def resolve_hashes_dir(self) -> str:
+        return self.hashes_dir or f"{self.data_root}/hashes"
+
+    def resolve_pcaps_dir(self) -> str:
+        return self.pcaps_dir or f"{self.data_root}/pcaps"
+
+    def resolve_mqtt_attacks_dir(self) -> str:
+        return self.mqtt_attacks_dir or f"{self.data_root}/mqtt_attacks"
+
+    def resolve_jsonl_dir(self) -> str:
+        return self.jsonl_dir or f"{self.log_root}/jsonl"
+
+    def resolve_mass_storage_dir(self) -> str:
+        from urban_hs.core.config import get_config
+        cfg = get_config()
+        return cfg.hid_usb.mass_storage_images_dir or f"{self.data_root}/mass_storage"
 
 
 class LoggingConfig(BaseSettings):
@@ -191,6 +239,18 @@ class Config(BaseSettings):
     def set_secret(self, service: str, username: str, password: str) -> None:
         """Store secret in keyring."""
         keyring.set_password(service, username, password)
+
+
+def resolve_data_path(subpath: str) -> Path:
+    """Resolve a path under the data root from Config."""
+    cfg = get_config()
+    return Path(cfg.storage.data_root) / subpath
+
+
+def resolve_log_path(subpath: str) -> Path:
+    """Resolve a path under the log root from Config."""
+    cfg = get_config()
+    return Path(cfg.storage.log_root) / subpath
 
 
 # Global config instance

@@ -50,7 +50,7 @@ def add_level(logger: WrappedLogger, method_name: str, event_dict: EventDict) ->
 
 def setup_logging(
     level: str = "INFO",
-    jsonl_dir: Optional[str] = "/var/log/urban-hs/jsonl",
+    jsonl_dir: Optional[str] = None,
     console: bool = True,
     console_format: str = "rich",
 ) -> None:
@@ -59,10 +59,13 @@ def setup_logging(
     
     Args:
         level: Log level (TRACE, DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        jsonl_dir: Directory for JSONL logs (per-module files)
+        jsonl_dir: Directory for JSONL logs (per-module files). Defaults to Config.storage.jsonl_dir.
         console: Enable console output
         console_format: "rich" for Rich formatting, "json" for JSON lines
     """
+    if jsonl_dir is None:
+        from urban_hs.core.config import get_config
+        jsonl_dir = get_config().storage.resolve_jsonl_dir()
     # Parse level
     log_level = getattr(logging, level.upper(), logging.INFO)
     if level.upper() == "TRACE":

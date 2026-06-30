@@ -94,12 +94,14 @@ class HealthChecker:
         self.register_check("cpu_usage", self._check_cpu_usage)
         
         # Check critical paths
+        from urban_hs.core.config import get_config
+        config = get_config()
         for path_name, path_str in [
             ("chroot", "/opt/urban-hs/chroot/alpine"),
-            ("evidence_dir", "/var/lib/urban-hs/evidence"),
-            ("reports_dir", "/var/lib/urban-hs/reports"),
-            ("credentials_dir", "/var/lib/urban-hs/credentials"),
-            ("artifacts_dir", "/var/lib/urban-hs/artifacts"),
+            ("evidence_dir", config.storage.resolve_evidence_dir()),
+            ("reports_dir", config.storage.resolve_reports_dir()),
+            ("credentials_dir", config.storage.resolve_credentials_dir()),
+            ("artifacts_dir", config.storage.resolve_artifact_root()),
         ]:
             self.register_check(f"path_{path_name}", self._make_path_check(path_str))
         
