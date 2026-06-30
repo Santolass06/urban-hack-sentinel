@@ -12,8 +12,10 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from urban_hs.core.event_bus import Event, EventPriority, get_event_bus
 from urban_hs.core.process_mgr import ProcessLimits, ProcessManager
@@ -21,6 +23,8 @@ from urban_hs.modules import list_modules
 from urban_hs.ui.api.auth import require_auth
 
 router = APIRouter(dependencies=[require_auth()])
+_process_manager = ProcessManager()
+_limiter = Limiter(key_func=get_remote_address)
 
 _process_manager = ProcessManager()
 
@@ -73,7 +77,7 @@ def _infer_plugin_type(name: str, class_path: str) -> str:
 
 
 @router.post("/attacks/{attack_name}/execute", response_model=ExecuteResponse)
-async def execute_attack(attack_name: str, payload: ExecuteRequest) -> ExecuteResponse:
+async def execute_attack(request: Request, attack_name: str, payload: ExecuteRequest) -> ExecuteResponse:
     modules = list_modules()
     if attack_name not in modules:
         raise HTTPException(status_code=404, detail="Unknown attack")

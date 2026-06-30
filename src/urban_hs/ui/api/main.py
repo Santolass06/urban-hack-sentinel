@@ -20,11 +20,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from urban_hs import __version__
 from urban_hs.core.event_bus import init_event_bus, shutdown_event_bus
 
 logger = logging.getLogger(__name__)
+
+limiter = Limiter(key_func=get_remote_address)
 
 
 @asynccontextmanager
@@ -44,6 +49,8 @@ def _build_app() -> FastAPI:
         version=__version__,
         lifespan=_lifespan,
     )
+    application.state.limiter = limiter
+    application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     from urban_hs.core.config import get_config
     cfg = get_config()
