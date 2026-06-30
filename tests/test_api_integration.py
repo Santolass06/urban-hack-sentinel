@@ -25,7 +25,7 @@ def app() -> FastAPI:
 async def test_healthz(app) -> None:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        r = await client.get("/healthz")
+        r = await client.get("/api/v1/healthz")
     assert r.status_code == 200
     assert r.json()["status"] == "ok"
 
