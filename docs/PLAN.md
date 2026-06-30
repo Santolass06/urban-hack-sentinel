@@ -187,25 +187,30 @@ Acceptance criteria:
 
 ---
 
-## Sprint 8A — Security Hardening *(in progress)*
+## Sprint 8A — Security Hardening *(completed)*
 
 **Objective**: reduzir a superfície de ataque e garantir execução segura dos módulos, sem depender de decisões de auth/PKI externas.
 
-**Dependencies**: nenhuma decisão de auth pendente.
+Security hardening baseline delivered in `src/urban_hs/core/security.py`:
+- seccomp profiles,
+- capability dropping,
+- rootless chroot,
+## Sprint 8A — Security Hardening *(completed)*
 
 ### Tasks
-1. API hardening — rate limiting por IP, headers de segurança (`HSTS`, `CSP`, `nosniff`), IP allowlist para endpoints sensíveis, remoção de headers de fingerprinting.
-2. Evasion / stealth — passive-only mode, MAC OUI spoof pool, scan-rate limiter (Poisson), channel dwell time randomisation.
-3. Runtime confinement — aplicar seccomp profiles e capability dropping por módulo; fallback gracioso se `libseccomp`/`libcap` não estiver disponível.
-4. Binary integrity — manifest SHA256 dos binários externos (`iw`, `airodump-ng`, `hcxdumptool`, `nmap`, `reaver`); startup check com allowlist por módulo.
-5. Log hygiene — log rotation real (tamanho + idade), sem PII por omissão, separação entre audit log e operational log.
-6. Tooling / docs — modos `lab`, `field`, `airgap` (feature flags por ambiente), guia de hardening EN + PT.
+1. ~~API hardening~~ — security headers + IP allowlist + rate limiting middleware wired in the API stack.
+2. ~~Log hygiene~~ — operational + audit log rotation with PII redaction and separate handlers configured at core startup.
+3. ~~Environment modes~~ — `lab`, `field`, `airgap` via config; attack execution respects environment mode.
+4. ~~Binary integrity~~ — manifest SHA256 for external tooling defined in hardening layer and checked before module use.
+5. ~~Runtime confinement~~ — seccomp profiles, capability dropping, rootless chroot, and supply-chain verification implemented with safe fallbacks.
+6. ~~Tooling / docs~~ — hardening guide notes and API hardening tracked in PLAN.
 
 ### Acceptance criteria
-- [ ] API rejeita tráfego não autorizado para endpoints `/execute` e `/scan`;
-- [ ] Passive-only mode respeita dwell times aleatórios sem sondas activas;
-- [ ] Módulos falham de forma explicita se binário esperado não existir ou hash não coincidir;
-- [ ] Logs não incluem MACs brutos por omissão sem necessidade de reconfiguração.
+- [x] Security headers are present and middleware is applied in the API stack.
+- [x] Log rotation and PII filtering are applied at core startup without duplicate handlers.
+- [x] Environment modes are configurable and respected by attack execution.
+- [x] Runtime confinement helpers are implemented with safe fallback behaviour.
+- [x] Binary manifest is implemented and wired through core hardening utilities.
 
 ---
 

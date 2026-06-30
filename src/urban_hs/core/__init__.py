@@ -240,6 +240,15 @@ async def init_core(
     
     # Setup logging first
     setup_logging(level=log_level, jsonl_dir="/var/log/urban-hs/jsonl")
+
+    try:
+        from urban_hs.core.logging_config import configure_logging as _configure_logging
+        _configure_logging(
+            base_dir="/var/log/urban-hs",
+            level=getattr(__import__("logging"), log_level.upper(), 20),
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        get_logger("core.init").warning("log rotation setup failed", error=str(exc))
     
     logger = get_logger("core.init")
     logger.info("Initializing core services")
