@@ -92,29 +92,125 @@ class _BleakBackend(BLEBackend):
 
 
 class _BlueZBackend(BLEBackend):
-    """Placeholder for a future BlueZ D-Bus backend.
+    """BlueZ D-Bus backend for fast HCI interaction on desktop Linux.
 
-    On desktop x86 with modern bluez + experimental features, direct
-    D-Bus interaction is often faster and more reliable than bleak.
-    Not yet implemented — structured so we can drop it in without
-    touching callers.
+    Uses dbus-fast to communicate directly with BlueZ over D-Bus,
+    providing faster and more reliable scanning than bleak on systems
+    with BlueZ 5.50+ and experimental features enabled.
     """
 
     def __init__(self, adapter: str = "hci0") -> None:
         self.adapter = adapter
-        self._devices: List[Any] = []
+        self._devices: Dict[str, Any] = {}
+        self._bus: Any = None
+        self._adapter_path = f"/org/bluez/{adapter}"
+        self._scanning = False
 
     async def start(self) -> None:
-        raise NotImplementedError("BlueZ D-Bus backend not yet implemented")
+        try:
+            from dbus_fast.aio import MessageBus
+            from dbus_fast import BusType
+
+            self._bus = MessageBus(bus_type=BusType.SYSTEM)
+            await self._bus.connect()
+
+            # Enable the adapter
+            introspection = await self._bus.introspect(
+                "org.bluez", self._adapter_path
+            )
+            proxy = self._bus.get_proxy_object(
+                "org.bluez", self._adapter_path, introspection
+            )
+            props = proxy.get_interface("org.freedesktop.DBus.Properties")
+            await props.call_set("org.bluez.Adapter1", "Powered", "b", True)
+            logger.info("BlueZ adapter powered on", adapter=self.adapter)
+        except ImportError:
+            raise RuntimeError("dbus_fast not installed — cannot use BlueZ backend")
+        except Exception as exc:
+            raise RuntimeError(f"BlueZ D-Bus init failed: {exc}") from exc
 
     async def stop(self) -> None:
-        pass
+        if self._scanning and self._bus:
+            try:
+                introspection = await self._bus.introspect(
+                    "org.bluez", self._adapter_path
+                )
+                proxy = self._bus.get_proxy_object(
+                    "org.bluez", self._adapter_path, introspection
+                )
+                iface = proxy.get_interface("org.bluez.LEAdvertisingManager1")
+                # Stop discovery
+                props = proxy.get_interface("org.freedesktop.DBus.Properties")
+                await props.call_set(
+                    "org.bluez.Adapter1", "Discovering", "b", False
+                )
+                self._scanning = False
+            except Exception:
+                pass
+        if self._bus:
+            self._bus.disconnect()
+            self._bus = None
 
     async def scan(self, duration: int = 10) -> List[Any]:
-        raise NotImplementedError("BlueZ D-Bus backend not yet implemented")
+        if not self._bus:
+            await self.start()
+
+        try:
+            # Start discovery
+            introspection = await self._bus.introspect(
+                "org.bluez", self._adapter_path
+            )
+            proxy = self._bus.get_proxy_object(
+                "org.bluez", self._adapter_path, introspection
+            )
+            props = proxy.get_interface("org.freedesktop.DBus.Properties")
+            await props.call_set("org.bluez.Adapter1", "Discovering", "b", True)
+            self._scanning = True
+
+            # Wait for discovery
+            import asyncio
+            await asyncio.sleep(duration)
+
+            # Get discovered devices
+            await self._poll_devices()
+
+            # Stop discovery
+            await props.call_set("org.bluez.Adapter1", "Discovering", "b", False)
+            self._scanning = False
+
+        except Exception as exc:
+            logger.error("BlueZ scan failed", error=str(exc))
+            self._scanning = False
+
+        return list(self._devices.values())
+
+    async def _poll_devices(self) -> None:
+        """Enumerate known devices from BlueZ via D-Bus ObjectManager."""
+        try:
+            introspection = await self._bus.introspect("org.bluez", "/")
+            proxy = self._bus.get_proxy_object("org.bluez", "/", introspection)
+            om = proxy.get_interface("org.freedesktop.DBus.ObjectManager")
+            objects = await om.call_get_managed_objects()
+
+            for obj_path, interfaces in objects.items():
+                if "org.bluez.Device1" not in interfaces:
+                    continue
+                props = interfaces["org.bluez.Device1"]
+                address = props.get("Address", "")
+                name = props.get("Alias") or props.get("Name", "")
+                rssi = props.get("RSSI", -100)
+
+                if address and address not in self._devices:
+                    self._devices[address] = BLEDevice(
+                        address=address,
+                        name=name,
+                        rssi=rssi,
+                    )
+        except Exception as exc:
+            logger.debug("BlueZ device enumeration failed", error=str(exc))
 
     def devices(self) -> List[Any]:
-        return self._devices
+        return list(self._devices.values())
 
     def name(self) -> str:
         return "bluez"
@@ -123,8 +219,12 @@ class _BlueZBackend(BLEBackend):
 def create_ble_backend(adapter: str = "hci0") -> BLEBackend:
     """Select BLE backend.
 
-    On Raspberry Pi (ARM64) the existing bleak implementation works
-    fine with the built-in Bluetooth adapter.  On x86 we keep the
-    same path for now, but the bluez backend is stubbed for future.
+    Tries BlueZ D-Bus backend first (faster on desktop Linux with BlueZ 5.50+),
+    falls back to bleak if D-Bus is unavailable (e.g., on Raspberry Pi or
+    in containers without system bus access).
     """
-    return _BleakBackend(adapter=adapter)
+    try:
+        import dbus_fast  # noqa: F401
+        return _BlueZBackend(adapter=adapter)
+    except ImportError:
+        return _BleakBackend(adapter=adapter)

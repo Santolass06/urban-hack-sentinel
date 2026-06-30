@@ -416,18 +416,167 @@ class CredentialManager:
         target_port: Optional[int] = None,
         service: str = "ssh",
     ) -> bool:
-        """Validate a credential against a live target."""
-        # This would use hydra, sshpass, or similar tools
-        # Implementation depends on service type
+        """Validate a credential against a live target.
+
+        Uses service-specific tools:
+        - SSH: sshpass with ssh
+        - HTTP: curl with basic/digest auth
+        - FTP: curl with ftp auth
+        - SMB: smbclient
+        - Everything else: hydra
+        """
         logger.info("Validating credential", target=target_address, service=service)
-        
-        # Placeholder - actual implementation would use service-specific validation
-        # For now, raise NotImplementedError to indicate this needs implementation
-        # rather than silently returning True which creates false positives
-        raise NotImplementedError(
-            f"Credential validation for service '{service}' not implemented. "
-            f"Implement using hydra, sshpass, or service-specific validation."
-        )
+
+        if not credential.password and not credential.hash:
+            logger.warning("No password or hash to validate", cred_id=credential.id)
+            return False
+
+        try:
+            if service == "ssh":
+                return self._validate_ssh(credential, target_address, target_port)
+            elif service in ("http", "https"):
+                return self._validate_http(credential, target_address, target_port, service)
+            elif service == "ftp":
+                return self._validate_ftp(credential, target_address, target_port)
+            elif service == "smb":
+                return self._validate_smb(credential, target_address, target_port)
+            else:
+                return self._validate_hydra(credential, target_address, target_port, service)
+        except Exception as exc:
+            logger.error("Credential validation failed", error=str(exc), cred_id=credential.id)
+            return False
+
+    def _validate_ssh(self, credential: Credential, target: str, port: Optional[int]) -> bool:
+        """Validate SSH credential using sshpass."""
+        import shutil
+        sshpass = shutil.which("sshpass")
+        if not sshpass:
+            logger.warning("sshpass not found, cannot validate SSH credential")
+            return False
+
+        port = port or 22
+        cmd = [
+            sshpass, "-p", credential.password or "",
+            "ssh", "-o", "StrictHostKeyChecking=no",
+            "-o", "ConnectTimeout=5",
+            "-p", str(port),
+            f"{credential.username or 'root'}@{target}",
+            "echo connected",
+        ]
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=15,
+            )
+            return result.returncode == 0 and "connected" in result.stdout
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
+
+    def _validate_http(self, credential: Credential, target: str, port: Optional[int], scheme: str) -> bool:
+        """Validate HTTP credential using curl."""
+        import shutil
+        curl = shutil.which("curl")
+        if not curl:
+            logger.warning("curl not found, cannot validate HTTP credential")
+            return False
+
+        port = port or (443 if scheme == "https" else 80)
+        url = f"{scheme}://{target}:{port}/"
+        cmd = [
+            curl, "-s", "-o", "/dev/null", "-w", "%{http_code}",
+            "--connect-timeout", "5",
+            "--max-time", "10",
+            "-u", f"{credential.username or ''}:{credential.password or ''}",
+            url,
+        ]
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=15,
+            )
+            status = result.stdout.strip()
+            # 200 = valid creds, 401/403 = invalid, anything else = uncertain
+            return status == "200"
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
+
+    def _validate_ftp(self, credential: Credential, target: str, port: Optional[int]) -> bool:
+        """Validate FTP credential using curl."""
+        import shutil
+        curl = shutil.which("curl")
+        if not curl:
+            return False
+
+        port = port or 21
+        cmd = [
+            curl, "-s", "-o", "/dev/null", "-w", "%{http_code}",
+            "--connect-timeout", "5",
+            "--max-time", "10",
+            "-u", f"{credential.username or 'anonymous'}:{credential.password or ''}",
+            f"ftp://{target}:{port}/",
+        ]
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=15,
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
+
+    def _validate_smb(self, credential: Credential, target: str, port: Optional[int]) -> bool:
+        """Validate SMB credential using smbclient."""
+        import shutil
+        smbclient = shutil.which("smbclient")
+        if not smbclient:
+            logger.warning("smbclient not found, cannot validate SMB credential")
+            return False
+
+        port = port or 445
+        cmd = [
+            smbclient, f"//{target}/IPC$",
+            "-U", f"{credential.username or ''}%{credential.password or ''}",
+            "-p", str(port),
+            "-c", "quit",
+        ]
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=15,
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
+
+    def _validate_hydra(self, credential: Credential, target: str, port: Optional[int], service: str) -> bool:
+        """Validate credential using hydra for arbitrary services."""
+        import shutil
+        hydra = shutil.which("hydra")
+        if not hydra:
+            logger.warning("hydra not found, cannot validate credential")
+            return False
+
+        port = port or 22
+        # Write temp files for hydra
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as user_f:
+            user_f.write(f"{credential.username or 'root'}\n")
+            user_file = user_f.name
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as pass_f:
+            pass_f.write(f"{credential.password or ''}\n")
+            pass_file = pass_f.name
+
+        try:
+            cmd = [
+                hydra, "-L", user_file, "-P", pass_file,
+                "-s", str(port), "-f", "-t", "1",
+                target, service,
+            ]
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=30,
+            )
+            return result.returncode == 0 and "login:" in result.stdout.lower()
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
+        finally:
+            os.unlink(user_file)
+            os.unlink(pass_file)
     
     async def crack_hashes(
         self,
