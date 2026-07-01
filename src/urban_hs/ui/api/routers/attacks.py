@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from urban_hs.core.config import get_config
 from urban_hs.core.event_bus import Event, EventPriority, get_event_bus
 from urban_hs.core.process_mgr import ProcessLimits, ProcessManager
+from urban_hs.core.session_scope import SessionScope
 from urban_hs.modules import list_modules
 from urban_hs.ui.api.auth import require_auth
 from urban_hs.ui.api.rate_limit import limiter
@@ -32,6 +33,20 @@ _process_manager = ProcessManager()
 # Other module names keep returning the inert placeholder below until
 # they get an equivalent, audited execution path.
 EXPLOIT_ATTACK_NAME = "exploit"
+
+# Module-level session scope — blocks active attacks by default.
+_session_scope = SessionScope()
+
+
+def get_session_scope() -> SessionScope:
+    """Return the current session scope (for external configuration)."""
+    return _session_scope
+
+
+def set_session_scope(scope: SessionScope) -> None:
+    """Replace the session scope (e.g. from TUI/Web UI on session start)."""
+    global _session_scope
+    _session_scope = scope
 
 
 class AttackSummary(BaseModel):
@@ -91,14 +106,6 @@ async def execute_attack(
         raise HTTPException(status_code=404, detail="Unknown attack")
 
     job_id = str(uuid.uuid4())
-    await _publish(
-        "attack.started",
-        {
-            "attack": attack_name,
-            "params": payload.params,
-            "job_id": job_id,
-        },
-    )
 
     if payload.dry_run:
         await _audit_log(attack_name, payload.params, job_id, "dry_run")
@@ -111,6 +118,23 @@ async def execute_attack(
             },
         )
         return ExecuteResponse(job_id=job_id, attack=attack_name)
+
+    # --- Session scope guard rail (blocks real execution) ---
+    category = attack_name.split("_", 1)[0] if "_" in attack_name else attack_name
+    target = payload.params.get("target") or payload.params.get("interface") or ""
+    try:
+        _session_scope.validate(target, category)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+
+    await _publish(
+        "attack.started",
+        {
+            "attack": attack_name,
+            "params": payload.params,
+            "job_id": job_id,
+        },
+    )
 
     if attack_name == EXPLOIT_ATTACK_NAME:
         return await _execute_exploit(attack_name, payload, job_id)
