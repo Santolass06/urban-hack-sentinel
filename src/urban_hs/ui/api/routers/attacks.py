@@ -3,6 +3,11 @@ Attack inventory and execution endpoints.
 
 Exposes registered modules as attacks and allows
 the UI to trigger execution with parameters.
+
+Sprint 8A hardening supports environment modes:
+- lab: full functionality for isolated labs
+- field: restricted active attacks, dry-run preferred
+- airgap: no external calls and no active exploit execution
 """
 
 from __future__ import annotations
@@ -94,6 +99,18 @@ def _infer_plugin_type(name: str, class_path: str) -> str:
     if any(k in lowered for k in ["report", "reporter"]):
         return "reporter"
     return "module"
+
+
+def _environment_mode() -> str:
+    try:
+        return get_config().environment.mode.lower()
+    except Exception:
+        return "lab"
+
+
+def _raise_if_airgap() -> None:
+    if _environment_mode() == "airgap":
+        raise HTTPException(status_code=403, detail="Active execution is disabled in airgap mode")
 
 
 @router.post("/attacks/{attack_name}/execute", response_model=ExecuteResponse)

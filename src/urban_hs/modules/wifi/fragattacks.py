@@ -306,6 +306,9 @@ class FragAttacksWrapper:
         client_mac: Optional[str],
     ) -> Optional[List[str]]:
         """Build command for fragattacks tool."""
+        if not self.fragattacks_path:
+            return None
+
         script = "fragattacks.py"
         script_path = Path(self.fragattacks_path) / script
 

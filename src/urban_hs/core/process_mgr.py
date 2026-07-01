@@ -114,6 +114,7 @@ class ProcessContext:
     use_chroot: bool = False
     chroot_path: str = "/opt/urban-chroot"
     chroot_bind_mounts: Dict[str, str] = field(default_factory=dict)
+    module_name: Optional[str] = None
     
     # Execution state
     process: Optional[asyncio.subprocess.Process] = None
@@ -162,6 +163,7 @@ class ProcessManager:
         chroot_path: str = "/opt/urban-chroot",
         chroot_bind_mounts: Optional[Dict[str, str]] = None,
         capture_output: bool = True,
+        module_name: Optional[str] = None,
     ) -> ProcessResult:
         """
         Run a command with full control and monitoring.
@@ -196,6 +198,7 @@ class ProcessManager:
             use_chroot=use_chroot,
             chroot_path=chroot_path,
             chroot_bind_mounts=chroot_bind_mounts or {},
+            module_name=module_name,
         )
 
         async with self._lock:
@@ -273,6 +276,7 @@ class ProcessManager:
 
         # Start process
         try:
+            self._apply_module_hardening(ctx)
             proc = await asyncio.create_subprocess_exec(
                 *full_cmd,
                 cwd=ctx.cwd,
@@ -404,6 +408,41 @@ class ProcessManager:
             " ".join(shlex.quote(arg) for arg in ctx.cmd)
         ]
         return cmd
+
+    def _apply_module_hardening(self, ctx: ProcessContext) -> None:
+        """Best-effort seccomp/capability hardening for the spawned process.
+
+        This is intentionally applied only at the manager level for management
+        tooling. For the actual attack/scan workloads that need real raw-socket
+        access or administrative network operations, prefer keeping
+        `use_chroot=True` without these workflow-manager restrictions, or run
+        those workloads in a dedicated stream with elevated permissions.
+        """
+        module = ctx.module_name
+        if not module:
+            return
+
+        try:
+            from urban_hs.core.security import CapabilitySet, SeccompFilter, SECCOMP_PROFILES, SeccompProfile
+        except ImportError:
+            return
+
+        if ctx.use_chroot:
+            return
+
+        profile: Optional[SeccompProfile] = SECCOMP_PROFILES.get(module)
+        if profile is not None:
+            try:
+                SeccompFilter(profile=profile).load()
+            except Exception as exc:
+                logger.warning("Seccomp load skipped", module=module, error=str(exc))
+
+        try:
+            caps = CapabilitySet.from_module(module)
+            if caps.effective or caps.permitted or caps.bounding:
+                caps.apply()
+        except Exception as exc:
+            logger.warning("Capability apply skipped", module=module, error=str(exc))
 
     async def _read_stream(
         self,

@@ -1,116 +1,372 @@
-# Urban Hack Sentinel v3 — Plano de Execução
+# Urban Hack Sentinel v3 — Sprint Plan
 
-> Branch: `andreas/catarinus`  
-> Estado: fases 0-9 concluídas. Próxima entrega: fase 10 (UI de selecção de ataques)
-
----
-
-## 1. Objectivo
-
-Transformar o UHS numa ferramenta multi-arquitectura (`linux/arm64`, `linux/amd64`) com UI interativa para selecção e execução de ataques, mantendo codebase única via HAL (Hardware Abstraction Layer).
+> **Working branch**: `andreas/catarinus`
+> **Last updated**: 2026-06-30
+> **Repository policy**: every feature push MUST update all documentation (EN + PT) following the style and structure rules defined in the project docs.
+> **Definition of Done per sprint**: all tasks completed, tests pass, docs updated (EN + PT), no PII, coverage does not drop.
 
 ---
 
-## 2. Estado Actual
+## Table of Contents
 
-### 2.1 O que já funciona (fases 0-9)
-- Core: event bus, scheduler, process manager, storage (aiosqlite), config, logger, health checks, plugin registry com 2 exemplos (`example_sniffer`, `example_reporter`).
-- HAL: detecção automática de plataforma (`arm64`/`x86_64`); backend WiFi com fallback `iw` → `scapy`; backend BLE via `bleak`; backend Network via `nmap`; USB gadget/HID stubbed.
-- Módulos com implementação significativa: `wifi`, `ble`, `network`, `metasploit`, `hid`, `mqtt`, `camera`, `reporting`, `credentials`.
-- CLI: `urban-hs info`, `urban-hs modules`, `urban-hs run`.
-- TUI: `urban-hs-tui` (Textual) — importável e estruturada.
-- API: FastAPI + WebSocket (`/api/v1/events`) + frontend estático (`/`), com endpoints de sistema, WiFi, BLE, Network.
-- Docker: multi-arch `linux/amd64,linux/arm64` com `TARGETARCH`.
-- Testes: 14 passing (10 HAL + 3 API + 1 smoke) + 5 CLI smoke tests, todos determinísticos via mock de hardware.
-- CI: GitHub Actions mínimo com `pytest`.
-
-### 2.2 O que ainda falta
-- UI interactiva de selecção de ataques com botões de confirmação e widget de terminal integrado.
-- Validação prática no hardware real (Alfa AWUS036ACH x86, GPS, BLE).
-- Cobertura de testes para TUI e plugins.
-- Documentação de utilizador da UI.
+1. [Completed Foundation (Sprints 0-3)](#completed-foundation-sprints-0-3)
+2. [Sprint 4 — Documentation Stabilisation & EN/PT Sync](#sprint-4--documentation-stabilisation--enpt-sync) *(completed)*
+3. [Sprint 5 — GPS Pipeline + Wardrive Mode](#sprint-5--gps-pipeline--wardrive-mode) *(completed)*
+4. [Sprint 6 — Real Module Validation (Nuclei, RouterScan, Bettercap, HFP)](#sprint-6--real-module-validation-nuclei-routerscan-bettercap-hfp) *(completed)*
+5. [Sprint 7 — Advanced WiFi Attacks](#sprint-7--advanced-wifi-attacks) *(completed)*
+6. [Sprint 8A — Security Hardening *(completed)*](#sprint-8a--security-hardening-completed)
+7. [Sprint 8B — Forensics & Evidence Integrity *(completed)*](#sprint-8b--forensics--evidence-integrity-completed)
+8. [Sprint 9 — Module Completion Pass *(completed)*](#sprint-9--module-completion-pass-completed)
+9. [Sprint 10 — Testing Hardening + Coverage Enforcement](#sprint-10--testing-hardening--coverage-enforcement)
+10. [Sprint 11 — Web UI Maps, PWA, Offline](#sprint-11--web-ui-maps-pwa-offline)
+11. [Sprint 12 — Plugin Marketplace](#sprint-12--plugin-marketplace)
+12. [Sprint 13 — Distributed Cracking & Offloading](#sprint-13--distributed-cracking--offloading)
+13. [Sprint 14 — Cutting-Edge Research](#sprint-14--cutting-edge-research)
+14. [Global Rules](#global-rules)
 
 ---
 
-## 3. Fases
+## Completed Foundation (Sprints 0-3)
 
-### Fase 0 — Fundação (concluída)
-- Repo estruturado, pyproject, core, HAL, CLI mínima, importações estáveis.
-- Critério: importa tudo, `urban-hs info` retorna JSON válido.
+### Sprint 0 — Foundation + Hardware Abstraction / x86 Port *(completed)*
+Tasks:
+- Repo structure (`src/` layout, `pyproject.toml`).
+- HAL layer with WiFi/BLE/Network/Platform abstractions.
+- x86 WiFi fallback (scapy) when `iw` JSON is unavailable.
+- Config (Pydantic v2), storage (SQLite WAL + JSONL), event bus, process manager.
+- Health checks, plugin registry, structured JSONL logging.
+- Docker multiarch (`linux/amd64,linux/arm64`) with `TARGETARCH`.
+- CI skeleton (lint + type-check + tests).
 
-### Fase 1 — Fix Blocker (concluída)
-- Resolver 500 em `/api/v1/network/scan`.
-- Resolver fallback `dbus` em `ble/exploit_chain.py`.
-- Critério: REST OK, container arranca, testes passam.
-
-### Fase 2 — Testes (concluída)
-- HAL tests mockados, API integration, CLI smoke tests.
-- Critério: 14+ testes deterministic passing.
-
-### Fase 3 — Docker multi-arch (concluída)
-- `Dockerfile.arm64`, `Dockerfile.amd64`, `docker-compose.yml` com `TARGETARCH`.
-- Critério: build local para ambas as archs sem erro.
-
-### Fase 4 — Event Bus + WebSocket (concluída)
-- Router `/api/v1/events` (WebSocket) ligado ao event bus.
-- Frontend alinhado a endpoints existentes.
-- Critério: UI recebe eventos em tempo real.
-
-### Fase 5 — Smoke test TUI (concluída)
-- Checklist documentado em `docs/SMOKE_TUI.md`.
-- Critério: import OK, TUI entra sem crash no Pi.
-
-### Fase 6 — BLE integrado (concluída)
-- Scan BLE com backend `bleak` validado no Pi 5.
-- Critério: scan retorna dispositivos OU documentação clara do bloqueio.
-
-### Fase 7 — Cobertura CLI/TUI (concluída)
-- 5 CLI smoke tests via subprocess.
-- Critério: `pytest tests/test_cli.py` verde.
-
-### Fase 8 — Polish framework (concluída)
-- Plugin registry com 2 plugins exemplo, docs API, CI mínimo.
-- Critério: registry com 16 plugins, `docs/API.md` completo.
-
-### Fase 9 — HAL WiFi x86 fallback scapy (concluída)
-- `create_wifi_backend()` com fallback real `iw` → `scapy`.
-- Critério: HAL tests passam para plataformas sem `iw`.
-
-### Fase 10 — UI de selecção de ataques (PENDENTE)
-- TUI: Tabs com botões por módulo, modais de confirmação, widget terminal integrado via event bus.
-- Web: frontend com mesmos controlos e output em tempo real.
-- Critério: operador consegue seleccionar ataque, confirmar, e ver output na UI.
+Acceptance criteria:
+- [x] `urban-hs --help` works on Pi and x86.
+- [x] Plugin registry loads and reports module inventory.
+- [x] Mock scan succeeds on x86 without monitor mode.
+- [x] Docker image builds and runs on both architectures.
+- [x] Health endpoint responds.
 
 ---
 
-## 4. Priorização
+### Sprint 1 — Core Modules + CLI + TUI Basic + Docker / CI *(completed)*
+Tasks:
+- WiFi scanner (passive/active, channel hopping, `iw` JSON + `airodump` fallback).
+- BLE module (Fast Pair scanner, WhisperPair tester/exploit, device quirks).
+- Network scanner (Nmap wrapper, OS fingerprint, service enum).
+- Camera discovery (mDNS, UPnP, ONVIF, RTSP, HTTP fingerprint).
+- Metasploit RPC client + exploit runner.
+- Credential manager + report generator (PDF/JSON/HTML + GPG signing).
+- MQTT attack suite (broker discovery, topic enum, cred brute).
+- HID/USB gadget stubs + ESP32/SSID/Bluetooth-HID attacks.
+- Rich CLI (`scan`, `attack`, `exploit`, `report`, `export`, `config`).
+- Basic Textual TUI (logs, metrics, device list).
+- Docker Compose, systemd service sample, release automation.
+- CI with `mac80211_hwsim` for virtual WiFi tests.
 
-1. **Fase 10**: UI de selecção de ataques — é o core do pedido original.
-2. **Hardware real**: validar com Alfa AWUS036ACH x86 + Pi BLE.
-3. **Docs**: guia do utilizador para a UI e troubleshooting actualizado.
-
-Qualquer outra fase (plugins dinâmicos via entry points, e2e completo, release automation) vem depois destas três.
+Acceptance criteria:
+- [x] All documented attack categories are reachable from CLI/TUI.
+- [x] Reports are generated and GPG-signed.
+- [x] Docker Compose brings the stack up with a single command.
+- [x] CI passes on every PR.
 
 ---
 
-## 5. Documentação
+### Sprint 2 — API + Event Bus + Attack Inventory *(completed)*
+Tasks:
+- FastAPI app with JSON config, rate limiting, masked secrets.
+- `/api/v1/attacks` — inventory + execute (dry-run / real).
+- `/api/v1/jobs/{id}` — status + cancel.
+- WebSocket feed for `attack.started`, `attack.progress`, `attack.completed`, `attack.error`.
+- `AttackEventNormalizer` to translate module-specific events into the canonical contract.
+- Tests: inventory, execute (sync TestClient), event contract, TUI smoke tests.
 
-| Documento | Status | Função |
-|-----------|--------|--------|
-| `README.md` | Actualizado | Quickstart, instalação, Docker, CLI, TUI, API |
-| `docs/API.md` | Mantido | Referência REST + WebSocket |
-| `docs/SMOKE_TUI.md` | Mantido | Checklist de smoke test da TUI no Pi |
-| `docs/MULTIARCH.md` | Mantido | Guia de build multi-arquitectura local |
-| `docs/PLAN.md` | Este | Plano faseado, estado e próximos passos |
-| `docs/index.md` | Mantido | Índice central da documentação |
-| `docs/archive/*` | Arquivado | Documentos legados não mantidos na linha frontal |
+Acceptance criteria:
+- [x] UI does not import any module directly; it only talks `/api/v1/attacks`.
+- [x] A new module added to the registry appears in the UI without frontend changes.
+- [x] Event contract is covered by unit tests.
 
 ---
 
-## 6. Critérios Gerais de “Feito”
+### Sprint 3 — Attack Selection UI Phase 10 *(completed)*
+Tasks:
+- TUI: attack buttons by category, confirmation modal, live terminal widget.
+- Web UI: HTMX + Alpine panel bound to `/api/v1/attacks` + WebSocket.
+- Attack persistence: `job_id` tracking + history.
+- Normalization of events with TUI + Web UI consumers.
+- Smoke tests for TUI and contracts.
 
-- Código mergeado em `andreas/catarinus`.
-- Build Docker verde (`linux/amd64` e `linux/arm64`).
-- Pelo menos um teste (unit ou integração) cobrindo o comportamento.
-- Documentação reflecte a mudança (se aplicável).
-- Nenhum import crash em ambiente limpo.
+Acceptance criteria:
+- [x] Operator can select an attack and see real-time output in both TUI and browser.
+- [x] Destructive attacks require confirmation before execution.
+- [x] Dry-run mode is available for every module.
+
+---
+
+## Sprint 4 — Documentation Stabilisation & EN/PT Sync *(completed)*
+
+**Objective**: make the project approachable for beginners while keeping it useful for advanced users; ensure every public-facing artifact is consistent, sanitised, and bilingual.
+
+Tasks:
+1. Rewrite `README.md` (EN) + `README.pt.md` (PT AO90) — fix anchors, fix mobile tables, fix links, add testing/code coverage section.
+2. `docs/OVERVIEW.md` + `docs/OVERVIEW.pt.md` — project origin, name meaning, target audience, learning-first narrative.
+3. `docs/API.md` + `docs/API.pt.md` — extensive reference with core concepts, auth, schemas, event contract, custom module example, error handling, testing.
+4. `docs/SMOKE_TUI.md` + `docs/SMOKE_TUI.pt.md` — manual test steps + custom test development guide.
+5. `docs/WORKFLOW.md` + `docs/WORKFLOW.pt.md` — operator working flows normal and parallel usage.
+6. `docs/CONTRIBUTING.md` + `docs/CONTRIBUTING.pt.md` — module template, commit rules, documentation sync obligations.
+7. `docs/PLAN.md` + `docs/PLAN.pt.md` — consolidate into a single sprint-based plan replacing legacy docs.
+8. Sanitise every `.md`, `.yml`, `.toml`, `.sh`, `.service`, `.py` file for personal data (PII).
+9. Ensure PT uses AO90 throughout (e.g., “objectivo”, “módulo”, “vários”).
+
+Acceptance criteria:
+- [x] README renders correctly on mobile with valid Markdown tables.
+- [x] All doc links resolve to valid anchors.
+- [x] Vocabulary is consistent across EN and PT docs.
+- [x] No personal data remains in tracked files.
+
+---
+
+## Sprint 5 — GPS Pipeline + Wardrive Mode *(completed)*
+
+**Objective**: complete the GPS pipeline from u-blox receiver to geotagged exports that can be loaded into Google Earth, WiGLE, and Kismet.
+
+Tasks:
+1. `gpsd` JSON protocol client — real TCP socket reader without Python `gpsd` bindings.
+2. NMEA sentence parser (`NMEAParser`) for `GPRMC`, `GPGGA`, `GPGSA`.
+3. `GeoMapper` — link snapshots to `(bssid, lat, lon, alt, timestamp)`.
+4. Exporters:
+   - KML (Google Earth `Placemark` per BSSID).
+   - WiGLE CSV (column order matching wigle.net).
+   - Kismet netXML (`<wireless-network>` with GPS tags).
+   - JSONL (primary audit pipeline).
+5. `WardriveMode` — continuous passive scan + GPS logging + auto-export.
+6. Event bus wiring — `gps.fix`, `gps.lost`, `wardrive.snapshot`, `geo.exported`.
+7. TUI and Web UI integration — lat/lon in scan tables, export buttons.
+8. Tests (`tests/test_gps_geo.py`) covering NMEA, exports, and wardrive lifecycle.
+
+Acceptance criteria:
+- [x] A walk with GPS produces a KML that opens in Google Earth with correct positions.
+- [x] WiGLE CSV accepts the export without column errors.
+- [x] Wardrive mode runs unattended and produces a complete session artefact.
+- [x] Tests run in CI without a real GPS dongle.
+
+---
+
+## Sprint 6 — Real Module Validation (Nuclei, RouterScan, Bettercap, HFP) *(completed)*
+
+**Objective**: move from scaffolding to working integrations with the underlying tools.
+
+Done:
+- `NucleiRunner` already complete in `NetworkModule`.
+- `RouterScanner.brute_force_credentials` (Hydra) already working; kept unchanged.
+- `RouterScanner.scan_router` was a stub and now builds a temporary RouterSploit script, executes it, treats stdout as raw text and cleans up the temporary file.
+- `BettercapBLEClient` added for BLE/GATT enumeration via bettercap’s REST API; emits `ble.discovered` and `scan.completed` via the event bus.
+- `HFPAudioCapture` codified in `src/urban_hs/modules/ble/hfp.py`, documenting the `bluealsa`/BlueZ prerequisites.
+
+Note: HFP and Bettercap still require their real software/hardware stacks; the module contracts are complete and testable, but field use depends on `bettercap`, `bluealsa` and a paired headset being present.
+
+---
+
+## Sprint 7 — Advanced WiFi Attacks *(completed)*
+
+**Objective**: modern WiFi security assessment capabilities beyond WPA2-PMKID/handshake/WPS.
+
+Done:
+- Scanner extended capability parsing now reports WPA3-SAE detection, OWE flags, 802.11r Fast Transition indicators, HE/EHT presence, 6 GHz band inference, 320 MHz width flags, and MLO-related BSSIDs.
+- WPA3-SAE PMKID capture path enabled through `hcxdumptool` SAE flows; module keeps existing behaviour for WPA2 while adding SAE-aware capture handling.
+- 802.11r Fast Transition support: forced-reassociation flow documented and wired through the WiFi attacks layer so the operator can target over-the-air FT materials.
+- Downgrade attack flow added to the attack framework for mixed-mode hosts, with explicit confirmation and dry-run guardrails.
+- OWE detection and handshake capture encapsulated in the WiFi module extensions.
+- PMF (802.11w) handling: detection for `MFPC` / `MFPR` and SA Query support; deauth limitations documented in module docstrings.
+- Wi-Fi 6/6E/7 parsing extended for `he_capab`, `eht_capab`, 6 GHz channel lists, and related 320 MHz width flags.
+- MLO correlation: multi-BSSID correlation logic added to the scanner/event plumbing.
+- UI wiring added so operators can select 802.11r, downgrade, OWE, and PMF-related actions through the existing attack endpoints.
+- Documentation now explains the legal/ethical boundary for each new attack type before execution.
+
+Acceptance criteria:
+- [x] Scanner reports WPA3, OWE, PMF, HE, EHT flags.
+- [x] Operator can choose 802.11r or downgrade attacks from the UI.
+- [x] Documentation explains the legal/ethical boundary for each new attack.
+
+---
+
+## Sprint 8A — Security Hardening *(completed)*
+
+**Objective**: reduzir a superfície de ataque e garantir execução segura dos módulos, sem depender de decisões de auth/PKI externas.
+
+Security hardening baseline delivered in `src/urban_hs/core/security.py`:
+- seccomp profiles,
+- capability dropping,
+- rootless chroot,
+## Sprint 8A — Security Hardening *(completed)*
+
+### Tasks
+1. ~~API hardening~~ — security headers + IP allowlist + rate limiting middleware wired in the API stack.
+2. ~~Log hygiene~~ — operational + audit log rotation with PII redaction and separate handlers configured at core startup.
+3. ~~Environment modes~~ — `lab`, `field`, `airgap` via config; attack execution respects environment mode.
+4. ~~Binary integrity~~ — manifest SHA256 for external tooling defined in hardening layer and checked before module use.
+5. ~~Runtime confinement~~ — seccomp profiles, capability dropping, rootless chroot, and supply-chain verification implemented with safe fallbacks.
+6. ~~Tooling / docs~~ — hardening guide notes and API hardening tracked in PLAN.
+
+### Acceptance criteria
+- [x] Security headers are present and middleware is applied in the API stack.
+- [x] Log rotation and PII filtering are applied at core startup without duplicate handlers.
+- [x] Environment modes are configurable and respected by attack execution.
+- [x] Runtime confinement helpers are implemented with safe fallback behaviour.
+- [x] Binary manifest is implemented and wired through core hardening utilities.
+
+---
+
+## Sprint 8B — Forensics & Evidence Integrity *(completed)*
+
+**Objective**: garantir que todos os artefactos são verificáveis, com cadeia de custódia imutável e comandos claros para verificar/selar/eliminar dados.
+
+**Dependencies**: 8A em curso (não bloqueia).
+
+### Tasks
+1. ~~MAC anonymisation~~ — redactor central para `devices`, `wifi_networks`, `ble_devices`, endpoints e exports WiGLE/Kismet/JSONL.
+2. ~~Retention policy~~ — aplicar TTL por sessão/artefacto; comando de right-to-erasure (hard-delete seguro + verificação).
+3. ~~Evidence bundle~~ — wrapper que usa `EvidenceLogger` + `GPGSigner`; hash SHA256/BLAKE2b em todos os artefactos.
+4. ~~Verify / seal~~ — `urban-hs verify --session <id>`, `urban-hs seal --session <id>`, `urban-hs audit-trail --session <id>`.
+5. ~~Audit trail~~ — registar quem, quando, quê, hash do comando + params, resultado; sem PII.
+6. Docs + migration guide — EN + PT, incluindo fluxo de verificação para laboratório e para admissibilidade forense.
+
+### Acceptance criteria
+- [x] MAC-anonymised exports não permitem reconstrução do MAC original;
+- [x] `verify --session` confirma GPG, integridade e consistência da cadeia;
+- [ ] `seal --session` move artefactos para storage só-leitura/append-only;
+- [x] `audit-trail` produz timeline legível para relatório final.
+
+### Notes
+- `seal` is stubbed: expected behaviour is to relocate artifacts to `/var/lib/urban-hs/sealed/<session_id>/` and set immutable flags; can be completed once a suitable storage backend exists.
+
+---
+
+## Sprint 9 — Module Completion Pass *(completed)*
+
+**Objective**: close all partial or scaffold modules introduced through Sprints 0-8 into executable, documented, testable features with the same deliverable standard as the WiFi/BLE core.
+
+In-scope scope: `wifi`, `ble`, `network`, `camera`, `credential`, `exploit`, `hid`, `metasploit`, `mqtt`, `esp32`, `bt_hid`, `ssid_confusion`, `reporting`, and `urban_hack` modules.
+
+### Order of execution (sequential)
+1. `wifi`: `plugin.py`, `fragattacks.py`, registry/attacks/managers alignment.
+2. `ble`: `exploit_chain.py`, `plugin.py`.
+3. `camera`: `enumeration.py`, `vuln_check.py`.
+4. `credential`: `manager.py`.
+5. `exploit`: `runner.py`.
+6. `hid`: `ducky.py`, `gadget.py`, `injector.py`.
+7. `metasploit`: `rpc.py`, `console.py`.
+8. `mqtt.py`, `esp32.py`, `bt_hid.py`, `ssid_confusion.py`.
+9. `urban_hack.py` orchestrator.
+10. `reporting/generator.py`.
+
+### Definition of functional
+- At least one happy-path execution runs under test or with realistic mocks.
+- No `raise NotImplementedError`, no empty `pass`-only public paths for core flows.
+- Contract test `tests/test_<module>_contract.py` present for each module.
+- Docs updated EN + PT.
+
+---
+
+## Sprint 9 — Testing Hardening + Coverage Enforcement
+
+**Objective**: move from smoke tests to a rigorous, maintainable test suite that gives confidence before every release.
+
+Tasks:
+1. Coverage baseline — run `pytest --cov=urban_hs` and set the floor at **85%**.
+2. Per-module contract tests — every module in `src/urban_hs/modules/...` has a companion `tests/test_<module>_contract.py`.
+3. Custom test framework — helpers for `gpsd` mock, `mac80211_hwsim` reusable fixtures, HAL adapter matrix (`x86_scapy` vs `arm_iw`).
+4. Integration tests — run real binaries in Docker (`airodump-ng`, `hcxdumptool`, `reaver`, `nmap`, `nuclei`) against intentionally vulnerable containers.
+5. Concurrency / load tests — parallel attacks, event bus under pressure, TUI + Web UI connected simultaneously.
+6. Security tests — path traversal, input fuzzing, secret leakage in logs, privilege checks.
+7. CI matrix — add `ubuntu-latest` + `arm64` runner if available; fail build on coverage drop.
+
+Acceptance criteria:
+- [ ] PR cannot merge if coverage drops below 85%.
+- [ ] Every new module must include `test_<module>_contract.py` and `test_<module>_execute.py`.
+- [ ] A new contributor can run `make test` and see green locally.
+
+---
+
+## Sprint 10 — Testing Hardening + Coverage Enforcement
+
+**Objective**: move from smoke tests to a rigorous, maintainable test suite that gives confidence before every release.
+
+Tasks:
+1. Coverage baseline — run `pytest --cov=urban_hs` and set the floor at **85%**.
+2. Per-module contract tests — every module in `src/urban_hs/modules/...` has a companion `tests/test_<module>_contract.py`.
+3. Custom test framework — helpers for `gpsd` mock, `mac80211_hwsim` reusable fixtures, HAL adapter matrix (`x86_scapy` vs `arm_iw`).
+4. Integration tests — run real binaries in Docker (`airodump-ng`, `hcxdumptool`, `reaver`, `nmap`, `nuclei`) against intentionally vulnerable containers.
+5. Concurrency / load tests — parallel attacks, event bus under pressure, TUI + Web UI connected simultaneously.
+6. Security tests — path traversal, input fuzzing, secret leakage in logs, privilege checks.
+7. CI matrix — add `ubuntu-latest` + `arm64` runner if available; fail build on coverage drop.
+
+Acceptance criteria:
+- [ ] PR cannot merge if coverage drops below 85%.
+- [ ] Every new module must include `test_<module>_contract.py` and `test_<module>_execute.py`.
+- [ ] A new contributor can run `make test` and see green locally.
+
+---
+
+## Sprint 11 — Plugin Marketplace
+
+**Objective**: lower the barrier for others to write and share modules.
+
+Tasks:
+1. Plugin metadata manifest (`pyproject.toml` `urban-hs.plugins` entry points).
+2. `urban-hs plugin install <name>` from a registry (local directory or remote Git).
+3. Signature verification for plugins.
+4. Module skeleton generator (`urban-hs plugin new <name>`).
+5. Runtime enable/disable without restart.
+6. Version constraints and dependency isolation per plugin.
+
+Acceptance criteria:
+- [ ] A new module can be written, installed, and appear in the UI in under 5 minutes.
+- [ ] Disabled plugins do not load or appear in the attack inventory.
+- [ ] Plugin docs template exists in `CONTRIBUTING.md`.
+
+---
+
+## Sprint 12 — Distributed Cracking & Offloading
+
+**Objective**: scale cracking beyond the Pi’s GPU.
+
+Tasks:
+1. Hash watcher — monitor `$HASH_DIR` for new `.22000` files.
+2. Remote submit — `rsync`/`scp`/`syncthing` to a configurable cracking host.
+3. Result poller — pull cracked `.potfile` and update local DB.
+4. Hashtopolis / KrakenHashes API clients.
+5. Cost estimator — estimate €/hash for cloud spot instances.
+6. Auto-report — sessions report how many hashes were cracked and by which backend.
+
+Acceptance criteria:
+- [ ] A `.22000` created on the Pi can be cracked on a desktop and the password appears in the local credential manager.
+- [ ] Operator sees in the UI which backend cracked each hash.
+
+---
+
+## Sprint 13 — Cutting-Edge Research
+
+**Objective**: keep the platform current with emerging WiFi/BLE/IoT/SDR techniques.
+
+Tasks:
+1. Wi-Fi 6/6E/7 — HE/EHT capabilities, 6 GHz channel list, MLO correlation.
+2. SDR / Spectrum — integrate `rtl_power` / `soapy_power` waterfall.
+3. IoT / Matter / Thread — `_matter._tcp`, Zigbee snapshot (if SDR present).
+4. Bluetooth Classic — KARMA/MANA, Evil Twin (lab-only), Enterprise/EAP hash capture.
+5. Wi-Fi Sensing / CSI — basic motion detection with Intel AX CSI tool.
+6. ML scoring — lightweight XGBoost/ONNX model for `p(crack)`.
+7. Rogue AP / hostapd-mana — requires second radio or VAP; lab-only policy.
+
+Acceptance criteria:
+- [ ] Each research topic has its own module directory and a clear “lab-only / requires HW” notice in the docs.
+- [ ] No research feature is enabled by default; requires an explicit feature flag and operator confirmation.
+
+---
+
+## Global Rules
+
+1. **No PII** in committed code or docs. Sanitise paths, usernames, emails, hardware serials.
+2. **EN + PT**: every new or updated `.md` must have both language versions unless explicitly waived.
+3. **Documentation-first for risky features**: before a destructive attack is merged, its doc must explain the legal/ethical boundary and the confirmation flow.
+4. **Tests before code** for new modules: `test_<module>_contract.py` and `test_<module>_execute.py` are required for merge.
+5. **Coverage floor**: 85% overall; new code must not decrease it.
+6. **Branch discipline**: feature branches off `andreas/catarinus`; PR description must include a `docs/` checklist.

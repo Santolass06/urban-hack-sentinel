@@ -13,7 +13,7 @@ from urban_hs.ui.api.auth import create_access_token
 async def test_fastapi_app_starts_and_stops() -> None:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        r = await client.get("/healthz")
+        r = await client.get("/api/v1/healthz")
         assert r.status_code == 200
         body = r.json()
         assert body["status"] == "ok"

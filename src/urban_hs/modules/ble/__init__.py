@@ -25,6 +25,7 @@ from urban_hs.modules.ble.fastpair import (
     _load_device_quirks,
     get_device_quirks,
 )
+from urban_hs.modules.ble.bettercap import BettercapBLEClient, BettercapBLEDevice
 
 __all__ = [
     "FastPairScanner",
@@ -46,4 +47,6 @@ __all__ = [
     "AccountKeyManager",
     "HFPAudioCapture",
     "WhisperPairFullExploit",
+    "BettercapBLEClient",
+    "BettercapBLEDevice",
 ]

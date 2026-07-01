@@ -166,6 +166,9 @@ class IWScanBackend(ScanBackend):
                 # Vendor from OUI
                 vendor = self._get_vendor(bssid)
 
+                # Extended capability parsing
+                extended = self._parse_extended(entry)
+
                 network = NetworkInfo(
                     bssid=bssid,
                     ssid=ssid,
@@ -177,7 +180,8 @@ class IWScanBackend(ScanBackend):
                     wps_enabled=wps_enabled,
                     pmf=pmf,
                     vendor=vendor,
-                )
+                    meta=extended,
+                    )
                 networks.append(network)
 
         except json.JSONDecodeError as e:
@@ -236,6 +240,49 @@ class IWScanBackend(ScanBackend):
             return None
         except Exception:
             return None
+
+    def _parse_extended(self, entry: Dict[str, Any]) -> Dict[str, Any]:
+        """Parse extended capabilities from iw scan output."""
+        meta: Dict[str, Any] = {
+            "owe": False,
+            "ft": False,
+            "six_ghz": False,
+            "he": False,
+            "eht": False,
+            "mhz320": False,
+            "mlo_bssids": [],
+        }
+        try:
+            flags = [str(f).lower() for f in entry.get("flags", [])]
+
+            raw = json.dumps(entry).lower()
+
+            meta["owe"] = "owe" in flags or " opportunistic wireless encryption" in raw
+            meta["ft"] = (
+                " ft " in raw
+                or "fast transition" in raw
+                or "802.11r" in raw
+                or any("ft" in f for f in flags)
+            )
+
+            freq = entry.get("freq", 0)
+            meta["six_ghz"] = 5955 <= freq <= 7115
+
+            he_keys = ("he_caps", "he_oper", "he")
+            eht_keys = ("eht_caps", "eht_oper", "eht")
+            meta["he"] = any(key in entry for key in he_keys)
+            meta["eht"] = any(key in entry for key in eht_keys)
+
+            caps_raw = entry.get("he_caps") or entry.get("he") or entry.get("he_oper") or entry.get("eht_caps")
+            if isinstance(caps_raw, dict):
+                meta["mhz320"] = "320" in str(caps_raw)
+            elif isinstance(caps_raw, str):
+                meta["mhz320"] = "320" in caps_raw
+            else:
+                meta["mhz320"] = meta["he"] or meta["eht"]
+        except Exception as exc:
+            logger.debug("Extended capability parsing failed", error=str(exc))
+        return meta
 
 
 class AirodumpScanBackend(ScanBackend):

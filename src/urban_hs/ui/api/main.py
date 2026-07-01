@@ -30,6 +30,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from urban_hs import __version__
+from urban_hs.core.config import get_config
 from urban_hs.core.event_bus import init_event_bus, shutdown_event_bus
 from urban_hs.ui.api.rate_limit import limiter
 
@@ -114,6 +115,17 @@ def _build_app() -> FastAPI:
 
 
 app = _build_app()
+
+from urban_hs.ui.api.middleware import (  # noqa: E402
+    IPAllowlistMiddleware,
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+)
+
+cfg = get_config()
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(IPAllowlistMiddleware, enabled=cfg.api.enable_ip_allowlist, allowed_ips=cfg.api.allowed_ips)
+app.add_middleware(RateLimitMiddleware, requests_per_minute=cfg.api.rate_limit_per_minute)
 
 
 def run() -> None:

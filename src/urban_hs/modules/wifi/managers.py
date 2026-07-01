@@ -3,6 +3,9 @@ WiFi Managers - Handshake management, MAC changing, Geo mapping.
 """
 
 import asyncio
+import json
+import os
+import re
 import shutil
 import subprocess
 import uuid
@@ -12,6 +15,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import structlog
+
+from urban_hs.core.event_bus import Event
 
 logger = structlog.get_logger(__name__)
 
@@ -438,20 +443,120 @@ class MACChanger:
         return {k: len(v) if v else 0 for k, v in self.OUI_PROFILES.items()}
 
 
+import re
+
+class NMEAParser:
+    """Parse NMEA sentences emitted by u-blox and most GPS receivers."""
+
+    SENTENCE_RE = re.compile(r"^\$([A-Z]{5}),([^*]+)\*([0-9A-F]{2})$")
+
+    @classmethod
+    def parse_line(cls, line: str) -> Optional[Dict[str, Any]]:
+        match = cls.SENTENCE_RE.match(line.strip())
+        if not match:
+            return None
+        sentence_type = match.group(1)
+        fields = match.group(2).split(",")
+        handler = {
+            "GPRMC": cls._parse_gprmc,
+            "GPGGA": cls._parse_gpgga,
+            "GPGSA": cls._parse_gpgsa,
+        }.get(sentence_type)
+        if handler is None:
+            return None
+        try:
+            return handler(fields)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _checksum(sentence: str) -> str:
+        data = sentence[1:sentence.index("*")]
+        checksum = 0
+        for char in data:
+            checksum ^= ord(char)
+        return f"{checksum:02X}".lower()
+
+    @staticmethod
+    def _parse_gprmc(fields: List[str]) -> Dict[str, Any]:
+        if len(fields) < 11 or fields[1] != "A":
+            return {}
+        return {
+            "sentence": "GPRMC",
+            "timestamp": fields[0],
+            "status": fields[1],
+            "lat": NMEAParser._dm_to_dd(fields[2], fields[3]),
+            "lon": NMEAParser._dm_to_dd(fields[4], fields[5]),
+            "speed_knots": float(fields[6]) if fields[6] else None,
+            "track": float(fields[7]) if fields[7] else None,
+            "date": fields[8] if len(fields) > 8 else None,
+            "mode": fields[11] if len(fields) > 11 else None,
+        }
+
+    @staticmethod
+    def _parse_gpgga(fields: List[str]) -> Dict[str, Any]:
+        if len(fields) < 10 or fields[6] == "0":
+            return {}
+        return {
+            "sentence": "GPGGA",
+            "timestamp": fields[0],
+            "lat": NMEAParser._dm_to_dd(fields[1], fields[2]),
+            "lon": NMEAParser._dm_to_dd(fields[3], fields[4]),
+            "fix_quality": int(fields[5]) if fields[5] else None,
+            "satellites": int(fields[6]) if fields[6] else None,
+            "hdop": float(fields[7]) if fields[7] else None,
+            "alt": float(fields[8]) if fields[8] else None,
+            "alt_unit": fields[9] if len(fields) > 9 else None,
+            "geoid_sep": float(fields[10]) if len(fields) > 10 and fields[10] else None,
+            "geoid_unit": fields[11] if len(fields) > 11 else None,
+            "dgps_age": fields[12] if len(fields) > 12 else None,
+            "dgps_station": fields[13] if len(fields) > 13 else None,
+        }
+
+    @staticmethod
+    def _parse_gpgsa(fields: List[str]) -> Dict[str, Any]:
+        if len(fields) < 18 or fields[1] == "1":
+            return {}
+        return {
+            "sentence": "GPGSA",
+            "mode": fields[1],
+            "fix_type": int(fields[2]),
+            "satellites": [int(x) for x in fields[3:15] if x],
+            "pdop": float(fields[15]) if fields[15] else None,
+            "hdop": float(fields[16]) if fields[16] else None,
+            "vdop": float(fields[17]) if fields[17] else None,
+        }
+
+    @staticmethod
+    def _dm_to_dd(dm: str, hemi: str) -> float:
+        if not dm:
+            return 0.0
+        degrees = int(float(dm) / 100)
+        minutes = float(dm) - degrees * 100
+        decimal = degrees + minutes / 60.0
+        if hemi in {"S", "W"}:
+            decimal *= -1
+        return decimal
+
+
 class GeoMapper:
     """
     GPS integration for wardriving.
-    
-    Integrates with gpsd for real-time position.
-    Exports to Kismet, WiGLE, Google Earth formats.
+
+    - Reads from gpsd (JSON protocol) and NMEA sentences.
+    - Links network snapshots to (bssid, lat, lon, alt, timestamp).
+    - Exports to KML, WiGLE CSV, Kismet netXML, JSONL.
     """
 
-    def __init__(self, gpsd_host: str = "localhost", gpsd_port: int = 2947):
+    def __init__(self, gpsd_host: str = "localhost", gpsd_port: int = 2947, event_bus=None):
         self.gpsd_host = gpsd_host
         self.gpsd_port = gpsd_port
         self._gps_data: Dict[str, Any] = {}
         self._running = False
         self._reader_task: Optional[asyncio.Task] = None
+        self.event_bus = event_bus
+        self._snapshots: List[Dict[str, Any]] = []
+        self._last_fix: bool = False
 
     async def start(self) -> None:
         """Start GPS data reader."""
@@ -534,3 +639,218 @@ class GeoMapper:
 
     def get_gps_data(self) -> Dict[str, Any]:
         return dict(self._gps_data)
+
+    def _publish(self, event_type: str, payload: Dict[str, Any]) -> None:
+        if self.event_bus is None:
+            return
+        try:
+            import asyncio
+            loop = asyncio.get_event_loop()
+            if not loop.is_running():
+                return
+            loop.create_task(self.event_bus.publish(Event(type=event_type, payload=payload, source="gps")))
+        except RuntimeError:
+            pass
+
+    def add_snapshot(self, bssid: str, essid: Optional[str] = None, **kwargs: Any) -> Dict[str, Any]:
+        position = self.get_position()
+        snapshot: Dict[str, Any] = {
+            "bssid": bssid,
+            "essid": essid,
+            "timestamp": datetime.utcnow().isoformat(),
+            "gps": position,
+            "gps_data": self.get_gps_data(),
+        }
+        snapshot.update(kwargs)
+        self._snapshots.append(snapshot)
+        if position and not self._last_fix:
+            self._last_fix = True
+            self._publish("gps.fix", {"position": position})
+        return snapshot
+
+    def export_kml(self, output_file: Path) -> int:
+        count = 0
+        with open(output_file, "w") as f:
+            f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+            f.write('<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n')
+            for snap in self._snapshots:
+                gps = snap.get("gps") or {}
+                if not gps:
+                    continue
+                lat = gps.get("lat")
+                lon = gps.get("lon")
+                if lat is None or lon is None:
+                    continue
+                name = snap.get("essid") or snap.get("bssid") or "unknown"
+                bssid = snap.get("bssid", "")
+                f.write('<Placemark>\n')
+                f.write(f'<name>{self._escape(name)}</name>\n')
+                f.write('<description><![CDATA[')
+                f.write(f'BSSID: {self._escape(bssid)}<br/>')
+                f.write(f'Time: {self._escape(snap.get("timestamp", ""))}<br/>')
+                f.write(']]></description>\n')
+                f.write('<Point><coordinates>')
+                f.write(f'{lon},{lat},{gps.get("alt", 0)}')
+                f.write('</coordinates></Point>\n')
+                f.write('</Placemark>\n')
+                count += 1
+            f.write('</Document>\n</kml>\n')
+        self._publish("geo.exported", {"format": "kml", "file": str(output_file), "count": count})
+        return count
+
+    def export_wigle_csv(self, output_file: Path) -> int:
+        count = 0
+        with open(output_file, "w") as f:
+            f.write("WigleWifi-1.6,appRelease=2.55,model=UrbanHS,release=3.0.0,device=Pi5,display=UrbanHS,board=RaspberryPi,brand=UrbanHS\n")
+            f.write("MAC,SSID,AuthMode,FirstSeen,Channel,RSSI,CurrentLatitude,CurrentLongitude,AltitudeMeters,AccuracyMeters,Type\n")
+            for snap in self._snapshots:
+                gps = snap.get("gps") or {}
+                if gps.get("lat") is None or gps.get("lon") is None:
+                    continue
+                first_seen = snap.get("timestamp", datetime.utcnow().isoformat())
+                channel = snap.get("channel", "")
+                rssi = snap.get("signal_dbm", "")
+                line = (
+                    f"{snap.get('bssid', '')},{snap.get('essid') or ''},,"
+                    f"{first_seen},{channel},{rssi},"
+                    f"{gps.get('lat', '')},{gps.get('lon', '')},"
+                    f"{gps.get('alt', '')},{gps.get('accuracy', '')},WIFI\n"
+                )
+                f.write(line)
+                count += 1
+        self._publish("geo.exported", {"format": "wigle_csv", "file": str(output_file), "count": count})
+        return count
+
+    def export_kismet_netxml(self, output_file: Path) -> int:
+        count = 0
+        with open(output_file, "w") as f:
+            f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+            f.write('<detection-run xmlns="http://www.kismet-2000lite.org/xml/detection-run-1.1">\n')
+            for snap in self._snapshots:
+                gps = snap.get("gps") or {}
+                if gps.get("lat") is None or gps.get("lon") is None:
+                    continue
+                bssid = snap.get("bssid", "")
+                essid = snap.get("essid") or ""
+                f.write('<wireless-network type="infrastructure">\n')
+                f.write(f'<BSSID>{self._escape(bssid)}</BSSID>\n')
+                f.write(f'<SSID>{self._escape(essid)}</SSID>\n')
+                f.write(f'<first-time>{snap.get("timestamp", "")}</first-time>\n')
+                f.write(f'<last-time>{snap.get("timestamp", "")}</last-time>\n')
+                f.write(f'<channel>{snap.get("channel", "")}</channel>\n')
+                f.write(f'<signal>{snap.get("signal_dbm", "")}</signal>\n')
+                f.write('<gps-info>\n')
+                f.write(f'<min-lat>{gps.get("lat", "")}</min-lat>\n')
+                f.write(f'<min-lon>{gps.get("lon", "")}</min-lon>\n')
+                f.write(f'<min-alt>{gps.get("alt", "")}</min-alt>\n')
+                f.write(f'<max-lat>{gps.get("lat", "")}</max-lat>\n')
+                f.write(f'<max-lon>{gps.get("lon", "")}</max-lon>\n')
+                f.write('</gps-info>\n')
+                f.write('</wireless-network>\n')
+                count += 1
+            f.write('</detection-run>\n')
+        self._publish("geo.exported", {"format": "kismet_netxml", "file": str(output_file), "count": count})
+        return count
+
+    def export_jsonl(self, output_file: Path) -> int:
+        count = 0
+        with open(output_file, "w") as f:
+            for snap in self._snapshots:
+                gps = snap.get("gps") or {}
+                if gps.get("lat") is None or gps.get("lon") is None:
+                    continue
+                record = {
+                    "ts": snap.get("timestamp"),
+                    "bssid": snap.get("bssid"),
+                    "essid": snap.get("essid"),
+                    "lat": gps.get("lat"),
+                    "lon": gps.get("lon"),
+                    "alt": gps.get("alt"),
+                    "channel": snap.get("channel"),
+                    "signal_dbm": snap.get("signal_dbm"),
+                }
+                f.write(json.dumps(record) + "\n")
+                count += 1
+        self._publish("geo.exported", {"format": "jsonl", "file": str(output_file), "count": count})
+        return count
+
+    @staticmethod
+    def _escape(value: str) -> str:
+        return (
+            str(value)
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+        )
+
+
+class WardriveMode:
+    """Continuous passive scan with GPS logging and auto-export."""
+
+    def __init__(self, gps_mapper: "GeoMapper", scanner: Any, event_bus: Any = None):
+        self.gps_mapper = gps_mapper
+        self.scanner = scanner
+        self.event_bus = event_bus
+        self._running = False
+        self._task: Optional[asyncio.Task] = None
+
+    async def start(self, scan_interval: float = 5.0) -> None:
+        self._running = True
+        self.gps_mapper.event_bus = self.event_bus
+        if hasattr(self.gps_mapper, "start") and not getattr(self.gps_mapper, "_running", False):
+            await self.gps_mapper.start()
+        self._task = asyncio.create_task(self._loop(scan_interval))
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+        await self.gps_mapper.stop()
+
+    async def _loop(self, scan_interval: float) -> None:
+        while self._running:
+            try:
+                networks = []
+                if hasattr(self.scanner, "scan"):
+                    networks = await self.scanner.scan()
+                elif hasattr(self.scanner, "scan_async"):
+                    networks = await self.scanner.scan_async()
+                position = self.gps_mapper.get_position()
+                for network in networks:
+                    bssid = network.get("bssid") or network.get("mac") or ""
+                    essid = network.get("ssid") or network.get("essid")
+                    snapshot = self.gps_mapper.add_snapshot(
+                        bssid=bssid,
+                        essid=essid,
+                        channel=network.get("channel"),
+                        signal_dbm=network.get("signal_dbm"),
+                    )
+                    if self.event_bus is not None:
+                        await self._safe_publish(
+                            "wardrive.snapshot",
+                            snapshot,
+                        )
+                if not self.gps_mapper.is_fixed():
+                    if self.event_bus is not None:
+                        await self._safe_publish(
+                            "gps.lost",
+                            {"message": "No GPS fix"},
+                        )
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                logger.error("Wardrive loop error", error=str(exc))
+            await asyncio.sleep(scan_interval)
+
+    async def _safe_publish(self, event_type: str, payload: Dict[str, Any]) -> None:
+        if self.event_bus is None:
+            return
+        try:
+            await self.event_bus.publish(Event(type=event_type, payload=payload, source="gps"))
+        except Exception as exc:
+            logger.error("Event publish failed", event_type=event_type, error=str(exc))

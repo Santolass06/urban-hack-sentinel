@@ -3,19 +3,25 @@ Urban Hack Sentinel v3 — CLI entry point (Typer).
 
 Commands
 --------
-* ``urban-hs info``    — print platform + capability summary.
-* ``urban-hs run``     — bootstrap core services and keep running.
-* ``urban-hs modules`` — list registered module plugins.
+* ``urban-hs info``              — print platform + capability summary.
+* ``urban-hs run``               — bootstrap core services and keep running.
+* ``urban-hs modules``           — list registered module plugins.
+* ``urban-hs verify --session``  — verify evidence bundle integrity.
+* ``urban-hs seal --session``    — seal session artifacts (planned).
+* ``urban-hs audit-trail``       — print custody timeline for a session.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
+import os
 import platform
 import shutil
 import signal
 import sys
-from typing import Optional
+from pathlib import Path
+from typing import List, Optional
 
 import typer
 from rich.console import Console
@@ -154,6 +160,122 @@ def _detect_capabilities() -> dict[str, bool]:
         "hcidump",
     ]
     return {name: shutil.which(name) is not None for name in tools}
+
+
+@app.command(name="verify")
+def verify_session(
+    session_id: str = typer.Argument(..., help="Session ID to verify."),
+    index: Optional[str] = typer.Option(None, "--index", help="Evidence index path."),
+) -> None:
+    """Verify evidence bundle integrity (GPG + hashes + chain)."""
+    try:
+        from urban_hs.core.forensics import EvidenceBundle
+    except ImportError as exc:
+        console.print(f"[red]Forensics module not available:[/red] {exc}")
+        raise typer.Exit(1)
+
+    bundle = EvidenceBundle(session_id=session_id)
+    if index:
+        bundle.index_path = lambda *args, **kwargs: index  # type: ignore[assignment]
+
+    idx = bundle.index_path()
+    if not os.path.exists(idx):
+        console.print(f"[red]Index not found:[/red] {idx}")
+        raise typer.Exit(1)
+
+    try:
+        data = json.loads(Path(idx).read_text(encoding="utf-8"))
+    except Exception as exc:
+        console.print(f"[red]Failed to parse index:[/red] {exc}")
+        raise typer.Exit(1)
+
+    errors: list[str] = []
+    for artifact in data.get("artifacts", []):
+        path = artifact.get("path")
+        expected_sha = artifact.get("sha256")
+        expected_blake = artifact.get("blake2b")
+        if not path or not os.path.exists(path):
+            errors.append(f"missing artifact: {path}")
+            continue
+        actual_sha = EvidenceBundle._sha256(path)
+        actual_blake = EvidenceBundle._blake2b(path)
+        if expected_sha and actual_sha != expected_sha:
+            errors.append(f"sha256 mismatch: {path}")
+        if expected_blake and actual_blake != expected_blake:
+            errors.append(f"blake2b mismatch: {path}")
+
+    custody = data.get("custody", [])
+    for i, entry in enumerate(custody):
+        if not entry.get("path") or not entry.get("ts"):
+            errors.append(f"custody entry {i} incomplete")
+
+    if errors:
+        console.print(f"[red]Verification failed ({len(errors)} issue(s)):[/red]")
+        for err in errors:
+            console.print(f"  - {err}")
+        raise typer.Exit(2)
+
+    console.print(f"[green]Session {session_id} verified OK.[/green]")
+    console.print(f"Artifacts: {len(data.get('artifacts', []))}")
+    console.print(f"Custody entries: {len(custody)}")
+
+
+@app.command(name="seal")
+def seal_session(
+    session_id: str = typer.Argument(..., help="Session ID to seal."),
+) -> None:
+    """Move session artifacts to append-only storage."""
+    console.print(
+        f"[yellow]Seal is not yet implemented for session {session_id}.[/yellow]"
+    )
+    console.print(
+        "Expected behaviour: relocate artifacts under /var/lib/urban-hs/sealed/<session_id>/ and set immutable flags."
+    )
+
+
+@app.command(name="audit-trail")
+def audit_trail(
+    session_id: str = typer.Argument(..., help="Session ID to inspect."),
+    index: Optional[str] = typer.Option(None, "--index", help="Evidence index path."),
+) -> None:
+    """Print readable audit/custody timeline for a session."""
+    try:
+        from urban_hs.core.forensics import EvidenceBundle
+    except ImportError as exc:
+        console.print(f"[red]Forensics module not available:[/red] {exc}")
+        raise typer.Exit(1)
+
+    bundle = EvidenceBundle(session_id=session_id)
+    if index:
+        bundle.index_path = lambda *args, **kwargs: index  # type: ignore[assignment]
+
+    idx = bundle.index_path()
+    if not os.path.exists(idx):
+        console.print(f"[red]Index not found:[/red] {idx}")
+        raise typer.Exit(1)
+
+    try:
+        data = json.loads(Path(idx).read_text(encoding="utf-8"))
+    except Exception as exc:
+        console.print(f"[red]Failed to parse index:[/red] {exc}")
+        raise typer.Exit(1)
+
+    custody = data.get("custody", [])
+    if not custody:
+        console.print("[yellow]No custody entries found.[/yellow]")
+        return
+
+    table = Table(title=f"Audit trail: {session_id}")
+    table.add_column("Time", style="cyan")
+    table.add_column("Action")
+    table.add_column("Path")
+    for entry in custody:
+        table.add_row(
+            entry.get("ts", ""),
+            entry.get("action", ""),
+            entry.get("path", ""),
+        )
+    console.print(table)
 
 
 if __name__ == "__main__":
