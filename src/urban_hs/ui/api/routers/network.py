@@ -7,6 +7,7 @@ Mount with prefix \"/api/v1/network\".
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from typing import Any, Dict
 
@@ -14,6 +15,8 @@ from fastapi import APIRouter, Request
 
 from urban_hs.ui.api.auth import require_auth
 from urban_hs.ui.api.rate_limit import limiter
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[require_auth()])
 
@@ -49,6 +52,7 @@ async def start_network_scan(
             return ScanType.HOST_DISCOVERY
 
     async def _run() -> None:
+        simulated = False
         try:
             await bus.publish(Event(
                 type="network.scan.started",
@@ -63,11 +67,22 @@ async def start_network_scan(
             result = [vars(h) for h in hosts]
             await bus.publish(Event(
                 type="network.scan.completed",
-                payload={"job_id": job_id, "count": len(result), "hosts": result},
+                payload={
+                    "job_id": job_id,
+                    "count": len(result),
+                    "hosts": result,
+                    "simulated": simulated,
+                },
                 source="api",
             ))
-            payload.update({"status": "completed", "count": len(result), "hosts": result})
+            payload.update({
+                "status": "completed",
+                "count": len(result),
+                "hosts": result,
+                "simulated": simulated,
+            })
         except Exception as exc:
+            logger.warning("Network scan failed: %s", exc)
             await bus.publish(Event(
                 type="network.scan.error",
                 payload={"job_id": job_id, "error": str(exc)},

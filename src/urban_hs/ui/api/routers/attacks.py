@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Request
@@ -216,6 +216,7 @@ async def _audit_log(
     job_id: str,
     outcome: str,
     error: Optional[str] = None,
+    simulated: bool = False,
 ) -> None:
     """Persist an auditable record of every execution attempt.
 
@@ -228,12 +229,13 @@ async def _audit_log(
         await get_storage().log_jsonl(
             "attack_audit",
             {
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "job_id": job_id,
                 "attack": attack_name,
                 "target": params.get("target") or params.get("target_address"),
                 "outcome": outcome,
                 "error": error,
+                "simulated": simulated,
             },
         )
     except Exception as exc:
@@ -249,7 +251,7 @@ async def _publish(event_type: str, payload: Dict[str, Any]) -> None:
         Event(
             type=event_type,
             payload=payload,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             correlation_id=payload.get("job_id", str(uuid.uuid4())),
             source="api.attacks",
             priority=EventPriority.NORMAL,

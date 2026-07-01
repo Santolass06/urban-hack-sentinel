@@ -7,6 +7,7 @@ Mount with prefix \"/api/v1/ble\".
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from typing import Any, Dict
 
@@ -14,6 +15,8 @@ from fastapi import APIRouter, Request
 
 from urban_hs.ui.api.auth import require_auth
 from urban_hs.ui.api.rate_limit import limiter
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[require_auth()])
 
@@ -42,10 +45,12 @@ async def start_ble_scan(request: Request, duration: int = 10) -> Dict[str, Any]
             ))
 
             scanner = FastPairScanner()
+            simulated = False
             try:
                 await scanner.start()
                 await asyncio.sleep(duration)
             except Exception as exc:
+                logger.warning("BLE scan failed, no fallback: %s", exc)
                 await bus.publish(Event(
                     type="ble.scan.error",
                     payload={"job_id": job_id, "error": str(exc)},
@@ -63,10 +68,20 @@ async def start_ble_scan(request: Request, duration: int = 10) -> Dict[str, Any]
 
             await bus.publish(Event(
                 type="ble.scan.completed",
-                payload={"job_id": job_id, "count": len(serialised), "devices": serialised},
+                payload={
+                    "job_id": job_id,
+                    "count": len(serialised),
+                    "devices": serialised,
+                    "simulated": simulated,
+                },
                 source="api",
             ))
-            payload.update({"status": "completed", "count": len(serialised), "devices": serialised})
+            payload.update({
+                "status": "completed",
+                "count": len(serialised),
+                "devices": serialised,
+                "simulated": simulated,
+            })
         except Exception as exc:
             payload.update({"status": "error", "error": str(exc)})
 
