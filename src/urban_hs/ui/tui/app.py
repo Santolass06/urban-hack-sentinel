@@ -182,12 +182,20 @@ class TUIApp(App):
             self._attack_log.append(f"[green]DONE[/green] {message.payload}")
         elif message.event_type == "attack.error":
             self._attack_log.append(f"[red]ERROR[/red] {message.payload}")
-        elif message.event_type == "wifi.scan_complete":
+        elif message.event_type in ("wifi.scan.completed", "wifi.scan_complete"):
             self._wifi_networks = message.payload.get("networks", [])
             self._refresh_wifi_table()
-        elif message.event_type == "ble.scan_complete":
+        elif message.event_type in ("ble.scan.completed", "ble.scan_complete"):
             self._ble_devices = message.payload.get("devices", [])
             self._refresh_ble_table()
+        elif message.event_type in ("network.scan.completed",):
+            hosts = message.payload.get("hosts", [])
+            results = self.query_one("#net-results", Static)
+            if hosts:
+                lines = [f"{h.get('ip', '?')} — {h.get('hostname', '')} ({h.get('os_guess', '')})" for h in hosts]
+                results.update("\n".join(lines))
+            else:
+                results.update("(no hosts found)")
 
     def _refresh_wifi_table(self) -> None:
         table = self.query_one("#wifi-table", DataTable)
@@ -241,7 +249,8 @@ class TUIApp(App):
         elif bid == "btn-ble-whisperpair":
             self._confirm("Run WhisperPair pairing attack?", self._ble_whisperpair)
         elif bid == "btn-net-nmap":
-            logs.write("[yellow]Nmap scan not yet implemented.[/yellow]")
+            logs.write("[yellow]Starting network scan…[/yellow]")
+            asyncio.create_task(self._network_scan())
         else:
             logs.write(f"[yellow]Button:[/yellow] {bid}")
 
@@ -273,19 +282,20 @@ class TUIApp(App):
 
     def _publish_attack(self, attack: str, params: Dict[str, Any]) -> None:
         import uuid
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         from urban_hs.core import get_event_bus
         from urban_hs.core.event_bus import Event, EventPriority
 
+        category = attack.split("_", 1)[0] if "_" in attack else "attack"
         bus = get_event_bus()
         event = Event(
-            type="wifi.attack_request",
-            payload={"type": attack, **params},
+            type=f"{category}.attack_request",
+            payload={"attack": attack, "params": params},
             source="tui",
             priority=EventPriority.NORMAL,
             correlation_id=str(uuid.uuid4()),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             metadata={},
         )
         asyncio.create_task(bus.publish(event))
@@ -337,6 +347,24 @@ class TUIApp(App):
             ))
         except Exception as exc:
             self.post_message(EventMessage("ble.scan.error", {"error": str(exc)}))
+
+    async def _network_scan(self) -> None:
+        try:
+            from urban_hs.modules.network import NetworkModule, ScanType
+
+            module = NetworkModule()
+            hosts = await module.nmap.scan(
+                ["192.168.1.0/24"],
+                scan_type=ScanType.HOST_DISCOVERY,
+                timeout=60,
+            )
+            result = [vars(h) for h in hosts]
+            self.post_message(EventMessage(
+                "network.scan.completed",
+                {"count": len(result), "hosts": result},
+            ))
+        except Exception as exc:
+            self.post_message(EventMessage("network.scan.error", {"error": str(exc)}))
 
     def action_toggle_dark(self) -> None:
         self.theme = "monokai" if self.theme == "default" else "default"

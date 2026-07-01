@@ -170,6 +170,15 @@
         </section>
 
         <section class="card">
+            <h2 style="margin-top:0">Network</h2>
+            <div class="row">
+                <input id="net-target" value="192.168.1.0/24" placeholder="Target (CIDR)" />
+                <button onclick="netScan()">Host Discovery</button>
+            </div>
+            <pre class="terminal" id="net-output">(idle)</pre>
+        </section>
+
+        <section class="card">
             <h2 style="margin-top:0">Live Feed</h2>
             <pre class="terminal" id="logs-output">(connecting…)</pre>
         </section>
@@ -318,10 +327,8 @@
             out.textContent = 'Scanning…';
             const iface = document.getElementById('wifi-iface').value || 'wlan1';
             try {
-                const j = await api('/wifi/scan', {
-                    method: 'POST',
-                    body: JSON.stringify({interface: iface, strategy: 'passive_only'})
-                });
+                const params = new URLSearchParams({interface: iface, strategy: 'passive_only'});
+                const j = await api('/wifi/scan?' + params.toString(), { method: 'POST' });
                 out.textContent = JSON.stringify(j, null, 2);
             } catch (e) {
                 out.textContent = 'Error: ' + (e.message || e);
@@ -343,10 +350,21 @@
             out.textContent = 'Scanning…';
             const dur = parseInt(document.getElementById('ble-duration').value || '10', 10);
             try {
-                const j = await api('/ble/scan', {
-                    method: 'POST',
-                    body: JSON.stringify({duration: dur})
-                });
+                const params = new URLSearchParams({duration: dur});
+                const j = await api('/ble/scan?' + params.toString(), { method: 'POST' });
+                out.textContent = JSON.stringify(j, null, 2);
+            } catch (e) {
+                out.textContent = 'Error: ' + (e.message || e);
+            }
+        }
+
+        async function netScan() {
+            const out = document.getElementById('net-output');
+            out.textContent = 'Scanning…';
+            const target = document.getElementById('net-target').value || '192.168.1.0/24';
+            try {
+                const params = new URLSearchParams({target: target, scan_type: 'host_discovery'});
+                const j = await api('/network/scan?' + params.toString(), { method: 'POST' });
                 out.textContent = JSON.stringify(j, null, 2);
             } catch (e) {
                 out.textContent = 'Error: ' + (e.message || e);
@@ -366,26 +384,49 @@
 
                 const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
                 const wsUrl = protocol + '//' + location.host + '/api/v1/events?token=' + encodeURIComponent(authToken);
-                const ws = new WebSocket(wsUrl);
-                const logs = document.getElementById('logs-output');
-                const attackOut = document.getElementById('attack-output');
-                ws.onopen = () => appendLog('logs-output', 'Live feed connected');
-                ws.onmessage = (ev) => {
-                    try {
-                        const data = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
-                        appendLog('logs-output', data.type + ' | ' + JSON.stringify(data.payload || {}));
-                        if (data.type && data.type.startsWith('attack.')) {
-                            appendLog('attack-output', data.type + ' | ' + JSON.stringify(data.payload || {}));
-                            if (data.type === 'attack.completed' || data.type === 'attack.error') {
-                                setJobBadge('');
+                let wsReconnectTimer = null;
+
+                function connectWs() {
+                    const ws = new WebSocket(wsUrl);
+                    const statusBadge = document.getElementById('status-badge');
+                    ws.onopen = () => {
+                        statusBadge.textContent = 'online';
+                        statusBadge.className = 'badge ok';
+                        appendLog('logs-output', 'Live feed connected');
+                    };
+                    ws.onmessage = (ev) => {
+                        try {
+                            const data = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
+                            appendLog('logs-output', data.type + ' | ' + JSON.stringify(data.payload || {}));
+                            if (data.type && data.type.startsWith('attack.')) {
+                                appendLog('attack-output', data.type + ' | ' + JSON.stringify(data.payload || {}));
+                                if (data.type === 'attack.completed' || data.type === 'attack.error') {
+                                    setJobBadge('');
+                                }
                             }
+                            if (data.type === 'wifi.scan.completed') {
+                                appendLog('wifi-output', 'Scan complete: ' + (data.payload?.count || 0) + ' networks');
+                            }
+                            if (data.type === 'ble.scan.completed') {
+                                appendLog('ble-output', 'Scan complete: ' + (data.payload?.count || 0) + ' devices');
+                            }
+                            if (data.type === 'network.scan.completed') {
+                                appendLog('net-output', 'Scan complete: ' + (data.payload?.count || 0) + ' hosts');
+                            }
+                        } catch {
+                            appendLog('logs-output', ev.data);
                         }
-                    } catch {
-                        appendLog('logs-output', ev.data);
-                    }
-                };
-                ws.onclose = () => appendLog('logs-output', 'Live feed disconnected');
-                ws.onerror = () => appendLog('logs-output', 'Live feed error');
+                    };
+                    ws.onclose = () => {
+                        statusBadge.textContent = 'offline';
+                        statusBadge.className = 'badge err';
+                        appendLog('logs-output', 'Live feed disconnected — reconnecting in 3s');
+                        wsReconnectTimer = setTimeout(connectWs, 3000);
+                    };
+                    ws.onerror = () => appendLog('logs-output', 'Live feed error');
+                    return ws;
+                }
+                connectWs();
             } catch (e) {
                 if (e.message !== 'Unauthorized') {
                     document.getElementById('sys-info').textContent = 'Error loading system info';
