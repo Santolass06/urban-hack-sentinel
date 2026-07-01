@@ -194,6 +194,9 @@ class APIConfig(BaseSettings):
     tls_enabled: bool = False
     tls_cert_path: str = ""
     tls_key_path: str = ""
+    enable_ip_allowlist: bool = False
+    allowed_ips: List[str] = Field(default_factory=list)
+    rate_limit_per_minute: int = 60
 
     @field_validator("jwt_secret", mode="before")
     @classmethod
