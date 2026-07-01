@@ -29,6 +29,7 @@ from dbus_fast import DBusError
 from dbus_fast.aio import MessageBus
 from dbus_fast.constants import BusType
 
+from urban_hs.core.session_scope import get_active_scope
 from urban_hs.modules.hid import DuckyCommandType, DuckyCompiler, HIDInjector, KeyboardLayout
 
 logger = structlog.get_logger(__name__)
@@ -688,7 +689,16 @@ async def bt_hid_attack(
     adapter: str = "hci0",
     keyboard_type: BTKeyboardType = BTKeyboardType.GENERIC,
 ) -> BTHIDResult:
-    """Convenience function to run a BT HID attack."""
+    """Convenience function to run a BT HID attack.
+
+    Session-scope guard: Bluetooth HID keystroke injection is an active
+    attack against *target_address* and must be authorised by the active
+    :class:`~urban_hs.core.session_scope.SessionScope`. A ``PermissionError``
+    is raised (not an event) because this standalone entry point has no
+    job_id / event-bus context — callers catch and surface it.
+    """
+    get_active_scope().validate(target_address, "bluetooth_hid")
+
     config = BTHIDConfig(
         adapter=adapter,
         target_address=target_address,

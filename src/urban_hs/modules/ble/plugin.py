@@ -219,6 +219,22 @@ class BLEEventHandler(EventHandler):
         if not address:
             return
         
+        # Session-scope guard rail (same shared scope as the REST/exploit paths).
+        # The WhisperPair *test* performs a real GATT write (KBP request) against
+        # a device not in pairing mode — the same CVE-2025-36911 primitive as the
+        # exploit chain, only shallower — so it must be gated identically.
+        try:
+            get_active_scope().validate(address, "ble")
+        except PermissionError as exc:
+            bus = get_event_bus()
+            await bus.publish(Event(
+                type="ble.attack_denied",
+                payload={"address": address, "reason": str(exc)},
+                source="ble.plugin",
+                correlation_id=event.correlation_id,
+            ))
+            return
+
         result = await self.plugin.test_vulnerability(address)
         
         bus = get_event_bus()
