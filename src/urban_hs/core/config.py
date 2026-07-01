@@ -184,7 +184,7 @@ class LoggingConfig(BaseSettings):
 
 
 class APIConfig(BaseSettings):
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = 8080
     workers: int = 2
     jwt_secret: str = ""  # Must be set via env/keyring

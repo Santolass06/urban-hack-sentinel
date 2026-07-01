@@ -96,9 +96,34 @@
         }
         .attack-card h3 { margin: 0; font-size: 0.95rem; }
         .attack-card p { margin: 0; color: var(--muted); font-size: 0.8rem; }
+        .login-overlay {
+            position: fixed; inset: 0;
+            background: var(--bg);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1000;
+        }
+        .login-box {
+            background: var(--panel);
+            border: 1px solid #30363d;
+            border-radius: 0.5rem;
+            padding: 2rem 2.5rem;
+            text-align: center;
+            max-width: 360px;
+        }
+        .login-box h2 { margin-top: 0; }
+        .login-box .msg { color: var(--amber); font-size: 0.85rem; margin-bottom: 0.75rem; min-height: 1.2em; }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
+    <div class="login-overlay" id="login-overlay">
+        <div class="login-box">
+            <h2>Urban Hack Sentinel</h2>
+            <p class="msg" id="login-msg"></p>
+            <button id="btn-connect" onclick="doLogin()">Connect</button>
+        </div>
+    </div>
+
     <header>
         <div>
             <strong>Urban Hack Sentinel v3</strong>
@@ -107,6 +132,7 @@
         <div class="row">
             <span class="badge" id="arch-badge">--</span>
             <span class="badge" id="job-badge">job: --</span>
+            <button class="secondary" onclick="doLogout()" style="font-size:0.75rem;padding:0.3rem 0.5rem">Logout</button>
         </div>
     </header>
 
@@ -151,12 +177,60 @@
 
     <script>
         const API = '/api/v1';
+        let authToken = localStorage.getItem('uhs_token') || null;
         let attackJobs = {};
+
+        function showLogin(msg) {
+            document.getElementById('login-overlay').classList.remove('hidden');
+            document.getElementById('login-msg').textContent = msg || '';
+        }
+
+        function hideLogin() {
+            document.getElementById('login-overlay').classList.add('hidden');
+        }
+
+        async function doLogin() {
+            const btn = document.getElementById('btn-connect');
+            btn.disabled = true;
+            btn.textContent = 'Connecting…';
+            try {
+                const res = await fetch(API + '/auth/token', { method: 'POST' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                authToken = data.access_token;
+                localStorage.setItem('uhs_token', authToken);
+                hideLogin();
+                init();
+            } catch (e) {
+                document.getElementById('login-msg').textContent = 'Falha ao conectar: ' + (e.message || e);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Connect';
+            }
+        }
+
+        function doLogout() {
+            authToken = null;
+            localStorage.removeItem('uhs_token');
+            location.reload();
+        }
+
         function api(path, opts = {}) {
             return fetch(API + path, {
                 ...opts,
-                headers: {'Content-Type': 'application/json'}
-            }).then(res => res.json().catch(() => ({})));
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(authToken ? { 'Authorization': 'Bearer ' + authToken } : {})
+                }
+            }).then(res => {
+                if (res.status === 401 || res.status === 403) {
+                    authToken = null;
+                    localStorage.removeItem('uhs_token');
+                    showLogin('Sessão expirada, reconecta');
+                    throw new Error('Unauthorized');
+                }
+                return res.json().catch(() => ({}));
+            });
         }
 
         function appendLog(nodeId, message) {
@@ -280,6 +354,10 @@
         }
 
         async function init() {
+            if (!authToken) {
+                showLogin();
+                return;
+            }
             try {
                 const info = await api('/info');
                 document.getElementById('sys-info').textContent = JSON.stringify(info, null, 2);
@@ -287,7 +365,8 @@
                 await loadAttacks();
 
                 const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const ws = new WebSocket(protocol + '//' + location.host + '/api/v1/events');
+                const wsUrl = protocol + '//' + location.host + '/api/v1/events?token=' + encodeURIComponent(authToken);
+                const ws = new WebSocket(wsUrl);
                 const logs = document.getElementById('logs-output');
                 const attackOut = document.getElementById('attack-output');
                 ws.onopen = () => appendLog('logs-output', 'Live feed connected');
@@ -308,11 +387,17 @@
                 ws.onclose = () => appendLog('logs-output', 'Live feed disconnected');
                 ws.onerror = () => appendLog('logs-output', 'Live feed error');
             } catch (e) {
-                document.getElementById('sys-info').textContent = 'Error loading system info';
+                if (e.message !== 'Unauthorized') {
+                    document.getElementById('sys-info').textContent = 'Error loading system info';
+                }
             }
         }
 
-        init();
+        if (authToken) {
+            init();
+        } else {
+            showLogin();
+        }
     </script>
 </body>
 </html>

@@ -15,6 +15,7 @@ from fastapi import FastAPI
 
 from urban_hs.ui.api.main import app as api_app
 from urban_hs.ui.api.auth import create_access_token
+from urban_hs.ui.api.rate_limit import limiter
 
 
 @pytest.fixture
@@ -26,6 +27,13 @@ def app() -> FastAPI:
 def auth_headers() -> dict[str, str]:
     token = create_access_token(subject="test-user")
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    limiter.reset()
+    yield
+    limiter.reset()
 
 
 @pytest.mark.asyncio
@@ -75,3 +83,14 @@ async def test_wifi_interfaces_unauthorized(app) -> None:
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         r = await client.get("/api/v1/wifi/interfaces")
     assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_wifi_scan_rate_limited_after_threshold(app, auth_headers) -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        statuses = [
+            (await client.post("/api/v1/wifi/scan", headers=auth_headers)).status_code
+            for _ in range(11)
+        ]
+    assert statuses[-1] == 429

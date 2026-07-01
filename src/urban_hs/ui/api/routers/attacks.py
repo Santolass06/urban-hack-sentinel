@@ -8,25 +8,30 @@ the UI to trigger execution with parameters.
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
+from urban_hs.core.config import get_config
 from urban_hs.core.event_bus import Event, EventPriority, get_event_bus
 from urban_hs.core.process_mgr import ProcessLimits, ProcessManager
 from urban_hs.modules import list_modules
 from urban_hs.ui.api.auth import require_auth
+from urban_hs.ui.api.rate_limit import limiter
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[require_auth()])
 _process_manager = ProcessManager()
-_limiter = Limiter(key_func=get_remote_address)
 
-_process_manager = ProcessManager()
+# The only registry entry currently wired to a real execution engine.
+# Other module names keep returning the inert placeholder below until
+# they get an equivalent, audited execution path.
+EXPLOIT_ATTACK_NAME = "exploit"
 
 
 class AttackSummary(BaseModel):
@@ -77,7 +82,10 @@ def _infer_plugin_type(name: str, class_path: str) -> str:
 
 
 @router.post("/attacks/{attack_name}/execute", response_model=ExecuteResponse)
-async def execute_attack(request: Request, attack_name: str, payload: ExecuteRequest) -> ExecuteResponse:
+@limiter.limit("10/minute")
+async def execute_attack(
+    request: Request, attack_name: str, payload: ExecuteRequest
+) -> ExecuteResponse:
     modules = list_modules()
     if attack_name not in modules:
         raise HTTPException(status_code=404, detail="Unknown attack")
@@ -93,6 +101,7 @@ async def execute_attack(request: Request, attack_name: str, payload: ExecuteReq
     )
 
     if payload.dry_run:
+        await _audit_log(attack_name, payload.params, job_id, "dry_run")
         await _publish(
             "attack.completed",
             {
@@ -103,11 +112,111 @@ async def execute_attack(request: Request, attack_name: str, payload: ExecuteReq
         )
         return ExecuteResponse(job_id=job_id, attack=attack_name)
 
+    if attack_name == EXPLOIT_ATTACK_NAME:
+        return await _execute_exploit(attack_name, payload, job_id)
+
     cmd = f"echo 'Executing {attack_name} with params={payload.params}'"
     limits = ProcessLimits(max_duration_sec=60)
     asyncio.create_task(_process_manager.run(cmd, limits=limits))
+    await _audit_log(attack_name, payload.params, job_id, "queued")
 
     return ExecuteResponse(job_id=job_id, attack=attack_name)
+
+
+async def _execute_exploit(
+    attack_name: str, payload: ExecuteRequest, job_id: str
+) -> ExecuteResponse:
+    """Dispatch to the real ExploitRunner, gated by the active-attacks guard rails.
+
+    enable_active_attacks and legal_warning_shown must both be set before
+    any exploit code is downloaded/executed against a target — mirrors the
+    guard already enforced for WiFi active attacks (urban_hack.py, wifi/plugin.py).
+    """
+    cfg = get_config()
+    if not cfg.wifi.enable_active_attacks or not cfg.wifi.legal_warning_shown:
+        await _audit_log(
+            attack_name, payload.params, job_id, "denied", error="guard_rails_not_satisfied"
+        )
+        await _publish(
+            "attack.denied",
+            {"job_id": job_id, "attack": attack_name, "reason": "guard_rails_not_satisfied"},
+        )
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Exploit execution requires both enable_active_attacks and "
+                "legal_warning_shown to be enabled in configuration."
+            ),
+        )
+
+    from urban_hs.modules.exploit.runner import ExploitRunner, ExploitSource, ExploitTarget
+
+    params = payload.params
+    target = ExploitTarget(
+        id=job_id,
+        target_type="service",
+        address=params.get("target", ""),
+        port=params.get("port"),
+        service=params.get("service"),
+    )
+
+    runner = ExploitRunner()
+    result = await runner.execute(
+        exploit_name=str(params.get("exploit_id", "")),
+        target=target,
+        source=ExploitSource.SEARCHSPLOIT,
+        options=params.get("options"),
+    )
+
+    await _audit_log(
+        attack_name,
+        params,
+        job_id,
+        result.status.value,
+        error=result.error or None,
+    )
+    await _publish(
+        "attack.completed",
+        {
+            "job_id": job_id,
+            "success": result.success,
+            "result": result.to_dict(),
+        },
+    )
+    return ExecuteResponse(job_id=job_id, attack=attack_name)
+
+
+async def _audit_log(
+    attack_name: str,
+    params: Dict[str, Any],
+    job_id: str,
+    outcome: str,
+    error: Optional[str] = None,
+) -> None:
+    """Persist an auditable record of every execution attempt.
+
+    Best-effort: a storage failure (e.g. unwritable log_root) must not
+    break the request — the gate/event-bus decision already happened.
+    """
+    try:
+        from urban_hs.core.storage import get_storage
+
+        await get_storage().log_jsonl(
+            "attack_audit",
+            {
+                "timestamp": datetime.utcnow().isoformat(),
+                "job_id": job_id,
+                "attack": attack_name,
+                "target": params.get("target") or params.get("target_address"),
+                "outcome": outcome,
+                "error": error,
+            },
+        )
+    except Exception as exc:
+        logger.warning(
+            "Failed to persist attack audit log",
+            extra={"attack": attack_name, "error": str(exc)},
+        )
 
 
 async def _publish(event_type: str, payload: Dict[str, Any]) -> None:

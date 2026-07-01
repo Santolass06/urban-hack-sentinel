@@ -38,8 +38,6 @@ _MODULE_REGISTRY: Dict[str, str] = {
     "esp32": "urban_hs.modules.esp32:ESP32Module",
     "bt_hid": "urban_hs.modules.bt_hid:BTHIDModule",
     "urban_hack": "urban_hs.modules.urban_hack:UrbanHackPlugin",
-    "example_sniffer": "urban_hs.modules.plugins.example_sniffer:ExampleSnifferPlugin",
-    "example_reporter": "urban_hs.modules.plugins.example_reporter:ExampleReporterPlugin",
 }
 
 

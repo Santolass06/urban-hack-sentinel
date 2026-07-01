@@ -5,11 +5,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any, Dict, Set
+from typing import Any, Dict, Optional, Set
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
+from jose import JWTError
 
 from urban_hs.core.event_bus import Event, EventHandler, get_event_bus
+from urban_hs.ui.api.auth import decode_access_token
 
 router = APIRouter()
 
@@ -67,8 +69,28 @@ class WebSocketEventHandler(EventHandler):
         )
 
 
+def _extract_ws_token(websocket: WebSocket, token: Optional[str]) -> Optional[str]:
+    """Pull a Bearer token from the Authorization header, falling back to ?token=."""
+    auth_header = websocket.headers.get("authorization")
+    if auth_header and auth_header.lower().startswith("bearer "):
+        return auth_header.split(" ", 1)[1]
+    return token
+
+
 @router.websocket("/events")
-async def websocket_events(websocket: WebSocket) -> None:
+async def websocket_events(
+    websocket: WebSocket, token: Optional[str] = Query(default=None)
+) -> None:
+    bearer = _extract_ws_token(websocket, token)
+    if not bearer:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    try:
+        decode_access_token(bearer)
+    except JWTError:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
     await manager.connect(websocket)
     bus = get_event_bus()
     bus.subscribe(WebSocketEventHandler())

@@ -21,7 +21,7 @@ from textual.widgets import (
     Footer,
     Header,
     Label,
-    Log,
+    RichLog,
     Static,
     TabbedContent,
     TabPane,
@@ -80,7 +80,7 @@ class TUIApp(App):
     CSS = """
     Screen { layout: vertical; }
     #main { height: 1fr; }
-    Log { height: 1fr; border: solid $primary; }
+    RichLog { height: 1fr; border: solid $primary; }
     .panel { padding: 1 2; }
     DataTable { height: 1fr; }
     Static.confirm-modal { 
@@ -141,9 +141,9 @@ class TUIApp(App):
                         classes="panel",
                     )
                 with TabPane("Terminal", id="tab-terminal"):
-                    yield Log(id="terminal-log", auto_scroll=True, markup=True)
+                    yield RichLog(id="terminal-log", auto_scroll=True, markup=True)
                 with TabPane("Logs", id="tab-logs"):
-                    yield Log(id="app-log", auto_scroll=True, markup=True)
+                    yield RichLog(id="app-log", auto_scroll=True, markup=True)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -168,11 +168,11 @@ class TUIApp(App):
             self.post_message(EventMessage("event_bus.error", {"error": str(exc)}))
 
     def on_event_message(self, message: EventMessage) -> None:
-        terminal = self.query_one("#terminal-log", Log)
-        logs = self.query_one("#app-log", Log)
+        terminal = self.query_one("#terminal-log", RichLog)
+        logs = self.query_one("#app-log", RichLog)
         formatted = f"[cyan]{message.event_type}[/cyan] {message.payload}"
-        terminal.write_line(formatted)
-        logs.write_line(formatted)
+        terminal.write(formatted)
+        logs.write(formatted)
 
         if message.event_type == "attack.started":
             self._attack_log.append(f"[yellow]START[/yellow] {message.payload}")
@@ -216,14 +216,14 @@ class TUIApp(App):
     # Button handlers
     # ------------------------------------------------------------------
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        logs = self.query_one("#app-log", Log)
+        logs = self.query_one("#app-log", RichLog)
         bid = event.button.id or ""
 
         if bid == "btn-wifi-scan":
-            logs.write_line("[yellow]Triggering WiFi scan…[/yellow]")
+            logs.write("[yellow]Triggering WiFi scan…[/yellow]")
             asyncio.create_task(self._wifi_scan())
         elif bid == "btn-wifi-interfaces":
-            logs.write_line("[yellow]Listing WiFi interfaces…[/yellow]")
+            logs.write("[yellow]Listing WiFi interfaces…[/yellow]")
             asyncio.create_task(self._wifi_interfaces())
         elif bid == "btn-wifi-deauth":
             self._confirm("Run deauth on selected network?", self._wifi_deauth)
@@ -236,14 +236,14 @@ class TUIApp(App):
         elif bid == "btn-wifi-pmkid":
             self._confirm("Capture PMKID?", self._wifi_pmkid)
         elif bid == "btn-ble-scan":
-            logs.write_line("[yellow]Triggering BLE scan…[/yellow]")
+            logs.write("[yellow]Triggering BLE scan…[/yellow]")
             asyncio.create_task(self._ble_scan())
         elif bid == "btn-ble-whisperpair":
             self._confirm("Run WhisperPair pairing attack?", self._ble_whisperpair)
         elif bid == "btn-net-nmap":
-            logs.write_line("[yellow]Nmap scan not yet implemented.[/yellow]")
+            logs.write("[yellow]Nmap scan not yet implemented.[/yellow]")
         else:
-            logs.write_line(f"[yellow]Button:[/yellow] {bid}")
+            logs.write(f"[yellow]Button:[/yellow] {bid}")
 
     def _confirm(self, message: str, callback: Any) -> None:
         container = self.query_one("#main", Container)

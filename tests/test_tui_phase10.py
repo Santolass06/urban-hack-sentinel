@@ -26,11 +26,11 @@ def test_tui_event_handler_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
 
     class FakeTerminal:
-        def write_line(self, line: str) -> None:
+        def write(self, line: str) -> None:
             calls.append(line)
 
     class FakeLog:
-        def write_line(self, line: str) -> None:
+        def write(self, line: str) -> None:
             calls.append(line)
 
     fake_terminal = FakeTerminal()

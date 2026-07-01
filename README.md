@@ -133,24 +133,24 @@ Full-screen dashboard with tabs for Wi-Fi, BLE, Network, and an integrated termi
 ### FastAPI + Web dashboard (`urban-hs-server`)
 
 ```bash
-urban-hs-server --host 0.0.0.0 --port 8000
+urban-hs-server
 ```
 
-REST API + WebSocket at `http://localhost:8000/`. Static frontend (HTMX + Alpine.js) served at `/`.
+Default: `http://127.0.0.1:8080/`. REST API + WebSocket + static frontend (HTMX + Alpine.js) served at `/`.
 
 ### Authentication
 
 All API endpoints (except `/healthz` and `/auth/token`) require a Bearer token:
 
 ```bash
-# Get a token
-TOKEN=$(curl -s -X POST http://localhost:8000/auth/token \
-  -H "Content-Type: application/json" \
-  -d '{"username": "admin", "password": "changeme"}' | jq -r '.access_token')
+# Get a token (no credentials required — see warning below)
+TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/token | jq -r '.access_token')
 
 # Use the token
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/info
 ```
+
+> **⚠ Security Warning:** This API **NUNCA** deve ser vinculada a `0.0.0.0` ou exposta fora de `localhost` sem adicionar autenticação real primeiro — o token JWT atual não verifica identidade, só gera uma sessão. O endpoint `/api/v1/auth/token` aceita qualquer request sem credenciais.
 
 ### Exploit Runner — Autonomous Execution
 

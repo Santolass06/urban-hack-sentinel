@@ -108,6 +108,14 @@ def run(
     asyncio.run(_main())
 
 
+@app.command()
+def tui() -> None:
+    """Launch the terminal UI dashboard."""
+    from urban_hs.ui.tui.app import run
+
+    run()
+
+
 @app.command(name="modules")
 def list_modules() -> None:
     """List registered module plugins."""

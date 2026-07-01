@@ -11,9 +11,10 @@ import asyncio
 import uuid
 from typing import Any, Dict
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from urban_hs.ui.api.auth import require_auth
+from urban_hs.ui.api.rate_limit import limiter
 
 router = APIRouter(dependencies=[require_auth()])
 
@@ -45,7 +46,10 @@ async def list_wifi_interfaces() -> Dict[str, Any]:
 
 
 @router.post("/scan")
-async def start_wifi_scan(interface: str = "wlan1", strategy: str = "passive_only") -> Dict[str, Any]:
+@limiter.limit("10/minute")
+async def start_wifi_scan(
+    request: Request, interface: str = "wlan1", strategy: str = "passive_only"
+) -> Dict[str, Any]:
     job_id = str(uuid.uuid4())
     payload: Dict[str, Any] = {
         "job_id": job_id,

@@ -3,10 +3,16 @@ Urban Hack Sentinel v3 — FastAPI backend (REST + WebSocket).
 
 Entry point::
 
-    uvicorn urban_hs.ui.api.main:run --host 0.0.0.0 --port 8000
+    urban-hs-server
 
 The ``run`` helper is registered as a console script in
 ``pyproject.toml`` (``urban-hs-server``).
+
+.. warning::
+
+    Esta API NUNCA deve ser vinculada a 0.0.0.0 ou exposta fora de
+    localhost sem adicionar autenticação real primeiro — o token JWT
+    atual não verifica identidade, só gera uma sessão.
 """
 
 from __future__ import annotations
@@ -20,16 +26,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from urban_hs import __version__
 from urban_hs.core.event_bus import init_event_bus, shutdown_event_bus
+from urban_hs.ui.api.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
-
-limiter = Limiter(key_func=get_remote_address)
 
 
 @asynccontextmanager
@@ -110,3 +114,13 @@ def _build_app() -> FastAPI:
 
 
 app = _build_app()
+
+
+def run() -> None:
+    """Console script entry point for ``urban-hs-server``."""
+    import uvicorn
+
+    from urban_hs.core.config import get_config
+
+    cfg = get_config()
+    uvicorn.run(app, host=cfg.api.host, port=cfg.api.port)

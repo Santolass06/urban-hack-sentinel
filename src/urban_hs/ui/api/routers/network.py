@@ -10,15 +10,18 @@ import asyncio
 import uuid
 from typing import Any, Dict
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from urban_hs.ui.api.auth import require_auth
+from urban_hs.ui.api.rate_limit import limiter
 
 router = APIRouter(dependencies=[require_auth()])
 
 
 @router.post("/scan")
+@limiter.limit("10/minute")
 async def start_network_scan(
+    request: Request,
     target: str = "192.168.1.0/24",
     scan_type: str = "host_discovery",
     timeout: int = 300,
