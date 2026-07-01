@@ -310,7 +310,11 @@ class TUIApp(App):
             self._refresh_wifi_table()
             self.post_message(EventMessage(
                 "wifi.scan.completed",
-                {"count": len(self._wifi_networks), "networks": self._wifi_networks},
+                {
+                    "count": len(self._wifi_networks),
+                    "networks": self._wifi_networks,
+                    "simulated": False,
+                },
             ))
         except Exception as exc:
             self.post_message(EventMessage("wifi.scan.error", {"error": str(exc)}))
@@ -343,7 +347,11 @@ class TUIApp(App):
             self._refresh_ble_table()
             self.post_message(EventMessage(
                 "ble.scan.completed",
-                {"count": len(self._ble_devices), "devices": self._ble_devices},
+                {
+                    "count": len(self._ble_devices),
+                    "devices": self._ble_devices,
+                    "simulated": False,
+                },
             ))
         except Exception as exc:
             self.post_message(EventMessage("ble.scan.error", {"error": str(exc)}))
@@ -361,7 +369,7 @@ class TUIApp(App):
             result = [vars(h) for h in hosts]
             self.post_message(EventMessage(
                 "network.scan.completed",
-                {"count": len(result), "hosts": result},
+                {"count": len(result), "hosts": result, "simulated": False},
             ))
         except Exception as exc:
             self.post_message(EventMessage("network.scan.error", {"error": str(exc)}))

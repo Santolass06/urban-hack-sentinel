@@ -10,6 +10,7 @@ import structlog
 
 from urban_hs.core import Event, get_config, get_event_bus, get_storage
 from urban_hs.core.event_bus import Event, EventHandler
+from urban_hs.core.session_scope import get_active_scope
 from urban_hs.modules.wifi.attacks import (
     AttackResult,
     DeauthAttack,
@@ -387,6 +388,21 @@ class WiFiEventHandler(EventHandler):
         bssid = payload.get("bssid")
 
         if not bssid:
+            return
+
+        # Session-scope guard rail: mirrors the check enforced on the REST
+        # path (ui/api/routers/attacks.py). The event bus is a second route
+        # to real execution, so it must consult the same shared scope.
+        try:
+            get_active_scope().validate(bssid, "wifi")
+        except PermissionError as exc:
+            bus = get_event_bus()
+            await bus.publish(Event(
+                type="wifi.attack_denied",
+                payload={"bssid": bssid, "type": attack_type, "reason": str(exc)},
+                source="wifi.plugin",
+                correlation_id=event.correlation_id,
+            ))
             return
 
         progress_updates = []

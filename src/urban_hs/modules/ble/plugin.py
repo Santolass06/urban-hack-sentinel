@@ -10,6 +10,7 @@ import structlog
 
 from urban_hs.core import Event, get_event_bus, get_storage
 from urban_hs.core.event_bus import Event, EventHandler
+from urban_hs.core.session_scope import get_active_scope
 from urban_hs.modules.ble import (
     BLEDevice,
     FastPairScanner,
@@ -243,10 +244,23 @@ class BLEEventHandler(EventHandler):
         # TODO: Implement full exploit chain
         payload = event.payload
         address = payload.get("address")
-        
+
         if not address:
             return
-        
+
+        # Session-scope guard rail (same shared scope as the REST path).
+        try:
+            get_active_scope().validate(address, "ble")
+        except PermissionError as exc:
+            bus = get_event_bus()
+            await bus.publish(Event(
+                type="ble.attack_denied",
+                payload={"address": address, "reason": str(exc)},
+                source="ble.plugin",
+                correlation_id=event.correlation_id,
+            ))
+            return
+
         result = {"status": "not_implemented", "message": "Full exploit chain requires BlueZ D-Bus integration"}
         
         bus = get_event_bus()

@@ -103,28 +103,41 @@ async def test_scan_request_event(plugin):
 
 @pytest.mark.asyncio()
 async def test_attack_execution(plugin):
+    from urban_hs.core.session_scope import SessionScope, set_active_scope
+
     with patch("urban_hs.modules.wifi.plugin.WiFiScanner", return_value=plugin.scanner):
         await plugin.initialize()
 
     bus_mock = MagicMock()
     bus_mock.publish = AsyncMock()
 
+    # Open the shared session scope so the guard rail permits execution.
+    set_active_scope(SessionScope(
+        allow_active=True,
+        allowed_targets={"AA:BB:CC:DD:EE:FF"},
+        allowed_categories={"wifi"},
+    ))
+
     from urban_hs.modules.wifi.plugin import WiFiEventHandler
     handler = WiFiEventHandler(plugin)
 
-    for attack_type in ("handshake", "pmkid", "wps_pixie", "wps_pin", "deauth"):
-        event = Event(
-            type="wifi.attack_request",
-            payload={
-                "type": attack_type,
-                "bssid": "AA:BB:CC:DD:EE:FF",
-                "channel": 1,
-                "count": 5,
-            },
-            source="test",
-            correlation_id="req-1",
-        )
-        await handler.handle(event)
+    try:
+        for attack_type in ("handshake", "pmkid", "wps_pixie", "wps_pin", "deauth"):
+            event = Event(
+                type="wifi.attack_request",
+                payload={
+                    "type": attack_type,
+                    "bssid": "AA:BB:CC:DD:EE:FF",
+                    "channel": 1,
+                    "count": 5,
+                },
+                source="test",
+                correlation_id="req-1",
+            )
+            await handler.handle(event)
+    finally:
+        # Restore the default closed scope so it does not leak to other tests.
+        set_active_scope(SessionScope())
 
 
 def test_get_known_networks_returns_scanner_list(plugin):

@@ -24,7 +24,11 @@ from pydantic import BaseModel, Field
 from urban_hs.core.config import get_config
 from urban_hs.core.event_bus import Event, EventPriority, get_event_bus
 from urban_hs.core.process_mgr import ProcessLimits, ProcessManager
-from urban_hs.core.session_scope import SessionScope
+from urban_hs.core.session_scope import (
+    SessionScope,
+    get_active_scope,
+    set_active_scope,
+)
 from urban_hs.modules import list_modules
 from urban_hs.ui.api.auth import require_auth
 from urban_hs.ui.api.rate_limit import limiter
@@ -39,19 +43,18 @@ _process_manager = ProcessManager()
 # they get an equivalent, audited execution path.
 EXPLOIT_ATTACK_NAME = "exploit"
 
-# Module-level session scope — blocks active attacks by default.
-_session_scope = SessionScope()
-
-
+# The session scope is a process-wide singleton owned by
+# ``core.session_scope`` so that this REST path and the event-bus attack
+# handlers share one state. These wrappers preserve the existing public
+# API used by the TUI/Web UI and tests.
 def get_session_scope() -> SessionScope:
-    """Return the current session scope (for external configuration)."""
-    return _session_scope
+    """Return the shared session scope (for external configuration)."""
+    return get_active_scope()
 
 
 def set_session_scope(scope: SessionScope) -> None:
-    """Replace the session scope (e.g. from TUI/Web UI on session start)."""
-    global _session_scope
-    _session_scope = scope
+    """Replace the shared session scope (e.g. from TUI/Web UI on session start)."""
+    set_active_scope(scope)
 
 
 class AttackSummary(BaseModel):
@@ -140,7 +143,7 @@ async def execute_attack(
     category = attack_name.split("_", 1)[0] if "_" in attack_name else attack_name
     target = payload.params.get("target") or payload.params.get("interface") or ""
     try:
-        _session_scope.validate(target, category)
+        get_session_scope().validate(target, category)
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc))
 

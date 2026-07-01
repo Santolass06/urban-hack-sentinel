@@ -94,3 +94,28 @@ class SessionScope:
             raise PermissionError(
                 f"Category '{category}' is not in the session allowlist."
             )
+
+
+# ----------------------------------------------------------------------
+# Process-wide active scope — single source of truth
+# ----------------------------------------------------------------------
+#
+# Both the REST execution path (ui/api/routers/attacks.py) and the
+# event-bus attack handlers (modules/wifi/plugin.py,
+# modules/urban_hack.py) must consult the *same* scope instance, otherwise
+# a scope configured on one path would not gate the other. The singleton
+# lives here in ``core`` (the lowest layer) so module handlers can import
+# it without depending on the UI layer.
+
+_active_scope: SessionScope = SessionScope()
+
+
+def get_active_scope() -> SessionScope:
+    """Return the process-wide active session scope."""
+    return _active_scope
+
+
+def set_active_scope(scope: SessionScope) -> None:
+    """Replace the process-wide active session scope."""
+    global _active_scope
+    _active_scope = scope

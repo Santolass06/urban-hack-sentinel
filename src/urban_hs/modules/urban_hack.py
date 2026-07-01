@@ -11,6 +11,7 @@ import structlog
 
 from urban_hs.core import Event, get_config, get_event_bus, get_storage
 from urban_hs.core.event_bus import Event, EventHandler
+from urban_hs.core.session_scope import get_active_scope
 from urban_hs.modules.ble import (
     BLEDevice,
     FastPairScanner,
@@ -514,6 +515,19 @@ class UrbanHackEventHandler(EventHandler):
         if not bssid:
             return
 
+        # Session-scope guard rail (same shared scope as the REST path).
+        try:
+            get_active_scope().validate(bssid, "wifi")
+        except PermissionError as exc:
+            bus = get_event_bus()
+            await bus.publish(Event(
+                type="wifi.attack_denied",
+                payload={"bssid": bssid, "type": attack_type, "reason": str(exc)},
+                source="urban_hack.plugin",
+                correlation_id=event.correlation_id,
+            ))
+            return
+
         progress_updates = []
         def progress_cb(msg: str):
             progress_updates.append(msg)
@@ -613,6 +627,19 @@ class UrbanHackEventHandler(EventHandler):
         address = payload.get("address")
 
         if not address:
+            return
+
+        # Session-scope guard rail (same shared scope as the REST path).
+        try:
+            get_active_scope().validate(address, "ble")
+        except PermissionError as exc:
+            bus = get_event_bus()
+            await bus.publish(Event(
+                type="ble.attack_denied",
+                payload={"address": address, "reason": str(exc)},
+                source="urban_hack.plugin",
+                correlation_id=event.correlation_id,
+            ))
             return
 
         result = {"status": "not_implemented", "message": "Full exploit chain requires BlueZ D-Bus integration"}

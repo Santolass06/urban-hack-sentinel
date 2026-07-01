@@ -6,6 +6,7 @@ Allows unauthorized pairing with Fast Pair devices, leading to microphone access
 """
 
 import json
+from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
