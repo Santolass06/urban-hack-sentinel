@@ -140,6 +140,64 @@ class _ScapyBackend(WiFiBackend):
         return "scapy"
 
 
+@dataclass
+class InterfaceCapabilities:
+    interface: str
+    monitor_supported: bool = False
+    injection_supported: bool = False
+    bands_supported: List[str] = field(default_factory=list)  # ["2.4GHz", "5GHz", "6GHz"]
+    driver: str = "unknown"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "interface": self.interface,
+            "monitor_supported": self.monitor_supported,
+            "injection_supported": self.injection_supported,
+            "bands_supported": self.bands_supported,
+            "driver": self.driver,
+        }
+
+
+async def detect_interface_capabilities(interface: str) -> InterfaceCapabilities:
+    """Probe hardware capabilities of ``interface`` via ``iw phy`` (Issue #1.1)."""
+    import shutil
+
+    caps = InterfaceCapabilities(interface=interface)
+    iw_bin = shutil.which("iw")
+    if not iw_bin:
+        return caps
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            iw_bin, "phy",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await proc.communicate()
+        text = stdout.decode(errors="replace")
+
+        # Parse supported interface modes
+        if "monitor" in text.lower():
+            caps.monitor_supported = True
+        if "AP" in text or "mesh point" in text:
+            caps.injection_supported = True
+
+        # Parse bands
+        bands = []
+        if "2412 MHz" in text or "2.4 GHz" in text or "Frequencies:" in text:
+            bands.append("2.4GHz")
+        if "5180 MHz" in text or "5 GHz" in text:
+            bands.append("5GHz")
+        if "5955 MHz" in text or "6 GHz" in text:
+            bands.append("6GHz")
+
+        caps.bands_supported = bands or ["2.4GHz"]
+    except Exception:
+        pass
+
+    return caps
+
+
 # ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------

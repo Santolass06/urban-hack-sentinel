@@ -293,7 +293,11 @@ class AirodumpScanBackend(ScanBackend):
             from urban_hs.core.config import get_config
             output_dir = get_config().storage.resolve_wifi_scans_dir()
         self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.output_dir.mkdir(parents=True, exist_ok=True)
+        except PermissionError:
+            self.output_dir = Path.home() / ".local/share/urban-hs/wifi_scans"
+            self.output_dir.mkdir(parents=True, exist_ok=True)
 
     async def scan(self, interface: str, channels: Optional[List[int]] = None, duration: int = 30) -> List[NetworkInfo]:
         csv_prefix = self.output_dir / f"scan_{uuid.uuid4().hex[:8]}"

@@ -91,7 +91,17 @@ class HandshakeManager:
         self.cracked_dir = Path(cracked_dir)
         
         for d in [self.handshake_dir, self.hash_dir, self.cracked_dir]:
-            d.mkdir(parents=True, exist_ok=True)
+            try:
+                d.mkdir(parents=True, exist_ok=True)
+            except PermissionError:
+                fallback_d = Path.home() / ".local/share/urban-hs" / d.name
+                fallback_d.mkdir(parents=True, exist_ok=True)
+                if d == self.handshake_dir:
+                    self.handshake_dir = fallback_d
+                elif d == self.hash_dir:
+                    self.hash_dir = fallback_d
+                elif d == self.cracked_dir:
+                    self.cracked_dir = fallback_d
 
         self._handshakes: Dict[str, HandshakeInfo] = {}
         self._load_existing()

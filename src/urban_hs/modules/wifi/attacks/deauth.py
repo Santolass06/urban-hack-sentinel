@@ -1,5 +1,9 @@
 """
-Deauthentication and Kr00k attacks.
+Deauthentication and Kr00k attacks module.
+
+Academic References & Tool Credits:
+- IEEE 802.11 Unauthenticated Management Frame Deauth Attack: Aircrack-ng Project (Thomas d'Otreppe et al.) via `aireplay-ng`.
+- Kr00k (CVE-2019-15126): All-zero encryption key vulnerability in Broadcom/Cypress Wi-Fi chips discovered by ESET Research (2020).
 """
 
 import asyncio
@@ -19,7 +23,8 @@ class DeauthAttack(BaseAttack):
     """
     Deauthentication Attack.
 
-    Uses aireplay-ng to send deauthentication packets.
+    Academic Reference: IEEE 802.11-2016 Section 12.3 (Management Frame Security).
+    Credits: Uses `aireplay-ng` from the Aircrack-ng suite for packet injection.
     Can target specific clients (targeted) or broadcast (all clients).
     """
 

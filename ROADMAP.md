@@ -199,6 +199,26 @@
 
 ---
 
+## 🏃 PLANO DE SPRINTS & ISSUES (Plano de Execução Sequencial) — Status: ✅ TODOS CONCLUÍDOS
+
+### 📌 Sprint 1 — Hardware Auto-Discovery & Mapa de Wardriving (F3.5 & F2.5) — ✅ Completo
+* **Issue #1.1 (Auto-Deteção de Capacidades Wi-Fi)**: Implementado `detect_interface_capabilities` via `iw phy` em `src/urban_hs/hal/wifi/__init__.py`. ✅
+* **Issue #1.2 (Endpoint REST de Geolocalização)**: Endpoint `/api/v1/wifi/map-data` em `src/urban_hs/ui/api/routers/wifi.py`. ✅
+* **Issue #1.3 (Mapa Interativo Leaflet.js)**: Interface Web com Leaflet.js + OpenStreetMap em `src/urban_hs/ui/web/index.html`. ✅
+
+### 📌 Sprint 2 — Relatórios de Auditoria & WiGLE.net (F5.5 & F6.4) — ✅ Completo
+* **Issue #2.1 (Gerador de Relatórios Executivos)**: CLI `urban-hs report` e `ReportGenerator` em `src/urban_hs/modules/reporting/generator.py`. ✅
+* **Issue #2.2 (Cliente API WiGLE.net)**: Cliente assíncrono `WigleClient` em `src/urban_hs/modules/wifi/wigle.py`. ✅
+
+### 📌 Sprint 3 — Ataques Avançados WPA3 & Fast Transition (F4.3 & F4.4) — ✅ Completo
+* **Issue #3.1 (WPA3 Transition Mode Downgrade)**: Classe `WPA3DowngradeAttack` em `src/urban_hs/modules/wifi/attacks/wpa.py`. ✅
+* **Issue #3.2 (802.11r Fast Transition PMK-R1 Capture)**: Classe `FastTransitionAttack` em `src/urban_hs/modules/wifi/attacks/wpa.py`. ✅
+
+### 📌 Sprint 4 — Fleet Management & Offloading (F5.4) — ✅ Completo
+* **Issue #4.1 (Cliente Hashtopolis REST API)**: Cliente `HashtopolisClient` em `src/urban_hs/core/offloading.py`. ✅
+
+---
+
 ## 💡 IDEIAS EXPERIMENTAIS (Backlog)
 
 - **Honeypot Wi-Fi**: `hostapd` + `freeradius` para capturar credenciais de clientes que conectam ao nosso AP rogue

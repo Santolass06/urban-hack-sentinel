@@ -11,7 +11,7 @@ Registered as ``urban-hs-tui`` in ``pyproject.toml``.
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, List
+from typing import Any, Optional
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
@@ -99,9 +99,9 @@ class TUIApp(App):
 
     def __init__(self) -> None:
         super().__init__()
-        self._wifi_networks: List[Dict[str, Any]] = []
-        self._ble_devices: List[Dict[str, Any]] = []
-        self._attack_log: List[str] = []
+        self._wifi_networks: list[dict[str, Any]] = []
+        self._ble_devices: list[dict[str, Any]] = []
+        self._attack_log: list[str] = []
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -259,30 +259,68 @@ class TUIApp(App):
         modal = ConfirmModal(message=message, on_confirm=callback)
         container.mount(modal)
 
-    # ------------------------------------------------------------------
-    # Stub attacks for TUI wiring
-    # ------------------------------------------------------------------
+    def _get_selected_wifi_bssid(self) -> str:
+        try:
+            table = self.query_one("#wifi-table", DataTable)
+            if table.cursor_row is not None and table.cursor_row < len(self._wifi_networks):
+                net = self._wifi_networks[table.cursor_row]
+                return net.get("bssid", "FF:FF:FF:FF:FF:FF")
+        except Exception:
+            pass
+        if self._wifi_networks:
+            return self._wifi_networks[0].get("bssid", "FF:FF:FF:FF:FF:FF")
+        return "FF:FF:FF:FF:FF:FF"
+
     async def _wifi_deauth(self) -> None:
-        self._publish_attack("wifi_deauth", {"count": 10})
+        self._publish_wifi_attack("deauth", {"count": 10})
 
     async def _wifi_wps_pixie(self) -> None:
-        self._publish_attack("wifi_wps_pixie", {})
+        self._publish_wifi_attack("wps_pixie")
 
     async def _wifi_wps_pin(self) -> None:
-        self._publish_attack("wifi_wps_pin", {})
+        self._publish_wifi_attack("wps_pin")
 
     async def _wifi_handshake(self) -> None:
-        self._publish_attack("wifi_handshake", {})
+        self._publish_wifi_attack("handshake")
 
     async def _wifi_pmkid(self) -> None:
-        self._publish_attack("wifi_pmkid", {})
+        self._publish_wifi_attack("pmkid")
 
     async def _ble_whisperpair(self) -> None:
         self._publish_attack("ble_whisperpair", {})
 
-    def _publish_attack(self, attack: str, params: Dict[str, Any]) -> None:
+    def _publish_wifi_attack(self, attack_type: str, extra_params: Optional[dict[str, Any]] = None) -> None:
         import uuid
-        from datetime import datetime, timezone
+        from datetime import datetime, UTC
+        from urban_hs.core import get_event_bus
+        from urban_hs.core.event_bus import Event, EventPriority
+
+        bssid = self._get_selected_wifi_bssid()
+        payload = {
+            "type": attack_type,
+            "bssid": bssid,
+            **(extra_params or {}),
+        }
+        bus = get_event_bus()
+        event = Event(
+            type="wifi.attack_request",
+            payload=payload,
+            source="tui",
+            priority=EventPriority.HIGH,
+            correlation_id=str(uuid.uuid4()),
+            timestamp=datetime.now(UTC),
+            metadata={},
+        )
+        asyncio.create_task(bus.publish(event))
+        try:
+            logs = self.query_one("#app-log", RichLog)
+            logs.write(f"[bold green]Dispatched WiFi attack '{attack_type}' to target {bssid}[/bold green]")
+        except Exception:
+            pass
+
+    def _publish_attack(self, attack: str, params: dict[str, Any]) -> None:
+        import uuid
+        from datetime import datetime, UTC
 
         from urban_hs.core import get_event_bus
         from urban_hs.core.event_bus import Event, EventPriority
@@ -295,7 +333,7 @@ class TUIApp(App):
             source="tui",
             priority=EventPriority.NORMAL,
             correlation_id=str(uuid.uuid4()),
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             metadata={},
         )
         asyncio.create_task(bus.publish(event))

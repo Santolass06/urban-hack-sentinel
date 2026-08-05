@@ -1,5 +1,9 @@
 """
-WPS attacks: Pixie Dust and PIN dictionary.
+WPS (Wi-Fi Protected Setup) attacks module: Pixie Dust and PIN dictionary.
+
+Academic References & Tool Credits:
+- WPS Pixie Dust Attack: Discovered by Dominique Bongard (2014) targeting weak Nonce PRNGs in WPS registrar implementations (Ralink, Realtek, Broadcom).
+- Tools: Implemented via `reaver` (t6x/Reaver-wps-fork-t6x) and `pixiewps` (wiire/pixiewps).
 """
 
 import asyncio
@@ -20,7 +24,8 @@ class WPSPixieAttack(BaseAttack):
     """
     WPS Pixie Dust Attack (Offline).
 
-    Uses reaver with pixiewps to perform offline WPS PIN cracking.
+    Academic Reference: "Practical PRNG attacks against Wi-Fi Protected Setup" (Bongard, 2014).
+    Credits: Uses `reaver` and `pixiewps` for offline PIN recovery.
     """
 
     def __init__(

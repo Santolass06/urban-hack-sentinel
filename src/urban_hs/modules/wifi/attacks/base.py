@@ -80,7 +80,11 @@ class BaseAttack(ABC):
             from urban_hs.core.config import get_config
             output_dir = get_config().storage.resolve_wifi_attacks_dir()
         self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.output_dir.mkdir(parents=True, exist_ok=True)
+        except PermissionError:
+            self.output_dir = Path.home() / ".local/share/urban-hs/wifi_attacks"
+            self.output_dir.mkdir(parents=True, exist_ok=True)
         self.attack_timeout = attack_timeout
         self._running = False
         self._cancelled = False

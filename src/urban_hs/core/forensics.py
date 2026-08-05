@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -121,6 +122,36 @@ class EvidenceBundle:
             encoding="utf-8",
         )
         return target
+
+    def seal(self, target_dir: Optional[str] = None) -> str:
+        """Relocate session artifacts to append-only/read-only sealed storage and create signed manifest."""
+        base_sealed = Path(target_dir) if target_dir else Path(self.retention.base_dir) / "sealed" / self.session_id
+        try:
+            base_sealed.mkdir(parents=True, exist_ok=True)
+        except PermissionError:
+            base_sealed = Path.home() / ".local/share/urban-hs/sealed" / self.session_id
+            base_sealed.mkdir(parents=True, exist_ok=True)
+
+        sealed_records = []
+        for record in self.records:
+            src_path = Path(record["path"])
+            if src_path.exists():
+                dest_path = base_sealed / src_path.name
+                shutil.copy2(src_path, dest_path)
+                # Set read-only permission (0o444)
+                os.chmod(dest_path, 0o444)
+                new_record = dict(record)
+                new_record["path"] = str(dest_path)
+                new_record["sha256"] = self._sha256(str(dest_path))
+                new_record["blake2b"] = self._blake2b(str(dest_path))
+                sealed_records.append(new_record)
+                self._append_custody("seal", str(dest_path), {"src": str(src_path), "sealed_at": datetime.now(timezone.utc).isoformat()})
+
+        self.records = sealed_records
+        manifest_path = str(base_sealed / f"{self.session_id}-sealed-manifest.json")
+        self.write_index(manifest_path)
+        os.chmod(manifest_path, 0o444)
+        return manifest_path
 
     def _append_custody(self, action: str, path: str, meta: Dict[str, Any]) -> None:
         self.custody_entries.append(

@@ -76,12 +76,14 @@ def info(
 def run(
     config_file: Optional[str] = typer.Option(None, "--config", "-c", help="Config YAML path."),
     log_level: str = typer.Option("INFO", "--log-level", help="Logging level."),
+    wardrive: bool = typer.Option(False, "--wardrive", "-w", help="Enable dedicated wardrive mode (continuous scan + GPS logging, no active attacks)."),
 ) -> None:
     """Bootstrap core services and run until Ctrl-C."""
 
     async def _main() -> None:
         try:
             from urban_hs.core import init_core, shutdown_core
+            from urban_hs.core.config import get_config
         except ImportError as exc:
             console.print(f"[red]Core not available:[/red] {exc}")
             sys.exit(1)
@@ -102,6 +104,11 @@ def run(
 
         try:
             await init_core(config_file=config_file, log_level=log_level)
+            cfg = get_config()
+            if wardrive:
+                cfg.wifi.enable_active_attacks = False
+                cfg.wifi.passive_scan = True
+                console.print("[bold cyan]Wardrive mode enabled: passive scanning + GPS logging only (active attacks disabled).[/bold cyan]")
             console.print("[green]Core initialised. Press Ctrl-C to stop.[/green]")
             await stop
             console.print("\n[yellow]Shutting down…[/yellow]")
@@ -223,14 +230,32 @@ def verify_session(
 @app.command(name="seal")
 def seal_session(
     session_id: str = typer.Argument(..., help="Session ID to seal."),
+    target_dir: Optional[str] = typer.Option(None, "--target-dir", help="Destination path for sealed storage."),
 ) -> None:
-    """Move session artifacts to append-only storage."""
-    console.print(
-        f"[yellow]Seal is not yet implemented for session {session_id}.[/yellow]"
-    )
-    console.print(
-        "Expected behaviour: relocate artifacts under /var/lib/urban-hs/sealed/<session_id>/ and set immutable flags."
-    )
+    """Move session artifacts to append-only / read-only sealed storage."""
+    try:
+        from urban_hs.core.forensics import EvidenceBundle
+    except ImportError as exc:
+        console.print(f"[red]Forensics module not available:[/red] {exc}")
+        raise typer.Exit(1)
+
+    bundle = EvidenceBundle(session_id=session_id)
+    idx = bundle.index_path()
+    if os.path.exists(idx):
+        try:
+            data = json.loads(Path(idx).read_text(encoding="utf-8"))
+            bundle.records = data.get("artifacts", [])
+            bundle.custody_entries = data.get("custody", [])
+        except Exception:
+            pass
+
+    try:
+        manifest_path = bundle.seal(target_dir=target_dir)
+        console.print(f"[green]Session {session_id} sealed successfully.[/green]")
+        console.print(f"Sealed manifest: [cyan]{manifest_path}[/cyan]")
+    except Exception as exc:
+        console.print(f"[red]Failed to seal session {session_id}:[/red] {exc}")
+        raise typer.Exit(1)
 
 
 @app.command(name="audit-trail")
@@ -276,6 +301,27 @@ def audit_trail(
             entry.get("path", ""),
         )
     console.print(table)
+
+
+@app.command(name="report")
+def generate_report(
+    session_id: str = typer.Option("default", "--session", help="Session ID."),
+    format_type: str = typer.Option("markdown", "--format", "-f", help="Output format: markdown, html, json."),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output destination file path."),
+) -> None:
+    """Generate executive audit report for session (Issue #2.1)."""
+    try:
+        from urban_hs.modules.reporting.generator import ReportFormat, ReportGenerator
+
+        fmt = ReportFormat(format_type.lower())
+        generator = ReportGenerator(session_id=session_id)
+        report_data = generator.generate_summary_report(fmt=fmt)
+        out_path = Path(output) if output else Path.cwd() / f"report_{session_id}.{format_type}"
+        out_path.write_text(report_data, encoding="utf-8")
+        console.print(f"[bold green]Audit report generated successfully:[bold green] [cyan]{out_path}[/cyan]")
+    except Exception as exc:
+        console.print(f"[red]Report generation failed:[/red] {exc}")
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":
