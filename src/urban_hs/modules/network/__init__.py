@@ -23,6 +23,8 @@ from urllib.parse import urlparse
 
 import structlog
 
+from urban_hs.modules.network.coap_fuzz import CoAPFuzzer, FuzzResult, MQTTFuzzer
+
 try:
     import aiohttp
 

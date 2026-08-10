@@ -49,6 +49,7 @@ from urban_hs.modules.hid.injector import (
     quick_ducky,
     quick_type,
 )
+from urban_hs.modules.hid.pico_hid import PicoHIDInjector, PicoHIDResult
 
 __all__ = [
     # DuckyScript

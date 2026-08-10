@@ -22,6 +22,7 @@ from urban_hs.modules.wifi.scanner import (
     ScanStrategy,
     WiFiScanner,
 )
+from urban_hs.modules.wifi.wardrive_ml import APCluster, cluster_grid, coverage_report
 
 __all__ = [
     "WiFiScanner",

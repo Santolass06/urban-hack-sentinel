@@ -48,6 +48,7 @@ def list_modules() -> dict[str, str]:
 
 # Subpackages that are safe to re-export at this level. These are
 # intentionally kept small to avoid circular-import risk.
+from urban_hs.modules.llm_orchestrator import ChainStep, ExploitChain, build_chain  # noqa: E402
 from urban_hs.modules.wifi import (  # noqa: E402
     CHANNELS_2GHZ,
     CHANNELS_5GHZ,
