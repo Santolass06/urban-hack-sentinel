@@ -77,16 +77,36 @@ class SystemStatus(Static):
 
     def render(self) -> str:
         import platform
+        import shutil
         import subprocess
 
         connected_info = "Not connected"
         try:
-            res = subprocess.run(["iwgetid", "-r"], capture_output=True, text=True, timeout=2)
-            ssid = res.stdout.strip()
-            if ssid:
-                res_iface = subprocess.run(["iwgetid"], capture_output=True, text=True, timeout=2)
-                iface = res_iface.stdout.split()[0] if res_iface.stdout else "wifi"
-                connected_info = f"Connected to [bold yellow]{ssid}[/bold yellow] ({iface})"
+            if shutil.which("iwgetid"):
+                res = subprocess.run(["iwgetid", "-r"], capture_output=True, text=True, timeout=2)
+                ssid = res.stdout.strip()
+                if ssid:
+                    res_iface = subprocess.run(
+                        ["iwgetid"], capture_output=True, text=True, timeout=2
+                    )
+                    iface = res_iface.stdout.split()[0] if res_iface.stdout else "wifi"
+                    connected_info = f"Connected to [bold yellow]{ssid}[/bold yellow] ({iface})"
+            elif shutil.which("iw"):
+                # Fallback when iwgetid is absent: parse `iw dev` for the
+                # connected interface's SSID.
+                out = subprocess.run(
+                    ["iw", "dev"], capture_output=True, text=True, timeout=2
+                ).stdout
+                iface = None
+                for raw in out.splitlines():
+                    line = raw.strip()
+                    if line.startswith("Interface "):
+                        iface = line.split()[1]
+                    elif line.startswith("ssid ") and iface:
+                        connected_info = (
+                            f"Connected to [bold yellow]{line[5:]}[/bold yellow] ({iface})"
+                        )
+                        break
         except Exception:
             pass
 
@@ -278,6 +298,14 @@ class TUIApp(App):
         ble_table = self.query_one("#ble-table", DataTable)
         ble_table.add_columns("Address", "Name", "Type", "RSSI")
         ble_table.cursor_type = "row"
+        # Pre-fill the Subnet box with the machine's actual network so the
+        # network scans target the connected LAN instead of a hardcoded guess.
+        detected = self._detect_local_subnet()
+        if detected:
+            try:
+                self.query_one("#net-subnet", Input).value = detected
+            except Exception:
+                pass
         await self._bootstrap_event_bus()
         asyncio.create_task(self._wifi_interfaces())
         asyncio.create_task(self._wifi_scan())
@@ -716,7 +744,8 @@ class TUIApp(App):
             from urban_hs.modules.network import NucleiRunner
 
             runner = NucleiRunner()
-            vulns = await runner.scan("192.168.1.1")
+            gateway = self._get_subnet_target().split("/")[0].rsplit(".", 1)[0] + ".1"
+            vulns = await runner.scan(gateway)
             if vulns:
                 lines = [
                     f"[{getattr(v.severity, 'value', v.severity)}] {v.name} @ {v.target_ip}:{v.target_port}"
@@ -871,7 +900,45 @@ class TUIApp(App):
                 return value
         except Exception:
             pass
-        return "192.168.1.0/24"
+        return self._detect_local_subnet() or "192.168.1.0/24"
+
+    def _detect_local_subnet(self) -> str | None:
+        """Return the CIDR network of the machine's primary LAN interface.
+
+        Derives e.g. ``192.168.0.4/24`` -> ``192.168.0.0/24`` from ``ip addr``,
+        preferring wireless interfaces and skipping loopback/virtual/VPN ones.
+        """
+        import ipaddress
+        import subprocess
+
+        try:
+            out = subprocess.run(
+                ["ip", "-o", "-f", "inet", "addr", "show"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            ).stdout
+        except Exception:
+            return None
+
+        candidates: list[tuple[int, str]] = []
+        for line in out.splitlines():
+            parts = line.split()
+            if len(parts) < 4:
+                continue
+            iface, cidr = parts[1], parts[3]
+            if iface == "lo" or iface.startswith(("docker", "veth", "br-", "tailscale", "tun")):
+                continue
+            try:
+                network = ipaddress.ip_interface(cidr).network
+            except ValueError:
+                continue
+            # Prefer wireless interfaces (wl*), then everything else.
+            preference = 0 if iface.startswith("wl") else 1
+            candidates.append((preference, str(network)))
+
+        candidates.sort()
+        return candidates[0][1] if candidates else None
 
     def _publish_wifi_attack(
         self, attack_type: str, extra_params: dict[str, Any] | None = None
@@ -906,14 +973,24 @@ class TUIApp(App):
 
     async def _wifi_scan(self) -> None:
         try:
+            import shutil
+
             from urban_hs.modules.wifi import ScanStrategy, WiFiScanner
 
             iface = self._get_selected_wifi_interface()
             logs = self.query_one("#app-log", RichLog)
-            logs.write(f"[yellow]Scanning on interface: {iface}…[/yellow]")
+            # PASSIVE_ONLY needs airodump-ng (monitor mode); without it fall back
+            # to the `iw` scan backend (DIRECT), which works on a normal managed
+            # interface. Otherwise the scan silently returns nothing.
+            if shutil.which("airodump-ng"):
+                strategy, duration = ScanStrategy.PASSIVE_ONLY, 30
+            else:
+                strategy, duration = ScanStrategy.DIRECT, 10
+                logs.write("[dim]airodump-ng not found — using `iw` scan[/dim]")
+            logs.write(f"[yellow]Scanning on interface: {iface} ({strategy.value})…[/yellow]")
 
-            scanner = WiFiScanner(interface=iface, strategy=ScanStrategy.PASSIVE_ONLY)
-            nets = await scanner.scan(duration=30)
+            scanner = WiFiScanner(interface=iface, strategy=strategy)
+            nets = await scanner.scan(duration=duration)
             self._wifi_networks = [n.to_dict() for n in nets]
             self._refresh_wifi_table()
             self.post_message(
@@ -987,7 +1064,7 @@ class TUIApp(App):
 
             module = NetworkModule()
             hosts = await module.nmap.scan(
-                ["192.168.1.0/24"], scan_type=ScanType.HOST_DISCOVERY, timeout=60
+                [self._get_subnet_target()], scan_type=ScanType.HOST_DISCOVERY, timeout=60
             )
             result = [vars(h) for h in hosts]
             self.post_message(

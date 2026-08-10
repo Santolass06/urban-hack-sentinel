@@ -98,7 +98,15 @@ class MQTTAttackSuite:
 
             output_dir = get_config().storage.resolve_mqtt_attacks_dir()
         self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.output_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            # Data root (e.g. /var/lib/urban-hs) not writable without root;
+            # fall back to a temp dir so discovery still works unprivileged.
+            import tempfile
+
+            self.output_dir = Path(tempfile.gettempdir()) / "urban-hs-mqtt"
+            self.output_dir.mkdir(parents=True, exist_ok=True)
         self.timeout = timeout
         self.scan_timeout = scan_timeout
 
