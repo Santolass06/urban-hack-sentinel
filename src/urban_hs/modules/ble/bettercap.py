@@ -12,25 +12,25 @@ All I/O is performed over the REST API; no direct HCI/bettercap internals.
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import aiohttp
+import structlog
 
-from urban_hs.core.event_bus import Event, EventBus
+from urban_hs.core.event_bus import EventBus
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
 class BettercapBLEDevice:
     address: str
-    name: Optional[str]
-    rssi: Optional[int]
-    company: Optional[str]
-    raw: Dict[str, Any] = field(default_factory=dict)
+    name: str | None
+    rssi: int | None
+    company: str | None
+    raw: dict[str, Any] = field(default_factory=dict)
 
 
 class BettercapBLEClient:
@@ -39,17 +39,17 @@ class BettercapBLEClient:
     def __init__(
         self,
         base_url: str = "http://127.0.0.1:8081",
-        event_bus: Optional[EventBus] = None,
+        event_bus: EventBus | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.event_bus = event_bus
 
-    async def enumerate_devices(self, duration: float = 5.0) -> List[BettercapBLEDevice]:
+    async def enumerate_devices(self, duration: float = 5.0) -> list[BettercapBLEDevice]:
         logger.info("Starting bettercap BLE enumeration", duration=duration)
-        devices: List[BettercapBLEDevice] = []
+        devices: list[BettercapBLEDevice] = []
         try:
             modules = await self._get("api/ble/modules")
-            if modules.get("modules") != modules.get("modules") == {}:
+            if not modules.get("modules"):
                 logger.warning("BLE modules unavailable in bettercap response")
         except Exception as exc:
             logger.error("BLE modules check failed", error=str(exc))
@@ -92,7 +92,7 @@ class BettercapBLEClient:
         if self.event_bus is not None:
             for device in devices:
                 try:
-                    self.event_bus.publish(
+                    await self.event_bus.publish(
                         "ble.discovered",
                         {
                             "address": device.address,
@@ -108,7 +108,7 @@ class BettercapBLEClient:
         logger.info("BLE scan elapsed", elapsed=elapsed, devices=len(devices))
         if self.event_bus is not None:
             try:
-                self.event_bus.publish(
+                await self.event_bus.publish(
                     "scan.completed",
                     {
                         "module": "bettercap_ble",
@@ -126,14 +126,14 @@ class BettercapBLEClient:
         except Exception as exc:
             logger.debug("Failed to disable BLE in bettercap", error=str(exc))
 
-    async def _get(self, path: str) -> Dict[str, Any]:
+    async def _get(self, path: str) -> dict[str, Any]:
         url = f"{self.base_url}/{path.lstrip('/')}"
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 resp.raise_for_status()
                 return await resp.json()
 
-    async def _post(self, path: str) -> Dict[str, Any]:
+    async def _post(self, path: str) -> dict[str, Any]:
         url = f"{self.base_url}/{path.lstrip('/')}"
         async with aiohttp.ClientSession() as session:
             async with session.post(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:

@@ -8,8 +8,6 @@ one contract.
 
 from __future__ import annotations
 
-from typing import Set
-
 from urban_hs.core.event_bus import Event, EventHandler, EventPriority, get_event_bus
 
 _CANONICAL_TYPES = {
@@ -28,7 +26,7 @@ class AttackEventNormalizer(EventHandler):
     """Bridge between module-specific events and the UI attack contract."""
 
     @property
-    def event_types(self) -> Set[str]:
+    def event_types(self) -> set[str]:
         return set(_CANONICAL_TYPES)
 
     async def handle(self, event: Event) -> None:

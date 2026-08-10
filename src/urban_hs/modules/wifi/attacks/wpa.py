@@ -8,9 +8,9 @@ Academic References & Tool Credits:
 
 import asyncio
 import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Optional
 
 import structlog
 
@@ -30,7 +30,7 @@ class HandshakeAttack(BaseAttack):
     def __init__(
         self,
         interface: str,
-        output_dir: Optional[str] = None,
+        output_dir: str | None = None,
         attack_timeout: int = 60,
         deauth_count: int = 10,
     ):
@@ -43,9 +43,9 @@ class HandshakeAttack(BaseAttack):
     async def execute(
         self,
         target_bssid: str,
-        target_essid: Optional[str] = None,
+        target_essid: str | None = None,
         channel: int = 1,
-        callback: Optional[Callable[[str], None]] = None,
+        callback: Callable[[str], None] | None = None,
     ) -> AttackResult:
         result = AttackResult(
             attack_type="handshake",
@@ -95,12 +95,12 @@ class HandshakeAttack(BaseAttack):
 
             try:
                 await asyncio.wait_for(airodump_proc.wait(), timeout=self.attack_timeout)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self._log("Timeout reached, killing airodump")
                 airodump_proc.terminate()
                 try:
                     await asyncio.wait_for(airodump_proc.wait(), timeout=5)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     airodump_proc.kill()
                     await airodump_proc.wait()
 
@@ -153,7 +153,7 @@ class PMKIDAttack(BaseAttack):
     def __init__(
         self,
         interface: str,
-        output_dir: Optional[str] = None,
+        output_dir: str | None = None,
         attack_timeout: int = 60,
     ):
         if output_dir is None:
@@ -164,9 +164,9 @@ class PMKIDAttack(BaseAttack):
     async def execute(
         self,
         target_bssid: str,
-        target_essid: Optional[str] = None,
+        target_essid: str | None = None,
         channel: int = 1,
-        callback: Optional[Callable[[str], None]] = None,
+        callback: Callable[[str], None] | None = None,
     ) -> AttackResult:
         result = AttackResult(
             attack_type="pmkid",
@@ -201,7 +201,7 @@ class PMKIDAttack(BaseAttack):
 
             try:
                 await asyncio.wait_for(proc.wait(), timeout=self.attack_timeout)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self._log("hcxdumptool timeout, killing process")
                 proc.kill()
                 await proc.wait()
@@ -268,9 +268,9 @@ class WPA3DowngradeAttack(BaseAttack):
     async def execute(
         self,
         target_bssid: str,
-        target_essid: Optional[str] = None,
+        target_essid: str | None = None,
         channel: int = 1,
-        callback: Optional[Callable[[str], None]] = None,
+        callback: Callable[[str], None] | None = None,
     ) -> AttackResult:
         result = AttackResult(
             attack_type="wpa3_downgrade",
@@ -299,9 +299,9 @@ class FastTransitionAttack(BaseAttack):
     async def execute(
         self,
         target_bssid: str,
-        target_essid: Optional[str] = None,
+        target_essid: str | None = None,
         channel: int = 1,
-        callback: Optional[Callable[[str], None]] = None,
+        callback: Callable[[str], None] | None = None,
     ) -> AttackResult:
         result = AttackResult(
             attack_type="fast_transition_ft",

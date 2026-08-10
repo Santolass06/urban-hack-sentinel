@@ -9,12 +9,11 @@ and happy-path job creation flows for read-only endpoints.
 from __future__ import annotations
 
 import pytest
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from fastapi import FastAPI
-
-from urban_hs.ui.api.main import app as api_app
 from urban_hs.ui.api.auth import create_access_token
+from urban_hs.ui.api.main import app as api_app
 from urban_hs.ui.api.rate_limit import limiter
 
 

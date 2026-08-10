@@ -3,8 +3,9 @@ BLE Module Plugin - Integrates Fast Pair scanning and WhisperPair exploit.
 """
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 import structlog
 
@@ -46,59 +47,59 @@ class BLEPlugin:
     - Device quirks database for exploit reliability
     """
 
-    def __init__(self, config: Optional[BLEModuleConfig] = None):
+    def __init__(self, config: BLEModuleConfig | None = None):
         self.config = config or BLEModuleConfig()
-        self.scanner: Optional[FastPairScanner] = None
-        self.tester: Optional[WhisperPairTester] = None
-        self.exploit: Optional[WhisperPairExploit] = None
+        self.scanner: FastPairScanner | None = None
+        self.tester: WhisperPairTester | None = None
+        self.exploit: WhisperPairExploit | None = None
         self._running = False
-        self._scan_task: Optional[asyncio.Task] = None
+        self._scan_task: asyncio.Task | None = None
         self._attack_semaphore = asyncio.Semaphore(2)  # Max 2 concurrent BLE attacks
 
     async def initialize(self) -> None:
         """Initialize BLE module components."""
         logger.info("Initializing BLE plugin", adapter=self.config.adapter)
-        
+
         self.scanner = FastPairScanner(
             adapter=self.config.adapter,
         )
-        
+
         self.tester = WhisperPairTester(adapter=self.config.adapter)
         self.exploit = WhisperPairExploit(adapter=self.config.adapter)
-        
+
         logger.info("BLE plugin initialized", adapter=self.config.adapter)
 
     async def start(self) -> None:
         """Start the BLE module (continuous scanning)."""
         if self._running:
             return
-        
+
         self._running = True
-        
+
         # Start continuous scanning if enabled
         if self.config.fast_pair_scan_enabled:
             self._scan_task = asyncio.create_task(self._continuous_scan())
-        
+
         # Subscribe to events
         bus = get_event_bus()
         bus.subscribe(BLEEventHandler(self))
-        
+
         logger.info("BLE module started")
 
     async def stop(self) -> None:
         """Stop the BLE module."""
         self._running = False
-        
+
         if self._scan_task:
             self._scan_task.cancel()
             try:
                 await self._scan_task
             except asyncio.CancelledError:
                 pass
-        
+
         if self.scanner:
             await self.scanner.stop()
-        
+
         logger.info("BLE module stopped")
 
     async def _continuous_scan(self) -> None:
@@ -109,7 +110,7 @@ class BLEPlugin:
                     await self.scanner.start(scan_all=False)
                     await asyncio.sleep(self.config.scan_interval)
                     await self.scanner.stop()
-                    
+
                     # Publish discovered devices
                     devices = self.scanner.get_fast_pair_devices()
                     if devices:
@@ -119,16 +120,16 @@ class BLEPlugin:
                             payload={"devices": [d.to_dict() for d in devices]},
                             source="ble_scanner",
                         ))
-                        
+
                         # Save to storage
                         await self._save_devices(devices)
-                
+
             except Exception as e:
                 logger.error("BLE scan error", error=str(e))
-            
+
             await asyncio.sleep(self.config.scan_interval)
 
-    async def _save_devices(self, devices: List[BLEDevice]) -> None:
+    async def _save_devices(self, devices: list[BLEDevice]) -> None:
         """Save discovered devices to storage."""
         storage = get_storage()
         for device in devices:
@@ -146,19 +147,19 @@ class BLEPlugin:
     async def test_vulnerability(
         self,
         address: str,
-        progress_callback: Optional[Callable[[str], None]] = None,
-    ) -> Dict[str, Any]:
+        progress_callback: Callable[[str], None] | None = None,
+    ) -> dict[str, Any]:
         """Test a device for WhisperPair vulnerability."""
         if not self.config.whisperpair_test_enabled:
             return {"status": "disabled", "error": "WhisperPair testing disabled in config"}
-        
+
         if not self.tester:
             self.tester = WhisperPairTester(adapter=self.config.adapter)
-        
+
         def progress_cb(msg: str):
             if progress_callback:
                 progress_callback(msg)
-        
+
         return await self.tester.test_device(address)
 
 
@@ -183,7 +184,7 @@ class BLEEventHandler(EventHandler):
         elif event.type == "ble.exploit_request":
             await self._handle_exploit_request(event)
 
-    async def _update_config(self, config_data: Dict[str, Any]) -> None:
+    async def _update_config(self, config_data: dict[str, Any]) -> None:
         """Update plugin configuration from config payload."""
         ble_config = config_data.get("ble", {})
         for key, value in ble_config.items():
@@ -194,15 +195,15 @@ class BLEEventHandler(EventHandler):
         """Handle scan request event."""
         payload = event.payload
         duration = payload.get("duration", 30)
-        
+
         # For now, just do a single scan
         if self.plugin.scanner:
             await self.plugin.scanner.start(scan_all=payload.get("scan_all", False))
             await asyncio.sleep(duration)
             await self.plugin.scanner.stop()
-            
+
             networks = self.plugin.scanner.get_devices()
-            
+
             bus = get_event_bus()
             await bus.publish(Event(
                 type="ble.scan_complete",
@@ -215,10 +216,10 @@ class BLEEventHandler(EventHandler):
         """Handle vulnerability test request."""
         payload = event.payload
         address = payload.get("address")
-        
+
         if not address:
             return
-        
+
         # Session-scope guard rail (same shared scope as the REST/exploit paths).
         # The WhisperPair *test* performs a real GATT write (KBP request) against
         # a device not in pairing mode — the same CVE-2025-36911 primitive as the
@@ -236,7 +237,7 @@ class BLEEventHandler(EventHandler):
             return
 
         result = await self.plugin.test_vulnerability(address)
-        
+
         bus = get_event_bus()
         await bus.publish(Event(
             type="ble.test_complete",
@@ -256,8 +257,7 @@ class BLEEventHandler(EventHandler):
                 correlation_id=event.correlation_id,
             ))
             return
-        
-        # TODO: Implement full exploit chain
+
         payload = event.payload
         address = payload.get("address")
 
@@ -277,11 +277,26 @@ class BLEEventHandler(EventHandler):
             ))
             return
 
-        result = {"status": "not_implemented", "message": "Full exploit chain requires BlueZ D-Bus integration"}
-        
+        # Run the real WhisperPair (CVE-2025-36911) multi-strategy KBP chain.
+        if not self.plugin.exploit:
+            self.plugin.exploit = WhisperPairExploit(adapter=self.plugin.config.adapter)
+
+        progress_updates: list[str] = []
+        try:
+            result = await self.plugin.exploit.execute_all_strategies(
+                address,
+                model_id=payload.get("model_id"),
+                progress_callback=lambda m: progress_updates.append(m),
+            )
+            result["progress"] = progress_updates
+            event_type = "ble.exploit_complete"
+        except Exception as exc:
+            result = {"status": "error", "error": str(exc), "progress": progress_updates}
+            event_type = "ble.exploit_failed"
+
         bus = get_event_bus()
         await bus.publish(Event(
-            type="ble.exploit_complete",
+            type=event_type,
             payload={"result": result},
             source="ble.plugin",
             correlation_id=event.correlation_id,
@@ -289,7 +304,7 @@ class BLEEventHandler(EventHandler):
 
 
 # Plugin entry point
-async def create_ble_plugin(config: Optional[BLEModuleConfig] = None) -> "BLEPlugin":
+async def create_ble_plugin(config: BLEModuleConfig | None = None) -> "BLEPlugin":
     """Factory function to create BLE plugin."""
     plugin = BLEPlugin(config)
     await plugin.initialize()

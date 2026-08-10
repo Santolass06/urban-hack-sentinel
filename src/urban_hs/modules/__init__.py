@@ -23,7 +23,7 @@ from urban_hs.core.plugins import PluginMetadata, PluginType, urban_plugin
 # Registry of available module plugins. Keys are the module name as
 # used in configuration (``modules.wifi.enabled = true``). Values are
 # lazily-resolved plugin class strings so we don't pay import cost upfront.
-_MODULE_REGISTRY: Dict[str, str] = {
+_MODULE_REGISTRY: dict[str, str] = {
     "wifi": "urban_hs.modules.wifi.plugin:WiFiPlugin",
     "ble": "urban_hs.modules.ble.plugin:BLEPlugin",
     "network": "urban_hs.modules.network:NetworkModule",
@@ -41,7 +41,7 @@ _MODULE_REGISTRY: Dict[str, str] = {
 }
 
 
-def list_modules() -> Dict[str, str]:
+def list_modules() -> dict[str, str]:
     """Return a snapshot of the module registry."""
     return dict(_MODULE_REGISTRY)
 

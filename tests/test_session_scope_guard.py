@@ -180,7 +180,7 @@ async def test_urban_ble_exploit_blocked_by_closed_scope():
 @pytest.mark.skipif(not _URBAN_OK, reason="urban_hack requires optional D-Bus dependency")
 @pytest.mark.asyncio()
 async def test_urban_ble_exploit_allowed_by_open_scope():
-    """Positive control: open scope lets the (stub) exploit body run."""
+    """Positive control: open scope lets the exploit body run (not denied)."""
     set_active_scope(SessionScope(
         allow_active=True,
         allowed_targets={TARGET_ADDR},
@@ -196,8 +196,10 @@ async def test_urban_ble_exploit_allowed_by_open_scope():
         await handler.handle(_ble_exploit_event())
 
     types = _published_types(bus_mock)
-    assert "ble.exploit_complete" in types
+    # Guard passed: the real WhisperPair chain ran. Without a mocked exploit it
+    # fails (no BLE), emitting exploit_failed — either way it is not denied.
     assert "ble.attack_denied" not in types
+    assert {"ble.exploit_complete", "ble.exploit_failed"} & set(types)
 
 
 # ----------------------------------------------------------------------
@@ -225,7 +227,7 @@ async def test_ble_plugin_exploit_blocked_by_closed_scope():
 @pytest.mark.skipif(not _BLE_OK, reason="ble.plugin requires optional D-Bus dependency")
 @pytest.mark.asyncio()
 async def test_ble_plugin_exploit_allowed_by_open_scope():
-    """Positive control for the BLE plugin exploit handler."""
+    """Positive control for the BLE plugin exploit handler (not denied)."""
     set_active_scope(SessionScope(
         allow_active=True,
         allowed_targets={TARGET_ADDR},
@@ -241,5 +243,7 @@ async def test_ble_plugin_exploit_allowed_by_open_scope():
         await handler.handle(_ble_exploit_event())
 
     types = _published_types(bus_mock)
-    assert "ble.exploit_complete" in types
+    # Guard passed: the real WhisperPair chain ran (fails without BLE, emitting
+    # exploit_failed) — either way it is not denied.
     assert "ble.attack_denied" not in types
+    assert {"ble.exploit_complete", "ble.exploit_failed"} & set(types)

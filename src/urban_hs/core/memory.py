@@ -16,10 +16,11 @@ import tracemalloc
 import weakref
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, AsyncIterator, Callable, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Generic, TypeVar
 
 import structlog
 
@@ -58,7 +59,7 @@ class MemorySnapshot:
     heap_mb: float
     gc_counts: tuple
     object_count: int
-    memray_file: Optional[str] = None
+    memray_file: str | None = None
 
 
 @dataclass
@@ -66,7 +67,7 @@ class AllocationRecord:
     """Memory allocation record."""
     size: int
     count: int
-    traceback: List[str]
+    traceback: list[str]
     module: str
     line: int
 
@@ -75,42 +76,42 @@ class AllocationRecord:
 class LeakReport:
     """Memory leak detection report."""
     timestamp: datetime
-    leaks: List[AllocationRecord]
+    leaks: list[AllocationRecord]
     total_leaked_bytes: int
-    top_modules: Dict[str, int]
+    top_modules: dict[str, int]
 
 
 class StreamingParser(ABC, Generic[T]):
     """Abstract base for memory-efficient streaming parsers."""
-    
+
     @abstractmethod
-    def parse_chunk(self, chunk: bytes) -> List[T]:
+    def parse_chunk(self, chunk: bytes) -> list[T]:
         """Parse a chunk of data and return parsed items."""
         pass
-    
+
     @abstractmethod
-    def finalize(self) -> List[T]:
+    def finalize(self) -> list[T]:
         """Finalize parsing and return any remaining items."""
         pass
-    
-    def get_stats(self) -> Dict[str, Any]:
+
+    def get_stats(self) -> dict[str, Any]:
         """Get parsing statistics."""
         return {}
 
 
-class JSONLStreamingParser(StreamingParser[Dict[str, Any]]):
+class JSONLStreamingParser(StreamingParser[dict[str, Any]]):
     """Memory-efficient JSONL parser for large log files."""
-    
+
     def __init__(self, max_chunk_size: int = 65536):
         self.max_chunk_size = max_chunk_size
         self._buffer = b""
         self._parsed_count = 0
         self._error_count = 0
-    
-    def parse_chunk(self, chunk: bytes) -> List[Dict[str, Any]]:
+
+    def parse_chunk(self, chunk: bytes) -> list[dict[str, Any]]:
         results = []
         self._buffer += chunk
-        
+
         # Process complete lines
         while b"\n" in self._buffer:
             line, self._buffer = self._buffer.split(b"\n", 1)
@@ -121,10 +122,10 @@ class JSONLStreamingParser(StreamingParser[Dict[str, Any]]):
                     self._parsed_count += 1
                 except json.JSONDecodeError:
                     self._error_count += 1
-        
+
         return results
-    
-    def finalize(self) -> List[Dict[str, Any]]:
+
+    def finalize(self) -> list[dict[str, Any]]:
         results = []
         if self._buffer.strip():
             try:
@@ -133,8 +134,8 @@ class JSONLStreamingParser(StreamingParser[Dict[str, Any]]):
             except json.JSONDecodeError:
                 self._error_count += 1
         return results
-    
-    def get_stats(self) -> Dict[str, Any]:
+
+    def get_stats(self) -> dict[str, Any]:
         return {
             "parsed": self._parsed_count,
             "errors": self._error_count,
@@ -142,18 +143,18 @@ class JSONLStreamingParser(StreamingParser[Dict[str, Any]]):
         }
 
 
-class PCAPStreamingParser(StreamingParser[Dict[str, Any]]):
+class PCAPStreamingParser(StreamingParser[dict[str, Any]]):
     """Memory-efficient PCAP packet parser using scapy streaming."""
-    
+
     def __init__(self, max_packets_per_chunk: int = 1000):
         self.max_packets_per_chunk = max_packets_per_chunk
         self._packet_buffer = []
         self._packet_count = 0
-    
-    def parse_chunk(self, chunk: bytes) -> List[Dict[str, Any]]:
+
+    def parse_chunk(self, chunk: bytes) -> list[dict[str, Any]]:
         results = []
         self._packet_buffer.append(chunk)
-        
+
         # In a real implementation, we'd use RawPcapReader with a buffer
         # This is a placeholder for the streaming logic
         try:
@@ -161,7 +162,7 @@ class PCAPStreamingParser(StreamingParser[Dict[str, Any]]):
 
             from scapy.layers.dot11 import Dot11
             from scapy.utils import RawPcapReader
-            
+
             # Combine buffered chunks
             combined = b"".join(self._packet_buffer)
             reader = RawPcapReader(io.BytesIO(combined))
@@ -181,13 +182,13 @@ class PCAPStreamingParser(StreamingParser[Dict[str, Any]]):
                 self._packet_buffer = [self._packet_buffer[-1]]
         except Exception as e:
             logger.warning("PCAP parse error", error=str(e))
-        
+
         return results
-    
-    def finalize(self) -> List[Dict[str, Any]]:
+
+    def finalize(self) -> list[dict[str, Any]]:
         return []
-    
-    def get_stats(self) -> Dict[str, Any]:
+
+    def get_stats(self) -> dict[str, Any]:
         return {
             "total_packets": self._packet_count,
             "buffer_size": len(self._packet_buffer),
@@ -198,7 +199,7 @@ class MemoryProfiler:
     """
     Memory profiler with memray/objgraph integration.
     """
-    
+
     def __init__(
         self,
         tracing: bool = True,
@@ -208,62 +209,62 @@ class MemoryProfiler:
         self.tracing = tracing
         self.objgraph_tracking = objgraph_tracking and OBJGRAPH_AVAILABLE
         self.leak_threshold_mb = leak_threshold_mb
-        
-        self._snapshots: List[MemorySnapshot] = []
-        self._memray_session: Optional[Any] = None
-        self._baseline_snapshot: Optional[MemorySnapshot] = None
-        
+
+        self._snapshots: list[MemorySnapshot] = []
+        self._memray_session: Any | None = None
+        self._baseline_snapshot: MemorySnapshot | None = None
+
         # Type tracking for leak detection
-        self._type_counts: Dict[str, int] = {}
-        self._weak_refs: Dict[str, List[weakref.ref]] = {}
-    
+        self._type_counts: dict[str, int] = {}
+        self._weak_refs: dict[str, list[weakref.ref]] = {}
+
     def start(self) -> None:
         """Start memory profiling."""
         if self.tracing:
             tracemalloc.start(25)  # Store 25 frames
             logger.info("Memory tracing started")
-        
+
         if self.objgraph_tracking:
             # Track common types
             self._track_common_types()
             logger.info("Object graph tracking started")
-        
+
         self._baseline_snapshot = self._take_snapshot("baseline")
-    
-    def stop(self) -> Optional[str]:
+
+    def stop(self) -> str | None:
         """Stop profiling and optionally generate memray report."""
         report_file = None
-        
+
         if self._memray_session and MEMRAY_AVAILABLE:
             report_file = f"/tmp/memray_{int(time.time())}.bin"
             self._memray_session.stop()
             logger.info("Memray profiling stopped", file=report_file)
-        
+
         if self.tracing:
             tracemalloc.stop()
             logger.info("Memory tracing stopped")
-        
+
         # Final snapshot
         final_snapshot = self._take_snapshot("final")
-        
+
         return report_file
-    
+
     def _track_common_types(self) -> None:
         """Track common Python types for leak detection."""
         if not OBJGRAPH_AVAILABLE:
             return
-        
+
         types_to_track = ["dict", "list", "tuple", "str", "bytes", "set", "frozenset"]
         for t in types_to_track:
             count = objgraph.count(t)
             self._type_counts[f"builtin.{t}"] = count
-            
+
             # Create weak references for tracking
             refs = []
             for obj in objgraph.by_type(t)[:100]:  # Limit to 100
                 refs.append(weakref.ref(obj))
             self._weak_refs[t] = refs
-    
+
     def _take_snapshot(self, label: str) -> MemorySnapshot:
         """Take a memory snapshot."""
         if PSUTIL_AVAILABLE and psutil is not None:
@@ -274,17 +275,17 @@ class MemoryProfiler:
         else:
             rss_mb = 0.0
             vms_mb = 0.0
-        
+
         gc_counts = gc.get_count()
-        
+
         # Count objects
         obj_count = len(gc.get_objects())
-        
+
         heap_mb = 0.0
         if self.tracing:
             current, peak = tracemalloc.get_traced_memory()
             heap_mb = peak / (1024 * 1024)
-        
+
         snapshot = MemorySnapshot(
             timestamp=datetime.utcnow(),
             rss_mb=rss_mb,
@@ -293,23 +294,23 @@ class MemoryProfiler:
             gc_counts=gc_counts,
             object_count=obj_count,
         )
-        
+
         self._snapshots.append(snapshot)
         logger.debug(f"Memory snapshot ({label})", rss=f"{snapshot.rss_mb:.1f}MB", objects=obj_count)
-        
+
         return snapshot
-    
-    def detect_leaks(self, threshold_mb: Optional[float] = None) -> LeakReport:
+
+    def detect_leaks(self, threshold_mb: float | None = None) -> LeakReport:
         """Detect memory leaks by comparing snapshots."""
         if len(self._snapshots) < 2:
             raise ValueError("Need at least 2 snapshots to detect leaks")
-        
+
         baseline = self._snapshots[0]
         current = self._snapshots[-1]
-        
+
         leaked = current.rss_mb - baseline.rss_mb
         threshold = threshold_mb or self.leak_threshold_mb
-        
+
         leaks = []
         if leaked > threshold:
             # Try to identify leaking types
@@ -325,27 +326,27 @@ class MemoryProfiler:
                             module=type_name,
                             line=0,
                         ))
-        
+
         # Group by module
         top_modules = defaultdict(int)
         for leak in leaks:
             top_modules[leak.module] += leak.count
-        
+
         return LeakReport(
             timestamp=datetime.utcnow(),
             leaks=leaks,
             total_leaked_bytes=int(leaked * 1024 * 1024),
             top_modules=dict(top_modules),
         )
-    
-    def get_summary(self) -> Dict[str, Any]:
+
+    def get_summary(self) -> dict[str, Any]:
         """Get profiling summary."""
         if not self._snapshots:
             return {"status": "no_snapshots"}
-        
+
         first = self._snapshots[0]
         last = self._snapshots[-1]
-        
+
         return {
             "snapshots": len(self._snapshots),
             "duration_sec": (last.timestamp - first.timestamp).total_seconds(),
@@ -378,7 +379,7 @@ def stream_parse_jsonl(file_path: str, chunk_size: int = 65536):
     """Stream parse JSONL file with minimal memory - returns async generator."""
     async def _async_gen():
         parser = JSONLStreamingParser()
-        
+
         loop = asyncio.get_event_loop()
         with open(file_path, "rb") as f:
             while True:
@@ -388,11 +389,11 @@ def stream_parse_jsonl(file_path: str, chunk_size: int = 65536):
                 results = parser.parse_chunk(chunk)
                 for item in results:
                     yield item
-        
+
         # Finalize
         for item in parser.finalize():
             yield item
-    
+
     return _async_gen()
 
 
@@ -400,7 +401,7 @@ def stream_parse_pcap(file_path: str, max_packets: int = 10000):
     """Stream parse PCAP file with Scapy - returns async generator."""
     async def _async_gen():
         parser = PCAPStreamingParser(max_packets)
-        
+
         loop = asyncio.get_event_loop()
         with open(file_path, "rb") as f:
             while True:
@@ -410,11 +411,11 @@ def stream_parse_pcap(file_path: str, max_packets: int = 10000):
                 results = parser.parse_chunk(chunk)
                 for item in results:
                     yield item
-            
+
             # Finalize
             for item in parser.finalize():
                 yield item
-    
+
     return _async_gen()
 
 
@@ -422,13 +423,13 @@ def detect_gc_leaks(threshold_count: int = 10000) -> LeakReport:
     """Run garbage collection and detect leaks."""
     # Force GC
     gc.collect()
-    
+
     # Get object counts
     counts = {}
     for obj in gc.get_objects():
         typename = type(obj).__name__
         counts[typename] = counts.get(typename, 0) + 1
-    
+
     # Find large counts
     leaks = []
     for typename, count in counts.items():
@@ -440,11 +441,11 @@ def detect_gc_leaks(threshold_count: int = 10000) -> LeakReport:
                 module=typename,
                 line=0,
             ))
-    
+
     top_modules = defaultdict(int)
     for leak in leaks:
         top_modules[leak.module] += leak.count
-    
+
     return LeakReport(
         timestamp=datetime.utcnow(),
         leaks=leaks,
@@ -455,7 +456,7 @@ def detect_gc_leaks(threshold_count: int = 10000) -> LeakReport:
 
 # Memory-efficient async iterators
 
-async def abatch(iterable: AsyncIterator[T], size: int) -> AsyncIterator[List[T]]:
+async def abatch(iterable: AsyncIterator[T], size: int) -> AsyncIterator[list[T]]:
     """Batch async iterator into chunks of size N."""
     batch = []
     async for item in iterable:
@@ -503,17 +504,17 @@ __all__ = [
     "MemoryProfiler",
     "memory_profile",
     "detect_gc_leaks",
-    
+
     # Streaming parsers
     "StreamingParser",
     "JSONLStreamingParser",
     "PCAPStreamingParser",
     "stream_parse_jsonl",
     "stream_parse_pcap",
-    
+
     # GC utilities
     "detect_gc_leaks",
-    
+
     # Async iterator utils
     "abatch",
     "alimit",

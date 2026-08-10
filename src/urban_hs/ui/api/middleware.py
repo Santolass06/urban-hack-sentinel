@@ -10,13 +10,11 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
-
-from urban_hs.core.config import get_config
 
 _SECURITY_HEADERS = {
     "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
@@ -41,7 +39,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 class IPAllowlistMiddleware(BaseHTTPMiddleware):
     """Allowlist-only access when enabled in config."""
 
-    def __init__(self, app, *, enabled: bool = False, allowed_ips: Optional[list[str]] = None) -> None:
+    def __init__(self, app, *, enabled: bool = False, allowed_ips: list[str] | None = None) -> None:
         super().__init__(app)
         self.enabled = enabled
         self.allowed_ips = set(allowed_ips or [])

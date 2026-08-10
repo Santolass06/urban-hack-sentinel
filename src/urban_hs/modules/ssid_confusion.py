@@ -23,11 +23,12 @@ CVE-2023-52425: SSID Confusion in 802.11r
 
 import asyncio
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 import structlog
 
@@ -55,9 +56,9 @@ class SSIDConfusionTarget:
     security_type: str  # WPA2, WPA3, etc.
     ft_enabled: bool = False  # 802.11r Fast Transition
     ft_over_ds: bool = False  # Fast Transition over DS
-    mobility_domain: Optional[str] = None
+    mobility_domain: str | None = None
     rssi: int = -100
-    vendor: Optional[str] = None
+    vendor: str | None = None
 
 
 @dataclass
@@ -65,10 +66,10 @@ class SSIDConfusionResult:
     """Result of SSID confusion analysis."""
     confusion_type: SSIDConfusionType
     vulnerable: bool
-    targets_involved: List[SSIDConfusionTarget] = field(default_factory=list)
+    targets_involved: list[SSIDConfusionTarget] = field(default_factory=list)
     description: str = ""
     risk_level: str = "low"  # critical, high, medium, low
-    evidence: Dict[str, Any] = field(default_factory=dict)
+    evidence: dict[str, Any] = field(default_factory=dict)
     timestamp: datetime = field(default_factory=datetime.utcnow)
 
 
@@ -97,7 +98,7 @@ class SSIDConfusionDetector:
         self.scan_timeout = scan_timeout
         self.nmap = NmapScanner()
 
-    async def scan_networks(self, target_network: str = "192.168.1.0/24") -> List[SSIDConfusionTarget]:
+    async def scan_networks(self, target_network: str = "192.168.1.0/24") -> list[SSIDConfusionTarget]:
         """Scan for WiFi networks and extract SSID confusion indicators."""
         # Use airodump-ng for detailed WiFi info
         from urban_hs.modules.wifi import WiFiScanner
@@ -125,7 +126,7 @@ class SSIDConfusionDetector:
         """Convert WiFi channel to frequency."""
         if 1 <= channel <= 14:
             return 2407 + (channel * 5)
-        elif 36 <= channel <= 165:
+        if 36 <= channel <= 165:
             return 5000 + (channel * 5)
         return 0
 
@@ -154,12 +155,12 @@ class SSIDConfusionDetector:
 
         return False
 
-    def analyze_confusion(self, targets: List[SSIDConfusionTarget]) -> List[SSIDConfusionResult]:
+    def analyze_confusion(self, targets: list[SSIDConfusionTarget]) -> list[SSIDConfusionResult]:
         """Analyze targets for SSID confusion vulnerabilities."""
         results = []
 
         # Group by BSSID
-        bssid_groups: Dict[str, List[SSIDConfusionTarget]] = {}
+        bssid_groups: dict[str, list[SSIDConfusionTarget]] = {}
         for target in targets:
             bssid_groups.setdefault(target.bssid, []).append(target)
 
@@ -190,7 +191,7 @@ class SSIDConfusionDetector:
         ft_networks = [t for t in targets if t.ft_enabled]
         if ft_networks:
             # Group by mobility domain and PSK (inferred from same security)
-            md_groups: Dict[str, List[SSIDConfusionTarget]] = {}
+            md_groups: dict[str, list[SSIDConfusionTarget]] = {}
             for t in ft_networks:
                 md = t.mobility_domain or f"channel_{t.channel}"
                 md_groups.setdefault(md, []).append(t)
@@ -214,7 +215,7 @@ class SSIDConfusionDetector:
                         ))
 
         # 3. Band transition analysis (2.4GHz vs 5GHz same SSID/PSK)
-        ssid_groups: Dict[str, List[SSIDConfusionTarget]] = {}
+        ssid_groups: dict[str, list[SSIDConfusionTarget]] = {}
         for t in targets:
             ssid_groups.setdefault(t.ssid, []).append(t)
 
@@ -259,7 +260,7 @@ class SSIDConfusionDetector:
 
         return results
 
-    def get_risk_summary(self, results: List[SSIDConfusionResult]) -> Dict[str, Any]:
+    def get_risk_summary(self, results: list[SSIDConfusionResult]) -> dict[str, Any]:
         """Get risk summary from analysis results."""
         if not results:
             return {
@@ -294,10 +295,10 @@ class SSIDConfusionDetector:
         target: SSIDConfusionTarget,
         rogue_ssid: str,
         passphrase: str,
-        interface: Optional[str] = None,
-        mobility_domain: Optional[str] = None,
-        callback: Optional[Callable[[str], None]] = None,
-    ) -> Dict[str, Any]:
+        interface: str | None = None,
+        mobility_domain: str | None = None,
+        callback: Callable[[str], None] | None = None,
+    ) -> dict[str, Any]:
         """
         Execute Evil Twin attack with 802.11r Fast Transition for SSID Confusion.
 
@@ -397,7 +398,7 @@ class SSIDConfusionDetector:
                 "error": str(e),
             }
 
-    async def stop_evil_twin_attack(self, attack_handle: Dict[str, Any]) -> bool:
+    async def stop_evil_twin_attack(self, attack_handle: dict[str, Any]) -> bool:
         """Stop a running Evil Twin attack."""
         proc = attack_handle.get("process")
         config_path = attack_handle.get("config_path")
@@ -406,7 +407,7 @@ class SSIDConfusionDetector:
             proc.terminate()
             try:
                 await asyncio.wait_for(proc.wait(), timeout=5)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
                 await proc.wait()
 
@@ -425,7 +426,7 @@ class SSIDConfusionDetector:
         passphrase: str,
         channel: int,
         mobility_domain: str,
-        target_bssid: Optional[str] = None,
+        target_bssid: str | None = None,
     ) -> str:
         """Generate hostapd configuration for Evil Twin with 802.11r."""
 
@@ -492,8 +493,8 @@ logger_stdout_level=2
     async def run_full_assessment(
         self,
         target_area: str = "192.168.1.0/24",
-        callback: Optional[Callable[[str], None]] = None,
-    ) -> Dict[str, Any]:
+        callback: Callable[[str], None] | None = None,
+    ) -> dict[str, Any]:
         """Run complete SSID confusion assessment."""
         if callback:
             callback("Starting SSID Confusion assessment...")
@@ -553,8 +554,8 @@ async def scan_ssid_confusion(
     target_area: str = "192.168.1.0/24",
     interface: str = "wlan0",
     scan_timeout: int = 30,
-    callback: Optional[Callable[[str], None]] = None,
-) -> Dict[str, Any]:
+    callback: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
     """Convenience function for SSID confusion scan."""
     detector = SSIDConfusionDetector(interface=interface, scan_timeout=scan_timeout)
     return await detector.run_full_assessment(target_area, callback)
@@ -563,7 +564,7 @@ async def scan_ssid_confusion(
 async def quick_ssid_confusion_check(
     interface: str = "wlan0",
     scan_timeout: int = 15,
-) -> List[SSIDConfusionResult]:
+) -> list[SSIDConfusionResult]:
     """Quick SSID confusion check."""
     detector = SSIDConfusionDetector(interface=interface, scan_timeout=scan_timeout)
     targets = await detector.scan_networks()

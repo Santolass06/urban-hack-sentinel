@@ -9,9 +9,9 @@ Academic References & Tool Credits:
 import asyncio
 import re
 import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Optional
 
 import structlog
 
@@ -31,7 +31,7 @@ class WPSPixieAttack(BaseAttack):
     def __init__(
         self,
         interface: str,
-        output_dir: Optional[str] = None,
+        output_dir: str | None = None,
         attack_timeout: int = 180,
     ):
         if output_dir is None:
@@ -42,9 +42,9 @@ class WPSPixieAttack(BaseAttack):
     async def execute(
         self,
         target_bssid: str,
-        target_essid: Optional[str] = None,
+        target_essid: str | None = None,
         channel: int = 1,
-        callback: Optional[Callable[[str], None]] = None,
+        callback: Callable[[str], None] | None = None,
     ) -> AttackResult:
         result = AttackResult(
             attack_type="wps_pixie",
@@ -91,7 +91,7 @@ class WPSPixieAttack(BaseAttack):
 
             try:
                 await asyncio.wait_for(proc.wait(), timeout=self.attack_timeout * 3)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
                 await proc.wait()
 
@@ -142,7 +142,7 @@ class WPSPinAttack(BaseAttack):
     def __init__(
         self,
         interface: str,
-        output_dir: Optional[str] = None,
+        output_dir: str | None = None,
         attack_timeout: int = 300,
     ):
         if output_dir is None:
@@ -153,9 +153,9 @@ class WPSPinAttack(BaseAttack):
     async def execute(
         self,
         target_bssid: str,
-        target_essid: Optional[str] = None,
+        target_essid: str | None = None,
         channel: int = 1,
-        callback: Optional[Callable[[str], None]] = None,
+        callback: Callable[[str], None] | None = None,
     ) -> AttackResult:
         result = AttackResult(
             attack_type="wps_pin",
@@ -214,7 +214,7 @@ class WPSPinAttack(BaseAttack):
                             self._notify_callback(callback, f"WPS PIN found: {pin}, PSK: {result.wps_psk}")
                             break
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     proc.kill()
                     await proc.wait()
                     continue

@@ -9,15 +9,13 @@ Validates:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 import pytest
 
 from urban_hs.modules.wifi.fragattacks import (
     FragAttackConfig,
     FragAttackResult,
-    FragAttackType,
     FragAttacksWrapper,
+    FragAttackType,
 )
 
 

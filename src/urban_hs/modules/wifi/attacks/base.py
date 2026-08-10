@@ -4,11 +4,12 @@ WiFi Attack base classes and shared types.
 
 import asyncio
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 import structlog
 
@@ -29,25 +30,25 @@ class AttackResult:
     """Result of an attack execution."""
     attack_type: str
     target_bssid: str
-    target_essid: Optional[str]
+    target_essid: str | None
     status: AttackStatus
     started_at: datetime
-    finished_at: Optional[datetime] = None
-    output_files: List[str] = field(default_factory=list)
-    handshake_path: Optional[str] = None
-    pmkid_path: Optional[str] = None
-    wps_pin: Optional[str] = None
-    wps_psk: Optional[str] = None
-    error_message: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    finished_at: datetime | None = None
+    output_files: list[str] = field(default_factory=list)
+    handshake_path: str | None = None
+    pmkid_path: str | None = None
+    wps_pin: str | None = None
+    wps_psk: str | None = None
+    error_message: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
-    def duration_seconds(self) -> Optional[float]:
+    def duration_seconds(self) -> float | None:
         if self.finished_at:
             return (self.finished_at - self.started_at).total_seconds()
         return None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "attack_type": self.attack_type,
             "target_bssid": self.target_bssid,
@@ -72,7 +73,7 @@ class BaseAttack(ABC):
     def __init__(
         self,
         interface: str,
-        output_dir: Optional[str] = None,
+        output_dir: str | None = None,
         attack_timeout: int = 60,
     ):
         self.interface = interface
@@ -93,9 +94,9 @@ class BaseAttack(ABC):
     async def execute(
         self,
         target_bssid: str,
-        target_essid: Optional[str] = None,
+        target_essid: str | None = None,
         channel: int = 1,
-        callback: Optional[Callable[[str], None]] = None,
+        callback: Callable[[str], None] | None = None,
     ) -> AttackResult:
         """Execute the attack against a target."""
         pass
@@ -103,7 +104,7 @@ class BaseAttack(ABC):
     def _log(self, message: str, **kwargs) -> None:
         logger.info(message, **kwargs)
 
-    def _notify_callback(self, callback: Optional[Callable[[str], None]], message: str) -> None:
+    def _notify_callback(self, callback: Callable[[str], None] | None, message: str) -> None:
         if callback:
             try:
                 callback(message)

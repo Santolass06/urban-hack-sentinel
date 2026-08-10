@@ -18,9 +18,9 @@ The ``run`` helper is registered as a console script in
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,7 +39,28 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
-    await init_event_bus()
+    bus = await init_event_bus()
+    # Register the audited attack plugins so REST-dispatched *.attack_request
+    # events have real consumers. Execution stays gated by the session-scope
+    # guard in routers/attacks.py. Handlers are kept on app.state because
+    # bus.subscribe() holds them in a WeakSet (they would otherwise be GC'd).
+    app.state.bus_handlers = []
+    try:
+        from urban_hs.modules.wifi.plugin import WiFiEventHandler, create_wifi_plugin
+
+        wifi_handler = WiFiEventHandler(await create_wifi_plugin())
+        app.state.bus_handlers.append(wifi_handler)
+        bus.subscribe(wifi_handler)
+    except Exception as exc:
+        logger.warning("WiFi attack plugin not registered: %s", exc)
+    try:
+        from urban_hs.modules.ble.plugin import BLEEventHandler, create_ble_plugin
+
+        ble_handler = BLEEventHandler(await create_ble_plugin())
+        app.state.bus_handlers.append(ble_handler)
+        bus.subscribe(ble_handler)
+    except Exception as exc:
+        logger.warning("BLE attack plugin not registered: %s", exc)
     yield
     await shutdown_event_bus()
 

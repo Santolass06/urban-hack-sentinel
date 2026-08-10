@@ -14,11 +14,12 @@ import json
 import os
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any
 
 import structlog
 
@@ -36,7 +37,7 @@ class ScanStrategy(Enum):
 class NetworkInfo:
     """Information about a discovered WiFi network."""
     bssid: str
-    ssid: Optional[str] = None
+    ssid: str | None = None
     encryption: str = "UNKNOWN"  # OPEN, WEP, WPA, WPA2, WPA3, OWE, WPS
     signal_dbm: int = -100
     channel: int = 0
@@ -45,13 +46,13 @@ class NetworkInfo:
     wps_enabled: bool = False
     wps_locked: bool = False
     pmf: str = "UNKNOWN"  # disabled, optional, required
-    vendor: Optional[str] = None
+    vendor: str | None = None
     last_seen: int = field(default_factory=lambda: int(datetime.utcnow().timestamp() * 1000))
-    gps_lat: Optional[float] = None
-    gps_lon: Optional[float] = None
-    gps_alt: Optional[float] = None
-    gps_accuracy: Optional[float] = None
-    meta: Dict[str, Any] = field(default_factory=dict)
+    gps_lat: float | None = None
+    gps_lon: float | None = None
+    gps_alt: float | None = None
+    gps_accuracy: float | None = None
+    meta: dict[str, Any] = field(default_factory=dict)
 
     @property
     def is_vulnerable_wps(self) -> bool:
@@ -62,7 +63,7 @@ class NetworkInfo:
     def is_wpa3(self) -> bool:
         return "WPA3" in self.encryption
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "bssid": self.bssid,
             "ssid": self.ssid,
@@ -88,7 +89,7 @@ class ScanBackend(ABC):
     """Abstract base for scan implementations."""
 
     @abstractmethod
-    async def scan(self, interface: str, channels: Optional[List[int]] = None, duration: int = 30) -> List[NetworkInfo]:
+    async def scan(self, interface: str, channels: list[int] | None = None, duration: int = 30) -> list[NetworkInfo]:
         """Perform scan and return discovered networks."""
         pass
 
@@ -99,7 +100,7 @@ class IWScanBackend(ScanBackend):
     def __init__(self, timeout: int = 15):
         self.timeout = timeout
 
-    async def scan(self, interface: str, channels: Optional[List[int]] = None, duration: int = 30) -> List[NetworkInfo]:
+    async def scan(self, interface: str, channels: list[int] | None = None, duration: int = 30) -> list[NetworkInfo]:
         cmd = ["iw", "dev", interface, "scan", "-f", "json"]
         if channels:
             freq_list = " ".join(str(self._channel_to_freq(c)) for c in channels)
@@ -118,7 +119,7 @@ class IWScanBackend(ScanBackend):
                 return []
 
             return self._parse_iw_json(stdout.decode(), interface)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("iw scan timeout")
             return []
         except Exception as e:
@@ -128,13 +129,13 @@ class IWScanBackend(ScanBackend):
     def _channel_to_freq(self, channel: int) -> int:
         if 1 <= channel <= 14:
             return 2407 + channel * 5
-        elif 36 <= channel <= 165:
+        if 36 <= channel <= 165:
             return 5000 + channel * 5
-        elif 1 <= channel <= 233:  # 6GHz
+        if 1 <= channel <= 233:  # 6GHz
             return 5950 + channel * 5
         return 2412
 
-    def _parse_iw_json(self, json_str: str, interface: str) -> List[NetworkInfo]:
+    def _parse_iw_json(self, json_str: str, interface: str) -> list[NetworkInfo]:
         networks = []
         try:
             data = json.loads(json_str)
@@ -150,10 +151,10 @@ class IWScanBackend(ScanBackend):
 
                 # Determine encryption
                 encryption = self._parse_encryption(flags)
-                
+
                 # WPS detection
                 wps_enabled = "wps" in [f.lower() for f in flags] or "wps" in str(entry).lower()
-                
+
                 # PMF detection
                 pmf = self._parse_pmf(flags)
 
@@ -189,7 +190,7 @@ class IWScanBackend(ScanBackend):
 
         return networks
 
-    def _parse_encryption(self, flags: List[str]) -> str:
+    def _parse_encryption(self, flags: list[str]) -> str:
         flags_lower = [f.lower() for f in flags]
         if "privacy" not in flags_lower:
             return "OPEN"
@@ -203,36 +204,36 @@ class IWScanBackend(ScanBackend):
             return "WEP"
         return "WPA"
 
-    def _parse_pmf(self, flags: List[str]) -> str:
+    def _parse_pmf(self, flags: list[str]) -> str:
         flags_lower = [f.lower() for f in flags]
         if "mfpc" in flags_lower and "mfpr" in flags_lower:
             return "required"
-        elif "mfpc" in flags_lower:
+        if "mfpc" in flags_lower:
             return "optional"
         return "disabled"
 
-    def _parse_bandwidth(self, entry: Dict) -> str:
+    def _parse_bandwidth(self, entry: dict) -> str:
         # HT/VHT/HE/EHT capabilities would be in iw output
         if "vht_caps" in entry:
             return "VHT80"
-        elif "he_caps" in entry:
+        if "he_caps" in entry:
             return "HE160"
-        elif "eht_caps" in entry:
+        if "eht_caps" in entry:
             return "EHT320"
-        elif "ht_caps" in entry:
+        if "ht_caps" in entry:
             return "HT40"
         return "HT20"
 
     def _freq_to_channel(self, freq: int) -> int:
         if 2412 <= freq <= 2484:
             return (freq - 2407) // 5
-        elif 5180 <= freq <= 5825:
+        if 5180 <= freq <= 5825:
             return (freq - 5000) // 5
-        elif 5955 <= freq <= 7115:
+        if 5955 <= freq <= 7115:
             return (freq - 5950) // 5
         return 0
 
-    def _get_vendor(self, bssid: str) -> Optional[str]:
+    def _get_vendor(self, bssid: str) -> str | None:
         """Lookup vendor from OUI."""
         try:
             oui = bssid[:8].upper().replace(":", "-")
@@ -241,9 +242,9 @@ class IWScanBackend(ScanBackend):
         except Exception:
             return None
 
-    def _parse_extended(self, entry: Dict[str, Any]) -> Dict[str, Any]:
+    def _parse_extended(self, entry: dict[str, Any]) -> dict[str, Any]:
         """Parse extended capabilities from iw scan output."""
-        meta: Dict[str, Any] = {
+        meta: dict[str, Any] = {
             "owe": False,
             "ft": False,
             "six_ghz": False,
@@ -288,7 +289,7 @@ class IWScanBackend(ScanBackend):
 class AirodumpScanBackend(ScanBackend):
     """Passive scan using airodump-ng with channel hopping."""
 
-    def __init__(self, output_dir: Optional[str] = None):
+    def __init__(self, output_dir: str | None = None):
         if output_dir is None:
             from urban_hs.core.config import get_config
             output_dir = get_config().storage.resolve_wifi_scans_dir()
@@ -299,9 +300,9 @@ class AirodumpScanBackend(ScanBackend):
             self.output_dir = Path.home() / ".local/share/urban-hs/wifi_scans"
             self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    async def scan(self, interface: str, channels: Optional[List[int]] = None, duration: int = 30) -> List[NetworkInfo]:
+    async def scan(self, interface: str, channels: list[int] | None = None, duration: int = 30) -> list[NetworkInfo]:
         csv_prefix = self.output_dir / f"scan_{uuid.uuid4().hex[:8]}"
-        
+
         cmd = [
             "airodump-ng",
             "--write", str(csv_prefix),
@@ -310,7 +311,7 @@ class AirodumpScanBackend(ScanBackend):
             "--manufacturer",
             "--uptime",
         ]
-        
+
         if channels:
             cmd.extend(["--channel", ",".join(str(c) for c in channels)])
 
@@ -336,10 +337,10 @@ class AirodumpScanBackend(ScanBackend):
 
         return []
 
-    def _parse_airodump_csv(self, csv_file: str) -> List[NetworkInfo]:
+    def _parse_airodump_csv(self, csv_file: str) -> list[NetworkInfo]:
         networks = []
         try:
-            with open(csv_file, 'r') as f:
+            with open(csv_file) as f:
                 lines = f.readlines()
 
             # Find the AP section (after the header lines)
@@ -363,7 +364,7 @@ class AirodumpScanBackend(ScanBackend):
 
         return networks
 
-    def _parse_ap_line(self, parts: List[str]) -> Optional[NetworkInfo]:
+    def _parse_ap_line(self, parts: list[str]) -> NetworkInfo | None:
         try:
             bssid = parts[0].lower()
             if not bssid or bssid == "00:00:00:00:00:00":
@@ -397,17 +398,17 @@ class AirodumpScanBackend(ScanBackend):
         auth_lower = auth.lower()
         if "wpa3" in privacy_lower or "sae" in auth_lower:
             return "WPA3"
-        elif "wpa2" in privacy_lower:
+        if "wpa2" in privacy_lower:
             return "WPA2"
-        elif "wpa" in privacy_lower:
+        if "wpa" in privacy_lower:
             return "WPA"
-        elif "wep" in privacy_lower:
+        if "wep" in privacy_lower:
             return "WEP"
-        elif "opn" in privacy_lower:
+        if "opn" in privacy_lower:
             return "OPEN"
         return "UNKNOWN"
 
-    def _get_vendor(self, bssid: str) -> Optional[str]:
+    def _get_vendor(self, bssid: str) -> str | None:
         # Would load from OUI database
         return None
 
@@ -422,7 +423,7 @@ class ScanManager:
         self,
         interface: str,
         strategy: ScanStrategy = ScanStrategy.PASSIVE_ONLY,
-        output_dir: Optional[str] = None,
+        output_dir: str | None = None,
     ):
         self.interface = interface
         self.strategy = strategy
@@ -430,17 +431,17 @@ class ScanManager:
             from urban_hs.core.config import get_config
             output_dir = get_config().storage.resolve_wifi_scans_dir()
         self.output_dir = output_dir
-        
+
         self.backends = {
             ScanStrategy.DIRECT: IWScanBackend(),
             ScanStrategy.MODE_SWITCH: IWScanBackend(),
             ScanStrategy.PASSIVE_ONLY: AirodumpScanBackend(output_dir=output_dir),
         }
-        
-        # Known networks cache
-        self._known_networks: Dict[str, NetworkInfo] = {}
 
-    async def scan(self, channels: Optional[List[int]] = None, duration: int = 30) -> List[NetworkInfo]:
+        # Known networks cache
+        self._known_networks: dict[str, NetworkInfo] = {}
+
+    async def scan(self, channels: list[int] | None = None, duration: int = 30) -> list[NetworkInfo]:
         """Perform scan based on configured strategy."""
         backend = self.backends.get(self.strategy)
         if not backend:
@@ -505,10 +506,10 @@ class ScanManager:
             await self._run_cmd(["ip", "link", "set", self.interface, "down"])
             await self._run_cmd(["iw", "dev", self.interface, "set", "type", "managed"])
             await self._run_cmd(["ip", "link", "set", self.interface, "up"])
-        
+
         await asyncio.sleep(0.5)
 
-    async def _run_cmd(self, cmd: List[str]) -> bool:
+    async def _run_cmd(self, cmd: list[str]) -> bool:
         try:
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -521,7 +522,7 @@ class ScanManager:
             logger.error("Command failed", cmd=cmd, error=str(e))
             return False
 
-    def get_known_networks(self) -> List[NetworkInfo]:
+    def get_known_networks(self) -> list[NetworkInfo]:
         return list(self._known_networks.values())
 
 
@@ -532,20 +533,20 @@ class WiFiScanner:
         self,
         interface: str,
         strategy: ScanStrategy = ScanStrategy.PASSIVE_ONLY,
-        output_dir: Optional[str] = None,
+        output_dir: str | None = None,
     ):
         self.manager = ScanManager(interface, strategy, output_dir)
 
-    async def scan(self, channels: Optional[List[int]] = None, duration: int = 30) -> List[NetworkInfo]:
+    async def scan(self, channels: list[int] | None = None, duration: int = 30) -> list[NetworkInfo]:
         """Perform a single scan."""
         return await self.manager.scan(channels, duration)
 
     async def continuous_scan(
         self,
         interval: int = 30,
-        channels: Optional[List[int]] = None,
-        callback: Optional[callable] = None,
-    ) -> AsyncIterator[List[NetworkInfo]]:
+        channels: list[int] | None = None,
+        callback: Callable | None = None,
+    ) -> AsyncIterator[list[NetworkInfo]]:
         """Continuously scan and yield results."""
         while True:
             networks = await self.manager.scan(channels=channels, duration=interval)
@@ -554,7 +555,7 @@ class WiFiScanner:
             yield self.manager.get_known_networks()
             await asyncio.sleep(interval)
 
-    def get_known_networks(self) -> List[NetworkInfo]:
+    def get_known_networks(self) -> list[NetworkInfo]:
         return self.manager.get_known_networks()
 
 

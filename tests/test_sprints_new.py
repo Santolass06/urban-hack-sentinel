@@ -2,15 +2,13 @@
 Unit & Integration Tests for Sprints 1 to 4 Features.
 """
 
-import pytest
-import asyncio
-from pathlib import Path
-from unittest.mock import AsyncMock, patch
 
-from urban_hs.hal.wifi import detect_interface_capabilities, InterfaceCapabilities
-from urban_hs.modules.wifi.wigle import WigleClient, WigleLocation
-from urban_hs.modules.wifi.attacks.wpa import WPA3DowngradeAttack, FastTransitionAttack
-from urban_hs.core.offloading import HashtopolisClient, HashtopolisTask
+import pytest
+
+from urban_hs.core.offloading import HashtopolisClient
+from urban_hs.hal.wifi import InterfaceCapabilities, detect_interface_capabilities
+from urban_hs.modules.wifi.attacks.wpa import FastTransitionAttack, WPA3DowngradeAttack
+from urban_hs.modules.wifi.wigle import WigleClient
 
 
 @pytest.mark.asyncio

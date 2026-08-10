@@ -12,7 +12,7 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, List, Optional, Union
+from typing import Any
 
 import structlog
 
@@ -56,7 +56,7 @@ class InjectionEvent:
     """Single injection event."""
     timestamp: datetime = field(default_factory=datetime.utcnow)
     event_type: str = ""  # key_down, key_up, key_press, mouse_move, mouse_click, delay
-    keycode: Optional[int] = None
+    keycode: int | None = None
     modifier: int = 0
     x: int = 0
     y: int = 0
@@ -71,29 +71,49 @@ class InjectionReport:
     end_time: datetime
     total_keys: int = 0
     total_delays: int = 0
-    events: List[InjectionEvent] = field(default_factory=list)
-    errors: List[str] = field(default_factory=list)
+    events: list[InjectionEvent] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
     status: InjectionStatus = InjectionStatus.COMPLETED
+
+
+# Linux input-event keycodes (input-event-codes.h) for the US layout.
+_KEY_LEFTSHIFT_CODE = 42
+_BASE_KEYCODES = {
+    "a": 30, "b": 48, "c": 46, "d": 32, "e": 18, "f": 33, "g": 34, "h": 35,
+    "i": 23, "j": 36, "k": 37, "l": 38, "m": 50, "n": 49, "o": 24, "p": 25,
+    "q": 16, "r": 19, "s": 31, "t": 20, "u": 22, "v": 47, "w": 17, "x": 45,
+    "y": 21, "z": 44,
+    "1": 2, "2": 3, "3": 4, "4": 5, "5": 6, "6": 7, "7": 8, "8": 9, "9": 10, "0": 11,
+    "-": 12, "=": 13, "[": 26, "]": 27, ";": 39, "'": 40, "`": 41, "\\": 43,
+    ",": 51, ".": 52, "/": 53,
+    " ": 57, "\n": 28, "\t": 15, "\r": 28,
+}
+# Shifted printable char -> its unshifted base key.
+_SHIFTED_CHARS = {
+    "!": "1", "@": "2", "#": "3", "$": "4", "%": "5", "^": "6", "&": "7",
+    "*": "8", "(": "9", ")": "0", "_": "-", "+": "=", "{": "[", "}": "]",
+    ":": ";", '"': "'", "~": "`", "|": "\\", "<": ",", ">": ".", "?": "/",
+}
 
 
 class UInputInjector:
     """HID injector using Linux uinput (local)."""
-    
-    def __init__(self, config: Optional[InjectionConfig] = None):
+
+    def __init__(self, config: InjectionConfig | None = None):
         self.config = config or InjectionConfig()
-        self._device: Optional[Any] = None
+        self._device: Any | None = None
         self._running = False
-        self._events: List[InjectionEvent] = []
-        
+        self._events: list[InjectionEvent] = []
+
         if not UINPUT_AVAILABLE:
             logger.warning("uinput not available, install python-uinput")
-    
+
     async def start(self) -> bool:
         """Initialize uinput device."""
         if not UINPUT_AVAILABLE:
             logger.error("uinput not available")
             return False
-        
+
         try:
             # Define device capabilities
             events = (
@@ -102,7 +122,7 @@ class UInputInjector:
                 uinput.EV_ABS,
                 uinput.EV_SYN,
             )
-            
+
             # Common keys
             keys = [
                 uinput.KEY_A, uinput.KEY_B, uinput.KEY_C, uinput.KEY_D, uinput.KEY_E,
@@ -114,6 +134,10 @@ class UInputInjector:
                 uinput.KEY_1, uinput.KEY_2, uinput.KEY_3, uinput.KEY_4, uinput.KEY_5,
                 uinput.KEY_6, uinput.KEY_7, uinput.KEY_8, uinput.KEY_9, uinput.KEY_0,
                 uinput.KEY_ENTER, uinput.KEY_ESC, uinput.KEY_BACKSPACE, uinput.KEY_TAB,
+                # Punctuation keys required to type symbols / shifted characters.
+                uinput.KEY_MINUS, uinput.KEY_EQUAL, uinput.KEY_LEFTBRACE, uinput.KEY_RIGHTBRACE,
+                uinput.KEY_SEMICOLON, uinput.KEY_APOSTROPHE, uinput.KEY_GRAVE, uinput.KEY_BACKSLASH,
+                uinput.KEY_COMMA, uinput.KEY_DOT, uinput.KEY_SLASH,
                 uinput.KEY_SPACE, uinput.KEY_LEFTSHIFT, uinput.KEY_RIGHTSHIFT,
                 uinput.KEY_LEFTCTRL, uinput.KEY_RIGHTCTRL, uinput.KEY_LEFTALT, uinput.KEY_RIGHTALT,
                 uinput.KEY_LEFTMETA, uinput.KEY_RIGHTMETA,  # GUI/Windows key
@@ -126,9 +150,9 @@ class UInputInjector:
                 uinput.KEY_INSERT, uinput.KEY_DELETE,
                 uinput.BTN_LEFT, uinput.BTN_RIGHT, uinput.BTN_MIDDLE,
             ]
-            
+
             rel_axes = [uinput.REL_X, uinput.REL_Y, uinput.REL_WHEEL]
-            
+
             self._device = uinput.Device(
                 events=events,
                 name=self.config.uinput_device_name,
@@ -136,15 +160,15 @@ class UInputInjector:
                 product=0x5678,
                 version=1,
             )
-            
+
             self._running = True
             logger.info("uinput injector started", device=self.config.uinput_device_name)
             return True
-            
+
         except Exception as e:
             logger.error("Failed to start uinput injector", error=str(e))
             return False
-    
+
     async def stop(self):
         """Stop uinput injector."""
         if self._device:
@@ -155,20 +179,20 @@ class UInputInjector:
             self._device = None
         self._running = False
         logger.info("uinput injector stopped")
-    
+
     def is_running(self) -> bool:
         return self._running
-    
+
     def _log_event(self, event: InjectionEvent):
         """Log injection event."""
         self._events.append(event)
         logger.debug("Injection event", **event.__dict__)
-    
+
     def key_down(self, keycode: int, modifier: int = 0) -> bool:
         """Press a key."""
         if not self._running or not self._device:
             return False
-        
+
         try:
             self._device.emit_click(keycode)
             self._log_event(InjectionEvent(
@@ -180,12 +204,12 @@ class UInputInjector:
         except Exception as e:
             logger.error("Key down failed", keycode=keycode, error=str(e))
             return False
-    
+
     def key_up(self, keycode: int, modifier: int = 0) -> bool:
         """Release a key."""
         if not self._running or not self._device:
             return False
-        
+
         try:
             # uinput emits key up automatically on emit_click
             # For explicit key up, we can emit with value 0
@@ -199,12 +223,12 @@ class UInputInjector:
         except Exception as e:
             logger.error("Key up failed", keycode=keycode, error=str(e))
             return False
-    
-    async def key_press(self, keycode: int, modifier: int = 0, delay_ms: Optional[int] = None) -> bool:
+
+    async def key_press(self, keycode: int, modifier: int = 0, delay_ms: int | None = None) -> bool:
         """Press and release a key."""
         if not self._running or not self._device:
             return False
-        
+
         try:
             self._device.emit_click(keycode)
             self._log_event(InjectionEvent(
@@ -212,58 +236,66 @@ class UInputInjector:
                 keycode=keycode,
                 modifier=modifier,
             ))
-            
+
             delay = delay_ms or self.config.default_delay
             if delay > 0:
                 await asyncio.sleep(delay / 1000.0)
-            
+
             return True
         except Exception as e:
             logger.error("Key press failed", keycode=keycode, error=str(e))
             return False
-    
-    async def type_string(self, text: str, delay_ms: Optional[int] = None) -> bool:
+
+    async def type_string(self, text: str, delay_ms: int | None = None) -> bool:
         """Type a string character by character."""
         if not self._running or not self._device:
             return False
-        
+
         for char in text:
-            # Convert char to keycode (simplified)
-            keycode = self._char_to_keycode(char)
-            if keycode:
-                if not await self.key_press(keycode, delay_ms=delay_ms):
-                    return False
-            else:
+            mapping = self._char_to_keycode(char)
+            if mapping is None:
                 logger.warning("Character not mappable", char=char)
-            
+                continue
+
+            keycode, needs_shift = mapping
+            if needs_shift:
+                self._device.emit(_KEY_LEFTSHIFT_CODE, 1)
+            ok = await self.key_press(keycode, delay_ms=delay_ms)
+            if needs_shift:
+                self._device.emit(_KEY_LEFTSHIFT_CODE, 0)
+            if not ok:
+                return False
+
             inter_delay = delay_ms or self.config.inter_key_delay
             if inter_delay > 0:
                 await asyncio.sleep(inter_delay / 1000.0)
-        
+
         return True
-    
-    def _char_to_keycode(self, char: str) -> Optional[int]:
-        """Convert character to uinput keycode (simplified)."""
-        # This is a simplified mapping - in production would use layout mapping
-        key_map = {
-            'a': 30, 'b': 48, 'c': 46, 'd': 32, 'e': 18, 'f': 33, 'g': 34, 'h': 35,
-            'i': 23, 'j': 36, 'k': 37, 'l': 38, 'm': 50, 'n': 49, 'o': 24, 'p': 25,
-            'q': 16, 'r': 19, 's': 31, 't': 20, 'u': 22, 'v': 47, 'w': 17, 'x': 45, 'y': 21, 'z': 44,
-            '1': 2, '2': 3, '2': 3, '3': 4, '4': 5, '5': 6, '6': 7, '7': 8, '8': 9, '9': 10, '0': 11,
-            ' ': 57, '\n': 28, '\t': 15, '\r': 28,
-        }
-        return key_map.get(char.lower())
-    
+
+    @staticmethod
+    def _char_to_keycode(char: str) -> tuple[int, bool] | None:
+        """Map a printable char to ``(linux_keycode, needs_shift)`` for the US layout.
+
+        Returns ``None`` for characters with no key on a US keyboard.
+        """
+        if char in _BASE_KEYCODES:
+            return (_BASE_KEYCODES[char], False)
+        if char.isalpha() and char.lower() in _BASE_KEYCODES:
+            return (_BASE_KEYCODES[char.lower()], True)
+        if char in _SHIFTED_CHARS:
+            return (_BASE_KEYCODES[_SHIFTED_CHARS[char]], True)
+        return None
+
     def mouse_move(self, x: int, y: int) -> bool:
         """Move mouse relatively."""
         if not self._running or not self._device:
             return False
-        
+
         try:
             self._device.emit(uinput.REL_X, x)
             self._device.emit(uinput.REL_Y, y)
             self._device.emit(uinput.EV_SYN, uinput.SYN_REPORT, 0)
-            
+
             self._log_event(InjectionEvent(
                 event_type="mouse_move",
                 x=x, y=y,
@@ -272,12 +304,12 @@ class UInputInjector:
         except Exception as e:
             logger.error("Mouse move failed", error=str(e))
             return False
-    
+
     def mouse_click(self, button: int = 1) -> bool:
         """Click mouse button (1=left, 2=right, 3=middle)."""
         if not self._running or not self._device:
             return False
-        
+
         try:
             btn = {1: uinput.BTN_LEFT, 2: uinput.BTN_RIGHT, 3: uinput.BTN_MIDDLE}.get(button, uinput.BTN_LEFT)
             self._device.emit_click(btn)
@@ -289,7 +321,7 @@ class UInputInjector:
         except Exception as e:
             logger.error("Mouse click failed", error=str(e))
             return False
-    
+
     async def delay(self, ms: int):
         """Add delay."""
         self._log_event(InjectionEvent(
@@ -297,11 +329,11 @@ class UInputInjector:
             delay_ms=ms,
         ))
         await asyncio.sleep(ms / 1000.0)
-    
-    def get_events(self) -> List[InjectionEvent]:
+
+    def get_events(self) -> list[InjectionEvent]:
         """Get recorded events."""
         return self._events.copy()
-    
+
     def clear_events(self):
         """Clear recorded events."""
         self._events.clear()
@@ -309,46 +341,46 @@ class UInputInjector:
 
 class USBGadgetInjector:
     """HID injector using USB Gadget (configfs HID)."""
-    
-    def __init__(self, config: Optional[InjectionConfig] = None):
+
+    def __init__(self, config: InjectionConfig | None = None):
         self.config = config or InjectionConfig(mode=InjectionMode.USB_GADGET)
-        self._gadget: Optional[Any] = None
+        self._gadget: Any | None = None
         self._running = False
-        self._events: List[InjectionEvent] = []
-        self._report: Optional[Any] = None  # HID report endpoint
-    
+        self._events: list[InjectionEvent] = []
+        self._report: Any | None = None  # HID report endpoint
+
     async def start(self) -> bool:
         """Initialize USB gadget HID."""
         try:
             from urban_hs.modules.hid import HIDReportDescriptors, USBGadgetManager
-            
+
             self._gadget = USBGadgetManager()
-            
+
             # Create gadget with HID keyboard
             if not self._gadget.setup_hid_keyboard(HIDReportDescriptors.KEYBOARD):
                 logger.error("Failed to setup HID keyboard")
                 return False
-            
+
             # Bind to UDC
             if not self._gadget.bind_udc():
                 logger.error("Failed to bind UDC")
                 return False
-            
+
             # Find HID device endpoint
             self._report = await self._find_hid_report()
             if not self._report:
                 logger.error("HID report endpoint not found")
                 return False
-            
+
             self._running = True
             logger.info("USB Gadget HID injector started")
             return True
-            
+
         except Exception as e:
             logger.error("Failed to start USB Gadget injector", error=str(e))
             return False
-    
-    async def _find_hid_report(self) -> Optional[str]:
+
+    async def _find_hid_report(self) -> str | None:
         """Find the HID report endpoint in /dev/hidg*."""
         import glob
         for path in glob.glob("/dev/hidg*"):
@@ -357,7 +389,7 @@ class USBGadgetInjector:
         for path in glob.glob("/dev/hidraw*"):
             return path
         return None
-    
+
     async def stop(self):
         """Stop USB gadget injector."""
         if self._gadget:
@@ -365,10 +397,10 @@ class USBGadgetInjector:
             self._gadget = None
         self._running = False
         logger.info("USB Gadget HID injector stopped")
-    
+
     def is_running(self) -> bool:
         return self._running
-    
+
     def _log_event(self, event: InjectionEvent):
         self._events.append(event)
 
@@ -383,128 +415,127 @@ class HIDInjector:
         await injector.type_string("Hello World")
         await injector.stop()
     """
-    
-    def __init__(self, config: Optional[InjectionConfig] = None):
+
+    def __init__(self, config: InjectionConfig | None = None):
         self.config = config or InjectionConfig()
-        self._uinput: Optional[UInputInjector] = None
-        self._usb_gadget: Optional[USBGadgetInjector] = None
-        self._active_injector: Optional[UInputInjector] = None
+        self._uinput: UInputInjector | None = None
+        self._usb_gadget: USBGadgetInjector | None = None
+        self._active_injector: UInputInjector | None = None
         self._running = False
-        self._events: List[InjectionEvent] = []
-    
+        self._events: list[InjectionEvent] = []
+
     async def start(self, mode: InjectionMode = InjectionMode.UINPUT) -> bool:
         """Start HID injector in specified mode."""
         self.config.mode = mode
-        
+
         if mode == InjectionMode.UINPUT:
             self._uinput = UInputInjector(self.config)
             success = await self._uinput.start()
             if success:
                 self._active_injector = self._uinput
-        
+
         elif mode == InjectionMode.USB_GADGET:
             self._usb_gadget = USBGadgetInjector(self.config)
             success = await self._usb_gadget.start()
             if success:
                 self._active_injector = self._usb_gadget
-        
+
         else:
             logger.error("Unknown injection mode", mode=mode)
             return False
-        
+
         if success:
             self._running = True
             logger.info("HID injector started", mode=mode.value)
-        
+
         return success
-    
+
     async def stop(self):
         """Stop HID injector."""
         if self._uinput:
             await self._uinput.stop()
             self._uinput = None
-        
+
         if self._usb_gadget:
             await self._usb_gadget.stop()
             self._usb_gadget = None
-        
+
         self._active_injector = None
         self._running = False
         logger.info("HID injector stopped")
-    
+
     def is_running(self) -> bool:
         return self._running
-    
-    async def type_string(self, text: str, delay_ms: Optional[int] = None) -> bool:
+
+    async def type_string(self, text: str, delay_ms: int | None = None) -> bool:
         """Type a string."""
         if not self._active_injector:
             return False
-        
+
         if hasattr(self._active_injector, 'type_string'):
             return await self._active_injector.type_string(text, delay_ms)
-        else:
-            # Fallback: type character by character
-            for char in text:
-                if not await self.key_press(char):
-                    return False
-            return True
-    
-    async def key_press(self, key: Union[str, int], modifier: int = 0, delay_ms: Optional[int] = None) -> bool:
+        # Fallback: type character by character
+        for char in text:
+            if not await self.key_press(char):
+                return False
+        return True
+
+    async def key_press(self, key: str | int, modifier: int = 0, delay_ms: int | None = None) -> bool:
         """Press a key."""
         if not self._active_injector:
             return False
-        
+
         if hasattr(self._active_injector, 'key_press'):
             if isinstance(key, str):
                 return await self._active_injector.type_string(key)
             return await self._active_injector.key_press(key, modifier, delay_ms)
         return False
-    
+
     async def key_down(self, keycode: int, modifier: int = 0) -> bool:
         """Press key down."""
         if not self._active_injector or not hasattr(self._active_injector, 'key_down'):
             return False
         return self._active_injector.key_down(keycode, modifier)
-    
+
     async def key_up(self, keycode: int, modifier: int = 0) -> bool:
         """Release key."""
         if not self._active_injector or not hasattr(self._active_injector, 'key_up'):
             return False
         return self._active_injector.key_up(keycode, modifier)
-    
+
     def mouse_move(self, x: int, y: int) -> bool:
         """Move mouse relatively."""
         if not self._active_injector or not hasattr(self._active_injector, 'mouse_move'):
             return False
         return self._active_injector.mouse_move(x, y)
-    
+
     def mouse_click(self, button: int = 1) -> bool:
         """Click mouse button."""
         if not self._active_injector or not hasattr(self._active_injector, 'mouse_click'):
             return False
         return self._active_injector.mouse_click(button)
-    
+
     async def delay(self, ms: int):
         """Add delay."""
         if self._active_injector and hasattr(self._active_injector, 'delay'):
             await self._active_injector.delay(ms)
         else:
             await asyncio.sleep(ms / 1000.0)
-    
+
     async def execute_ducky(self, script_path: str, layout: str = "us") -> bool:
         """Execute DuckyScript file."""
         try:
-            from urban_hs.modules.hid import DuckyCompiler
+            from urban_hs.modules.hid import DuckyCompiler, KeyboardLayout
             compiler = DuckyCompiler(KeyboardLayout(layout))
             script = compiler.compile_file(script_path)
-            
+
             if script.errors:
                 for error in script.errors:
                     logger.error("DuckyScript error", error=error)
                 return False
-            
+
             reports = compiler.encode_to_hid(script)
-            
+
             # Send reports via active injector
             for report in reports:
                 # Skip DELAY markers (high bit 0x80 set in first byte)
@@ -512,20 +543,20 @@ class HIDInjector:
                     delay_ms = ((report[0] & 0x7F) << 8) | report[1]
                     await asyncio.sleep(delay_ms / 1000.0)
                     continue
-                
+
                 # Inject report bytes
                 if hasattr(self._active_injector, '_report') and self._active_injector._report:
                     with open(self._active_injector._report, 'wb') as f:
                         f.write(report)
                 else:
                     logger.warning("No HID report endpoint for ducky execution")
-            
+
             return True
         except Exception as e:
             logger.error("DuckyScript execution failed", error=str(e))
             return False
-    
-    def get_events(self) -> List[InjectionEvent]:
+
+    def get_events(self) -> list[InjectionEvent]:
         """Get all recorded injection events."""
         events = []
         if self._uinput:
@@ -533,9 +564,6 @@ class HIDInjector:
         if self._usb_gadget:
             events.extend(self._usb_gadget._events)
         return events
-    
-    def is_running(self) -> bool:
-        return self._running
 
 
 # Convenience functions
@@ -553,7 +581,7 @@ async def quick_ducky(script_path: str, mode: InjectionMode = InjectionMode.UINP
     """Quick helper to execute DuckyScript."""
     injector = HIDInjector(InjectionConfig(mode=mode, layout=layout))
     if await injector.start(mode):
-        result = injector.execute_ducky(script_path, layout)
+        result = await injector.execute_ducky(script_path, layout)
         await injector.stop()
         return result
     return False

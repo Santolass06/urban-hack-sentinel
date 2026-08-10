@@ -8,10 +8,11 @@ import asyncio
 import os
 import tempfile
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any
 
 import structlog
 
@@ -42,21 +43,21 @@ class ResourceScript:
     """Metasploit resource script (.rc file)."""
     name: str
     content: str
-    path: Optional[str] = None
+    path: str | None = None
     created_at: datetime = field(default_factory=datetime.utcnow)
-    
-    def save(self, directory: Optional[str] = None) -> str:
+
+    def save(self, directory: str | None = None) -> str:
         """Save script to file."""
         if directory is None:
             directory = tempfile.gettempdir()
-        
+
         os.makedirs(directory, exist_ok=True)
         filename = f"{self.name}_{int(time.time())}.rc"
         filepath = os.path.join(directory, filename)
-        
+
         with open(filepath, 'w') as f:
             f.write(self.content)
-        
+
         self.path = filepath
         return filepath
 
@@ -72,27 +73,27 @@ class MetasploitConsole:
     - Session management
     - Module execution via console
     """
-    
+
     def __init__(
         self,
         msfconsole_path: str = "msfconsole",
-        resource_dir: Optional[str] = None,
+        resource_dir: str | None = None,
         timeout: int = 300,
     ):
         self.msfconsole_path = msfconsole_path
         self.resource_dir = resource_dir or os.path.join(tempfile.gettempdir(), "urban-hs-msf-resources")
         self.timeout = timeout
-        
+
         os.makedirs(self.resource_dir, exist_ok=True)
-        
-        self._process: Optional[asyncio.subprocess.Process] = None
+
+        self._process: asyncio.subprocess.Process | None = None
         self._active = False
-    
+
     async def execute_rc_script(
         self,
-        script: Union[str, ResourceScript],
-        timeout: Optional[int] = None,
-        on_output: Optional[Callable[[str, str], None]] = None,
+        script: str | ResourceScript,
+        timeout: int | None = None,
+        on_output: Callable[[str, str], None] | None = None,
     ) -> ConsoleResult:
         """
         Execute a resource script via msfconsole.
@@ -104,13 +105,13 @@ class MetasploitConsole:
         """
         start_time = time.time()
         timeout = timeout or self.timeout
-        
+
         # Get script path
         if isinstance(script, ResourceScript):
             script_path = script.path or script.save(self.resource_dir)
         else:
             script_path = script
-        
+
         if not os.path.exists(script_path):
             return ConsoleResult(
                 command=f"msfconsole -r {script_path}",
@@ -119,12 +120,12 @@ class MetasploitConsole:
                 returncode=-1,
                 duration_ms=0,
             )
-        
+
         cmd = [self.msfconsole_path, "-q", "-r", script_path]
         cmd_str = " ".join(cmd)
-        
+
         logger.info("Executing msfconsole resource script", script=script_path)
-        
+
         try:
             self._process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -132,12 +133,12 @@ class MetasploitConsole:
                 stderr=asyncio.subprocess.PIPE,
                 limit=1024 * 1024,
             )
-            
+
             self._active = True
-            
+
             stdout_lines = []
             stderr_lines = []
-            
+
             async def read_stream(stream, stream_name, lines_list):
                 while True:
                     line = await stream.readline()
@@ -147,10 +148,10 @@ class MetasploitConsole:
                     lines_list.append(decoded)
                     if on_output:
                         on_output(stream_name, decoded)
-            
+
             stdout_task = asyncio.create_task(read_stream(self._process.stdout, "stdout", stdout_lines))
             stderr_task = asyncio.create_task(read_stream(self._process.stderr, "stderr", stderr_lines))
-            
+
             try:
                 await asyncio.wait_for(
                     asyncio.gather(stdout_task, stderr_task, self._process.wait()),
@@ -158,13 +159,13 @@ class MetasploitConsole:
                 )
                 returncode = self._process.returncode
                 timed_out = False
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("msfconsole timeout", timeout=timeout)
                 self._process.kill()
                 await self._process.wait()
                 returncode = -1
                 timed_out = True
-            
+
         except Exception as e:
             logger.error("msfconsole execution failed", error=str(e))
             return ConsoleResult(
@@ -177,9 +178,9 @@ class MetasploitConsole:
         finally:
             self._active = False
             self._process = None
-        
+
         duration_ms = int((time.time() - start_time) * 1000)
-        
+
         return ConsoleResult(
             command=cmd_str,
             output="\n".join(stdout_lines),
@@ -188,12 +189,12 @@ class MetasploitConsole:
             duration_ms=duration_ms,
             timed_out=timed_out,
         )
-    
+
     async def execute_command(
         self,
         command: str,
-        timeout: Optional[int] = None,
-        on_output: Optional[Callable[[str, str], None]] = None,
+        timeout: int | None = None,
+        on_output: Callable[[str, str], None] | None = None,
     ) -> ConsoleResult:
         """Execute a single command in interactive msfconsole."""
         script = ResourceScript(
@@ -201,22 +202,22 @@ class MetasploitConsole:
             content=f"{command}\nexit\n",
         )
         return await self.execute_rc_script(script, timeout, on_output)
-    
+
     async def run_exploit(
         self,
         exploit_module: str,
         target: str,
-        payload: Optional[str] = None,
-        options: Optional[Dict[str, Any]] = None,
-        payload_options: Optional[Dict[str, Any]] = None,
-        timeout: Optional[int] = None,
-        on_output: Optional[Callable[[str, str], None]] = None,
+        payload: str | None = None,
+        options: dict[str, Any] | None = None,
+        payload_options: dict[str, Any] | None = None,
+        timeout: int | None = None,
+        on_output: Callable[[str, str], None] | None = None,
     ) -> ConsoleResult:
         """Run exploit module via console."""
         lines = [
             f"use {exploit_module}",
         ]
-        
+
         opts = options or {}
         opts["RHOSTS"] = target
         for k, v in opts.items():
@@ -225,37 +226,37 @@ class MetasploitConsole:
             if '\n' in v_str or '\r' in v_str:
                 raise ValueError(f"Value for option '{k}' contains newline/carriage return")
             lines.append(f"set {k} {v_str}")
-        
+
         if payload:
             lines.append(f"set PAYLOAD {payload}")
         if payload_options:
             for k, v in payload_options.items():
                 lines.append(f"set {k} {v}")
-        
+
         lines.extend([
             "exploit -z",  # Run in background
             "sessions -l",
             "exit",
         ])
-        
+
         script = ResourceScript(
             name=f"exploit_{exploit_module.replace('/', '_')}",
             content="\n".join(lines),
         )
-        
+
         return await self.execute_rc_script(script, timeout, on_output)
-    
+
     def generate_rc_script(
         self,
         name: str,
-        commands: List[str],
+        commands: list[str],
     ) -> ResourceScript:
         """Generate a resource script from commands."""
         content = "\n".join(commands) + "\n"
         return ResourceScript(name=name, content=content)
-    
+
     # Pre-built script templates
-    
+
     @staticmethod
     def template_port_scan(target: str, ports: str = "1-1000") -> ResourceScript:
         """Generate port scan resource script."""
@@ -269,7 +270,7 @@ run
 exit
 """,
         )
-    
+
     @staticmethod
     def template_vuln_scan(target: str) -> ResourceScript:
         """Generate vulnerability scan resource script."""
@@ -289,7 +290,7 @@ run
 exit
 """,
         )
-    
+
     @staticmethod
     def template_smb_enum(target: str) -> ResourceScript:
         """Generate SMB enumeration resource script."""
@@ -309,7 +310,7 @@ run
 exit
 """,
         )
-    
+
     @staticmethod
     def template_brute_force(
         target: str,
@@ -329,7 +330,7 @@ run
 exit
 """,
         )
-    
+
     @staticmethod
     def template_exploit_chain(exploit: str, target: str, payload: str = "windows/meterpreter/reverse_tcp", lhost: str = "127.0.0.1", lport: int = 4444) -> ResourceScript:
         """Generate exploit chain resource script."""
@@ -345,12 +346,12 @@ sessions -l
 exit
 """,
         )
-    
+
     # Control
-    
+
     def is_active(self) -> bool:
         return self._active
-    
+
     def kill(self):
         """Kill active msfconsole process."""
         if self._process and self._active:

@@ -7,7 +7,6 @@ Supports YAML/TOML/ENV sources, secrets via keyring, hot-reload via watchfiles.
 import asyncio
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Union
 
 import keyring
 import structlog
@@ -22,15 +21,15 @@ logger = structlog.get_logger(__name__)
 
 class WiFiConfig(BaseSettings):
     interface: str = "wlan0"
-    monitor_interface: Optional[str] = None
-    channels_2ghz: List[int] = Field(default_factory=lambda: [1, 6, 11])
-    channels_5ghz: List[int] = Field(default_factory=lambda: [36, 40, 44, 48])
-    channels_6ghz: List[int] = Field(default_factory=lambda: [])
+    monitor_interface: str | None = None
+    channels_2ghz: list[int] = Field(default_factory=lambda: [1, 6, 11])
+    channels_5ghz: list[int] = Field(default_factory=lambda: [36, 40, 44, 48])
+    channels_6ghz: list[int] = Field(default_factory=lambda: [])
     scan_interval_sec: int = 5
     passive_scan: bool = True
-    tx_power_dbm: Optional[int] = None
+    tx_power_dbm: int | None = None
     mac_randomize_interval: int = 300  # seconds
-    oui_profiles: Dict[str, List[str]] = Field(default_factory=dict)
+    oui_profiles: dict[str, list[str]] = Field(default_factory=dict)
     enable_active_attacks: bool = False
     legal_warning_shown: bool = False
 
@@ -50,15 +49,15 @@ class BLEConfig(BaseSettings):
 class NetworkConfig(BaseSettings):
     nmap_timing_template: str = "T3"
     nmap_ports: str = "1-1000"
-    nmap_scripts: List[str] = Field(default_factory=lambda: ["vuln", "auth", "default"])
-    nuclei_templates: List[str] = Field(default_factory=lambda: ["cves/", "exposures/", "misconfig/"])
-    nuclei_severity: List[str] = Field(default_factory=lambda: ["critical", "high", "medium"])
+    nmap_scripts: list[str] = Field(default_factory=lambda: ["vuln", "auth", "default"])
+    nuclei_templates: list[str] = Field(default_factory=lambda: ["cves/", "exposures/", "misconfig/"])
+    nuclei_severity: list[str] = Field(default_factory=lambda: ["critical", "high", "medium"])
     hydra_threads: int = 4
     hydra_timeout: int = 30
 
 
 class CameraConfig(BaseSettings):
-    discovery_protocols: List[str] = Field(default_factory=lambda: ["mdns", "upnp", "onvif", "rtsp"])
+    discovery_protocols: list[str] = Field(default_factory=lambda: ["mdns", "upnp", "onvif", "rtsp"])
     default_creds_file: str = "/etc/urban-hs/camera_default_creds.json"
     onvif_timeout: int = 10
     rtsp_timeout: int = 15
@@ -88,16 +87,16 @@ class ChrootConfig(BaseSettings):
     enabled: bool = True
     path: str = "/opt/urban-chroot"
     alpine_version: str = "3.20"
-    packages: List[str] = Field(default_factory=lambda: [
+    packages: list[str] = Field(default_factory=lambda: [
         "nmap", "nuclei", "hydra", "metasploit-framework", "hashcat",
         "searchsploit", "bettercap", "routerSploit", "hashcat", "john"
     ])
-    bind_mounts: Dict[str, str] = Field(default_factory=lambda: {
+    bind_mounts: dict[str, str] = Field(default_factory=lambda: {
         "/data": "/data",
         "/artifacts": "/artifacts",
         "/logs": "/logs",
     })
-    resource_limits: Dict[str, Union[int, str]] = Field(default_factory=lambda: {
+    resource_limits: dict[str, int | str] = Field(default_factory=lambda: {
         "memory": "2G",
         "cpus": "2",
         "pids": "100",
@@ -107,7 +106,7 @@ class ChrootConfig(BaseSettings):
 class HIDUSBConfig(BaseSettings):
     hid_enabled: bool = True
     usb_gadget_enabled: bool = True
-    keyboard_layouts: List[str] = Field(default_factory=lambda: ["us", "gb", "de", "fr", "es", "it", "ru"])
+    keyboard_layouts: list[str] = Field(default_factory=lambda: ["us", "gb", "de", "fr", "es", "it", "ru"])
     default_vid: str = "0x1d6b"
     default_pid: str = "0x0104"
     mass_storage_images_dir: str = ""  # Defaults to {data_root}/mass_storage if empty
@@ -190,12 +189,12 @@ class APIConfig(BaseSettings):
     jwt_secret: str = ""  # Must be set via env/keyring
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60
-    cors_origins: List[str] = Field(default_factory=lambda: ["http://localhost:3000"])
+    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
     tls_enabled: bool = False
     tls_cert_path: str = ""
     tls_key_path: str = ""
     enable_ip_allowlist: bool = False
-    allowed_ips: List[str] = Field(default_factory=list)
+    allowed_ips: list[str] = Field(default_factory=list)
     rate_limit_per_minute: int = 60
 
     @field_validator("jwt_secret", mode="before")
@@ -233,7 +232,7 @@ class Config(BaseSettings):
     # Global settings
     debug: bool = False
     dry_run: bool = False
-    config_file: Optional[str] = None
+    config_file: str | None = None
 
     def get_secret(self, service: str, username: str) -> str:
         """Retrieve secret from keyring."""
@@ -257,8 +256,8 @@ def resolve_log_path(subpath: str) -> Path:
 
 
 # Global config instance
-_config: Optional[Config] = None
-_config_watch_task: Optional[asyncio.Task] = None
+_config: Config | None = None
+_config_watch_task: asyncio.Task | None = None
 
 
 def get_config() -> Config:
@@ -268,18 +267,18 @@ def get_config() -> Config:
     return _config
 
 
-async def init_config(config_file: Optional[str] = None, watch: bool = True) -> Config:
+async def init_config(config_file: str | None = None, watch: bool = True) -> Config:
     """Initialize configuration with optional hot-reload."""
     global _config, _config_watch_task
-    
+
     if config_file:
         os.environ["URBAN_HS_CONFIG_FILE"] = config_file
-    
+
     _config = Config(config_file=config_file)
-    
+
     if watch:
         _config_watch_task = asyncio.create_task(_watch_config())
-    
+
     # Publish config loaded event
     bus = get_event_bus()
     await bus.publish(Event(
@@ -287,7 +286,7 @@ async def init_config(config_file: Optional[str] = None, watch: bool = True) -> 
         payload=_config.model_dump(mode="json"),
         source="config",
     ))
-    
+
     return _config
 
 
@@ -296,10 +295,10 @@ async def _watch_config() -> None:
     config_file = os.environ.get("URBAN_HS_CONFIG_FILE")
     if not config_file or not os.path.exists(config_file):
         return
-    
+
     config = get_config()
     bus = get_event_bus()
-    
+
     async for changes in awatch(config_file):
         if not changes:
             continue
@@ -308,7 +307,7 @@ async def _watch_config() -> None:
             old_config = config.model_dump()
             config = Config(config_file=config_file)
             globals()["_config"] = config
-            
+
             # Publish reload event
             await bus.publish(Event(
                 type="config.reloaded",

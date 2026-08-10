@@ -15,9 +15,9 @@ class WiFiBackend(ABC):
     @abstractmethod
     async def scan(
         self,
-        channels: Optional[List[int]] = None,
+        channels: list[int] | None = None,
         duration: int = 30,
-    ) -> List[NetworkInfo]:
+    ) -> list[NetworkInfo]:
         ...
 
     @abstractmethod
@@ -41,7 +41,7 @@ class _IWBackend(WiFiBackend):
         self.interface = interface
         self.strategy = strategy
 
-    async def scan(self, channels=None, duration=30) -> List[NetworkInfo]:
+    async def scan(self, channels=None, duration=30) -> list[NetworkInfo]:
         from urban_hs.modules.wifi.scanner import ScanStrategy, WiFiScanner
 
         scanner = WiFiScanner(
@@ -93,13 +93,13 @@ class _ScapyBackend(WiFiBackend):
     def __init__(self, interface: str) -> None:
         self.interface = interface
 
-    async def scan(self, channels=None, duration=30) -> List[NetworkInfo]:
+    async def scan(self, channels=None, duration=30) -> list[NetworkInfo]:
         try:
             from scapy.all import AsyncSniffer  # type: ignore[import-untyped]
         except Exception:
             return []
 
-        found: Dict[str, NetworkInfo] = {}
+        found: dict[str, NetworkInfo] = {}
 
         def _pkt(pkt) -> Any:
             try:
@@ -145,10 +145,10 @@ class InterfaceCapabilities:
     interface: str
     monitor_supported: bool = False
     injection_supported: bool = False
-    bands_supported: List[str] = field(default_factory=list)  # ["2.4GHz", "5GHz", "6GHz"]
+    bands_supported: list[str] = field(default_factory=list)  # ["2.4GHz", "5GHz", "6GHz"]
     driver: str = "unknown"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "interface": self.interface,
             "monitor_supported": self.monitor_supported,

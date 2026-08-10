@@ -14,11 +14,13 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import re
+import secrets
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from urllib.parse import urlparse
 
 import structlog
@@ -67,37 +69,37 @@ class CameraCredential:
     auth_type: AuthType = AuthType.BASIC
     source: str = "default"  # default, brute_force, config_dump, default_db
     verified: bool = False
-    verified_at: Optional[datetime] = None
-    realm: Optional[str] = None
+    verified_at: datetime | None = None
+    realm: str | None = None
 
 
 @dataclass
 class CameraConfig:
     """Camera configuration dump."""
-    manufacturer: Optional[str] = None
-    model: Optional[str] = None
-    firmware_version: Optional[str] = None
-    serial_number: Optional[str] = None
-    mac_address: Optional[str] = None
-    ip_address: Optional[str] = None
-    network_config: Dict[str, Any] = field(default_factory=dict)
-    wifi_config: Dict[str, Any] = field(default_factory=dict)
-    rtsp_streams: List[Dict[str, Any]] = field(default_factory=list)
-    onvif_profiles: List[Dict[str, Any]] = field(default_factory=list)
-    users: List[Dict[str, Any]] = field(default_factory=list)
-    motion_regions: List[Dict[str, Any]] = field(default_factory=list)
-    ptz_config: Dict[str, Any] = field(default_factory=dict)
-    raw_config: Dict[str, Any] = field(default_factory=dict)
+    manufacturer: str | None = None
+    model: str | None = None
+    firmware_version: str | None = None
+    serial_number: str | None = None
+    mac_address: str | None = None
+    ip_address: str | None = None
+    network_config: dict[str, Any] = field(default_factory=dict)
+    wifi_config: dict[str, Any] = field(default_factory=dict)
+    rtsp_streams: list[dict[str, Any]] = field(default_factory=list)
+    onvif_profiles: list[dict[str, Any]] = field(default_factory=list)
+    users: list[dict[str, Any]] = field(default_factory=list)
+    motion_regions: list[dict[str, Any]] = field(default_factory=list)
+    ptz_config: dict[str, Any] = field(default_factory=dict)
+    raw_config: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class CameraFirmware:
     """Camera firmware information."""
     version: str
-    build_date: Optional[str] = None
-    manufacturer: Optional[str] = None
-    model: Optional[str] = None
-    raw_info: Dict[str, Any] = field(default_factory=dict)
+    build_date: str | None = None
+    manufacturer: str | None = None
+    model: str | None = None
+    raw_info: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -106,16 +108,16 @@ class EnumerationResult:
     ip: str
     port: int
     protocol: CameraProtocol
-    manufacturer: Optional[str] = None
-    model: Optional[str] = None
-    firmware: Optional[CameraFirmware] = None
-    config: Optional[CameraConfig] = None
-    credentials: List[CameraCredential] = field(default_factory=list)
-    rtsp_streams: List[Dict[str, Any]] = field(default_factory=list)
-    onvif_info: Optional[Dict[str, Any]] = None
-    vulnerabilities: List[Dict[str, Any]] = field(default_factory=list)
+    manufacturer: str | None = None
+    model: str | None = None
+    firmware: CameraFirmware | None = None
+    config: CameraConfig | None = None
+    credentials: list[CameraCredential] = field(default_factory=list)
+    rtsp_streams: list[dict[str, Any]] = field(default_factory=list)
+    onvif_info: dict[str, Any] | None = None
+    vulnerabilities: list[dict[str, Any]] = field(default_factory=list)
     discovered_at: datetime = field(default_factory=datetime.utcnow)
-    errors: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
 
 # Common default credentials for IP cameras
@@ -211,17 +213,17 @@ class CameraEnumerator:
         self.max_concurrent = max_concurrent
         self.user_agent = user_agent
         self._semaphore = asyncio.Semaphore(max_concurrent)
-        
-        # Session cache
-        self._sessions: Dict[str, "aiohttp.ClientSession"] = {}
 
-    async def _get_session(self, base_url: str) -> "aiohttp.ClientSession":
+        # Session cache
+        self._sessions: dict[str, aiohttp.ClientSession] = {}
+
+    async def _get_session(self, base_url: str) -> aiohttp.ClientSession:
         """Get or create aiohttp session for a base URL."""
         if not AIOHTTP_AVAILABLE:
             raise RuntimeError("aiohttp not available")
         parsed = urlparse(base_url)
         key = f"{parsed.scheme}://{parsed.netloc}"
-        
+
         if key not in self._sessions:
             timeout = aiohttp.ClientTimeout(total=self.timeout)
             connector = aiohttp.TCPConnector(limit=10, ssl=False)
@@ -230,7 +232,7 @@ class CameraEnumerator:
                 connector=connector,
                 headers={"User-Agent": self.user_agent}
             )
-        
+
         return self._sessions[key]
 
     async def close(self):
@@ -248,9 +250,9 @@ class CameraEnumerator:
         ip: str,
         port: int,
         protocol: CameraProtocol = CameraProtocol.HTTP,
-        credentials: Optional[List[Tuple[str, str]]] = None,
+        credentials: list[tuple[str, str]] | None = None,
         path: str = "/",
-    ) -> List[CameraCredential]:
+    ) -> list[CameraCredential]:
         """Test credentials against camera."""
         if not AIOHTTP_AVAILABLE:
             logger.warning("aiohttp not available for credential testing")
@@ -262,7 +264,7 @@ class CameraEnumerator:
 
         async with self._semaphore:
             session = await self._get_session(base_url)
-            
+
             for username, password in creds:
                 try:
                     # Test Basic Auth
@@ -270,13 +272,13 @@ class CameraEnumerator:
                     if cred:
                         verified_creds.append(cred)
                         continue
-                    
+
                     # Test Digest Auth
                     cred = await self._try_digest_auth(session, base_url, username, password)
                     if cred:
                         verified_creds.append(cred)
                         continue
-                        
+
                 except Exception as e:
                     logger.debug("Credential test failed", ip=ip, user=username, error=str(e))
 
@@ -288,11 +290,11 @@ class CameraEnumerator:
         url: str,
         username: str,
         password: str,
-    ) -> Optional[CameraCredential]:
+    ) -> CameraCredential | None:
         """Test Basic Authentication."""
         auth = base64.b64encode(f"{username}:{password}".encode()).decode()
         headers = {"Authorization": f"Basic {auth}"}
-        
+
         try:
             async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=5)) as resp:
                 if resp.status == 200:
@@ -303,12 +305,12 @@ class CameraEnumerator:
                         verified=True,
                         verified_at=datetime.utcnow(),
                     )
-                elif resp.status == 401:
+                if resp.status == 401:
                     # Check for Digest auth challenge
                     www_auth = resp.headers.get("WWW-Authenticate", "")
                     if "Digest" in www_auth:
                         return await self._try_digest_auth_from_challenge(
-                            www_auth, username, password
+                            session, url, www_auth, username, password
                         )
         except Exception:
             pass
@@ -320,34 +322,114 @@ class CameraEnumerator:
         url: str,
         username: str,
         password: str,
-    ) -> Optional[CameraCredential]:
-        """Test Digest Authentication (simplified - tries GET first to get challenge)."""
+    ) -> CameraCredential | None:
+        """Test Digest Authentication (tries GET first to get challenge)."""
         try:
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
                 if resp.status == 401:
                     www_auth = resp.headers.get("WWW-Authenticate", "")
                     if "Digest" in www_auth:
-                        return await self._try_digest_auth_from_challenge(www_auth, username, password)
+                        return await self._try_digest_auth_from_challenge(
+                            session, url, www_auth, username, password
+                        )
         except Exception:
             pass
         return None
 
+    @staticmethod
+    def _parse_digest_challenge(www_auth: str) -> dict[str, str]:
+        """Parse a ``WWW-Authenticate: Digest ...`` header into its parameters."""
+        challenge = www_auth.split(" ", 1)[1] if " " in www_auth else www_auth
+        params: dict[str, str] = {}
+        for match in re.finditer(r'(\w+)=(?:"([^"]*)"|([^,]+))', challenge):
+            params[match.group(1).lower()] = (
+                match.group(2) if match.group(2) is not None else match.group(3).strip()
+            )
+        return params
+
+    @staticmethod
+    def _build_digest_header(
+        username: str,
+        password: str,
+        method: str,
+        uri: str,
+        params: dict[str, str],
+    ) -> str:
+        """Compute an RFC 2617/7616 Digest ``Authorization`` header value."""
+        realm = params.get("realm", "")
+        nonce = params.get("nonce", "")
+        qop = params.get("qop")
+        opaque = params.get("opaque")
+        algorithm = params.get("algorithm", "MD5")
+
+        hasher = hashlib.sha256 if "SHA-256" in algorithm.upper() else hashlib.md5
+
+        def H(data: str) -> str:
+            return hasher(data.encode()).hexdigest()
+
+        ha1 = H(f"{username}:{realm}:{password}")
+        if algorithm.upper().endswith("-SESS"):
+            cnonce = secrets.token_hex(8)
+            ha1 = H(f"{ha1}:{nonce}:{cnonce}")
+        ha2 = H(f"{method}:{uri}")
+
+        parts = [
+            f'username="{username}"',
+            f'realm="{realm}"',
+            f'nonce="{nonce}"',
+            f'uri="{uri}"',
+        ]
+        if qop:
+            selected_qop = qop.split(",")[0].strip()
+            nc = "00000001"
+            cnonce = secrets.token_hex(8)
+            response = H(f"{ha1}:{nonce}:{nc}:{cnonce}:{selected_qop}:{ha2}")
+            parts += [f"qop={selected_qop}", f"nc={nc}", f'cnonce="{cnonce}"']
+        else:
+            response = H(f"{ha1}:{nonce}:{ha2}")
+
+        parts.append(f'response="{response}"')
+        if opaque:
+            parts.append(f'opaque="{opaque}"')
+        parts.append(f"algorithm={algorithm}")
+        return "Digest " + ", ".join(parts)
+
     async def _try_digest_auth_from_challenge(
         self,
+        session: aiohttp.ClientSession,
+        url: str,
         www_auth: str,
         username: str,
         password: str,
-    ) -> Optional[CameraCredential]:
-        """Parse Digest challenge and generate response."""
-        # Simplified - in production would use proper digest auth
-        return CameraCredential(
-            username=username,
-            password=password,
-            auth_type=AuthType.DIGEST,
-            verified=False,  # Would need full implementation
-        )
+        method: str = "GET",
+    ) -> CameraCredential | None:
+        """Compute the Digest response and re-request to verify the credential."""
+        params = self._parse_digest_challenge(www_auth)
+        if not params.get("nonce"):
+            return None
 
-    def _get_manufacturer_credentials(self, manufacturer: Optional[str]) -> List[Tuple[str, str]]:
+        uri = urlparse(url).path or "/"
+        header = self._build_digest_header(username, password, method, uri, params)
+        try:
+            async with session.get(
+                url,
+                headers={"Authorization": header},
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as resp:
+                if resp.status in (200, 301, 302):
+                    return CameraCredential(
+                        username=username,
+                        password=password,
+                        auth_type=AuthType.DIGEST,
+                        verified=True,
+                        verified_at=datetime.utcnow(),
+                        realm=params.get("realm"),
+                    )
+        except Exception:
+            pass
+        return None
+
+    def _get_manufacturer_credentials(self, manufacturer: str | None) -> list[tuple[str, str]]:
         """Get credential list for manufacturer."""
         if manufacturer and manufacturer.lower() in MANUFACTURER_CREDS:
             # Start with manufacturer-specific creds, then fall back to defaults
@@ -362,9 +444,9 @@ class CameraEnumerator:
         self,
         ip: str,
         port: int,
-        credentials: Optional[CameraCredential] = None,
+        credentials: CameraCredential | None = None,
         protocol: CameraProtocol = CameraProtocol.HTTP,
-    ) -> Optional[CameraConfig]:
+    ) -> CameraConfig | None:
         """Dump camera configuration."""
         if not AIOHTTP_AVAILABLE:
             return None
@@ -399,22 +481,64 @@ class CameraEnumerator:
         self,
         ip: str,
         port: int,
-        credentials: Optional[CameraCredential] = None,
-    ) -> Optional[CameraConfig]:
-        """Get config via ONVIF."""
+        credentials: CameraCredential | None = None,
+    ) -> CameraConfig | None:
+        """Get config via ONVIF (device info + media profiles / RTSP URIs)."""
         if not ONVIF_AVAILABLE:
             return None
 
-        # This would use the onvif library
-        # For now, return None
-        return None
+        username = credentials.username if credentials else ""
+        password = credentials.password if credentials else ""
+
+        def _query() -> CameraConfig:
+            # onvif-zeep is synchronous; run it off the event loop.
+            from onvif import ONVIFCamera
+
+            cam = ONVIFCamera(ip, port, username, password)
+            cam.update_xaddrs()
+            info = cam.devicemgmt.GetDeviceInformation()
+            cfg = CameraConfig(
+                manufacturer=getattr(info, "Manufacturer", None),
+                model=getattr(info, "Model", None),
+                firmware_version=getattr(info, "FirmwareVersion", None),
+                serial_number=getattr(info, "SerialNumber", None),
+                ip_address=ip,
+            )
+            try:
+                media = cam.create_media_service()
+                for profile in media.GetProfiles():
+                    token = getattr(profile, "token", None)
+                    entry: dict[str, Any] = {"name": getattr(profile, "Name", None), "token": token}
+                    try:
+                        req = media.create_type("GetStreamUri")
+                        req.ProfileToken = token
+                        req.StreamSetup = {
+                            "Stream": "RTP-Unicast",
+                            "Transport": {"Protocol": "RTSP"},
+                        }
+                        uri = getattr(media.GetStreamUri(req), "Uri", None)
+                        if uri:
+                            entry["rtsp_uri"] = uri
+                            cfg.rtsp_streams.append({"profile": token, "uri": uri})
+                    except Exception:
+                        pass
+                    cfg.onvif_profiles.append(entry)
+            except Exception:
+                pass
+            return cfg
+
+        try:
+            return await asyncio.to_thread(_query)
+        except Exception as e:
+            logger.debug("ONVIF config retrieval failed", ip=ip, error=str(e))
+            return None
 
     async def _get_http_config(
         self,
         ip: str,
         port: int,
-        credentials: Optional[CameraCredential] = None,
-    ) -> Optional[CameraConfig]:
+        credentials: CameraCredential | None = None,
+    ) -> CameraConfig | None:
         """Get config via HTTP API."""
         base_url = f"http://{ip}:{port}"
         session = await self._get_session(base_url)
@@ -461,7 +585,7 @@ class CameraEnumerator:
 
         return config
 
-    def _parse_config_json(self, data: Dict[str, Any], config: CameraConfig):
+    def _parse_config_json(self, data: dict[str, Any], config: CameraConfig):
         """Parse JSON config into CameraConfig."""
         # Generic mapping
         config.raw_config.update(data)
@@ -492,14 +616,14 @@ class CameraEnumerator:
         ip: str,
         port: int,
         protocol: CameraProtocol = CameraProtocol.HTTP,
-    ) -> Optional[CameraFirmware]:
+    ) -> CameraFirmware | None:
         """Extract firmware version."""
         firmware = await self._extract_firmware_http(ip, port)
         if not firmware:
             firmware = await self._extract_firmware_rtsp(ip, port)
         return firmware
 
-    async def _extract_firmware_http(self, ip: str, port: int) -> Optional[CameraFirmware]:
+    async def _extract_firmware_http(self, ip: str, port: int) -> CameraFirmware | None:
         """Extract firmware via HTTP."""
         if not AIOHTTP_AVAILABLE:
             return None
@@ -527,12 +651,12 @@ class CameraEnumerator:
                     continue
         return None
 
-    async def _extract_firmware_rtsp(self, ip: str, port: int) -> Optional[CameraFirmware]:
+    async def _extract_firmware_rtsp(self, ip: str, port: int) -> CameraFirmware | None:
         """Extract firmware via RTSP DESCRIBE."""
         # RTSP DESCRIBE can sometimes include firmware info
         return None
 
-    def _parse_firmware_data(self, data: Any) -> Optional[CameraFirmware]:
+    def _parse_firmware_data(self, data: Any) -> CameraFirmware | None:
         """Parse firmware data from various formats."""
         if isinstance(data, dict):
             version = data.get("version") or data.get("firmware_version") or data.get("fw_version")
@@ -563,11 +687,11 @@ class CameraEnumerator:
     async def discover_rtsp_streams(
         self,
         ip: str,
-        ports: List[int] = [554, 8554, 1935, 8000],
-    ) -> List[Dict[str, Any]]:
+        ports: list[int] = [554, 8554, 1935, 8000],
+    ) -> list[dict[str, Any]]:
         """Discover RTSP streams."""
         streams = []
-        
+
         for port in ports:
             try:
                 stream_info = await self._rtsp_describe(ip, port)
@@ -578,7 +702,7 @@ class CameraEnumerator:
                 continue
         return streams
 
-    async def _rtsp_describe(self, ip: str, port: int) -> Optional[Dict[str, Any]]:
+    async def _rtsp_describe(self, ip: str, port: int) -> dict[str, Any] | None:
         """Send RTSP DESCRIBE request."""
         try:
             # Use RTSP DESCRIBE
@@ -586,17 +710,17 @@ class CameraEnumerator:
                 asyncio.open_connection(ip, port),
                 timeout=5
             )
-            
+
             request = f"DESCRIBE rtsp://{ip}:{port}/ RTSP/1.0\r\nCSeq: 1\r\nUser-Agent: {self.user_agent}\r\n\r\n"
             writer.write(request.encode())
             await writer.drain()
-            
+
             response = await asyncio.wait_for(reader.read(4096), timeout=5)
             response_text = response.decode(errors='ignore')
-            
+
             writer.close()
             await writer.wait_closed()
-            
+
             if "200 OK" in response_text:
                 # Parse SDP
                 return self._parse_sdp(response_text)
@@ -604,7 +728,7 @@ class CameraEnumerator:
             pass
         return None
 
-    def _parse_sdp(self, sdp: str) -> Dict[str, Any]:
+    def _parse_sdp(self, sdp: str) -> dict[str, Any]:
         """Parse SDP response."""
         info = {"raw_sdp": sdp}
         for line in sdp.split('\n'):
@@ -633,8 +757,8 @@ class CameraEnumerator:
         self,
         ip: str,
         port: int,
-        credentials: Optional[CameraCredential] = None,
-    ) -> Optional[Dict[str, Any]]:
+        credentials: CameraCredential | None = None,
+    ) -> dict[str, Any] | None:
         """Get ONVIF device information."""
         if not ONVIF_AVAILABLE:
             return None
@@ -655,8 +779,8 @@ class CameraEnumerator:
         self,
         ip: str,
         port: int = 80,
-        protocols: Optional[List[CameraProtocol]] = None,
-        credentials: Optional[List[Tuple[str, str]]] = None,
+        protocols: list[CameraProtocol] | None = None,
+        credentials: list[tuple[str, str]] | None = None,
     ) -> EnumerationResult:
         """Perform full camera enumeration."""
         protocols = protocols or [CameraProtocol.HTTP, CameraProtocol.RTSP, CameraProtocol.ONVIF]
@@ -704,7 +828,7 @@ async def enumerate_camera(
         await enumerator.close()
 
 
-async def test_default_creds(ip: str, port: int) -> List[CameraCredential]:
+async def test_default_creds(ip: str, port: int) -> list[CameraCredential]:
     """Test default credentials against a camera."""
     enumerator = CameraEnumerator()
     try:

@@ -4,7 +4,7 @@ Nuclei vulnerability scanner wrapper.
 
 import asyncio
 import json
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 from urllib.parse import urlparse
 
 import structlog
@@ -25,9 +25,9 @@ class NucleiRunner:
     def __init__(
         self,
         nuclei_path: str = "nuclei",
-        templates_dir: Optional[str] = None,
-        severity_levels: List[str] = None,
-        tags: List[str] = None,
+        templates_dir: str | None = None,
+        severity_levels: list[str] = None,
+        tags: list[str] = None,
         rate_limit: int = 150,
         timeout: int = 300,
     ):
@@ -40,11 +40,11 @@ class NucleiRunner:
 
     async def scan(
         self,
-        targets: Union[str, List[str]],
-        template_dirs: List[str] = None,
-        exclude_tags: List[str] = None,
-        extra_args: List[str] = None,
-    ) -> List[Vulnerability]:
+        targets: str | list[str],
+        template_dirs: list[str] = None,
+        exclude_tags: list[str] = None,
+        extra_args: list[str] = None,
+    ) -> list[Vulnerability]:
         if isinstance(targets, str):
             targets = [targets]
 
@@ -98,14 +98,14 @@ class NucleiRunner:
             logger.info("Nuclei scan completed", vulns_found=len(vulnerabilities))
             return vulnerabilities
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("Nuclei scan timeout")
             return []
         except Exception as e:
             logger.error("Nuclei scan error", error=str(e))
             return []
 
-    def _parse_nuclei_finding(self, data: Dict[str, Any]) -> Optional[Vulnerability]:
+    def _parse_nuclei_finding(self, data: dict[str, Any]) -> Vulnerability | None:
         try:
             info = data.get("info", {})
             severity_str = info.get("severity", "unknown").lower()

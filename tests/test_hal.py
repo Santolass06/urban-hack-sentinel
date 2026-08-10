@@ -6,8 +6,6 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 from urban_hs.hal.platform import Arch, Platform, detect_platform
 from urban_hs.hal.wifi import WiFiBackend, create_wifi_backend
 

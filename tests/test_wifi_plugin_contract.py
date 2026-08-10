@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from urban_hs.core.event_bus import Event
-from urban_hs.modules.wifi.plugin import WiFiPlugin, WiFiModuleConfig
+from urban_hs.modules.wifi.plugin import WiFiModuleConfig, WiFiPlugin
 
 
 @pytest.fixture()

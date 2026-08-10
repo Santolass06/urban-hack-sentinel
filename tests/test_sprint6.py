@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import stat
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -38,7 +37,7 @@ def test_router_scanner_scan_router_calls_routersploit(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_bettercap_ble_enumerate_parses_defaults(monkeypatch):
-    captured: Dict[str, Any] = {}
+    captured: dict[str, Any] = {}
 
     async def fake_get(self, path):
         captured["path"] = path

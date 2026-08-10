@@ -14,11 +14,12 @@ import hashlib
 import json
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 import structlog
@@ -83,8 +84,8 @@ class Evidence:
     collector: str = ""
     hash_sha256: str = ""
     gpg_signature: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    
+    metadata: dict[str, Any] = field(default_factory=dict)
+
     def compute_hash(self) -> str:
         """Compute SHA256 hash of evidence file."""
         if os.path.exists(self.path):
@@ -104,22 +105,22 @@ class Finding:
     description: str = ""
     severity: FindingSeverity = FindingSeverity.UNKNOWN
     status: FindingStatus = FindingStatus.OPEN
-    cvss_score: Optional[float] = None
+    cvss_score: float | None = None
     cvss_vector: str = ""
-    cve_ids: List[str] = field(default_factory=list)
-    cwe_ids: List[str] = field(default_factory=list)
-    affected_hosts: List[str] = field(default_factory=list)
-    affected_services: List[str] = field(default_factory=list)
-    evidence: List[Evidence] = field(default_factory=list)
+    cve_ids: list[str] = field(default_factory=list)
+    cwe_ids: list[str] = field(default_factory=list)
+    affected_hosts: list[str] = field(default_factory=list)
+    affected_services: list[str] = field(default_factory=list)
+    evidence: list[Evidence] = field(default_factory=list)
     proof_of_concept: str = ""
     remediation: str = ""
-    references: List[str] = field(default_factory=list)
-    tags: List[str] = field(default_factory=list)
+    references: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     discovered_at: datetime = field(default_factory=datetime.utcnow)
-    confirmed_at: Optional[datetime] = None
-    resolved_at: Optional[datetime] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    
+    confirmed_at: datetime | None = None
+    resolved_at: datetime | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
     @property
     def severity_order(self) -> int:
         """Numeric order for sorting by severity."""
@@ -139,14 +140,14 @@ class AuditSession:
     """Audit session metadata."""
     id: str = field(default_factory=lambda: str(uuid4()))
     name: str = ""
-    scope: List[str] = field(default_factory=list)  # IP ranges, domains, etc.
+    scope: list[str] = field(default_factory=list)  # IP ranges, domains, etc.
     start_time: datetime = field(default_factory=datetime.utcnow)
-    end_time: Optional[datetime] = None
-    team_members: List[str] = field(default_factory=list)
+    end_time: datetime | None = None
+    team_members: list[str] = field(default_factory=list)
     methodology: str = ""
-    tools_used: List[str] = field(default_factory=list)
-    findings: List[Finding] = field(default_factory=list)
-    evidence: List[Evidence] = field(default_factory=list)
+    tools_used: list[str] = field(default_factory=list)
+    findings: list[Finding] = field(default_factory=list)
+    evidence: list[Evidence] = field(default_factory=list)
     credentials_found: int = 0
     hosts_scanned: int = 0
     services_enumerated: int = 0
@@ -156,30 +157,30 @@ class AuditSession:
     notes: str = ""
     gpg_signed: bool = False
     gpg_signature: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    
+    metadata: dict[str, Any] = field(default_factory=dict)
+
     @property
-    def duration(self) -> Optional[timedelta]:
+    def duration(self) -> timedelta | None:
         if self.end_time:
             return self.end_time - self.start_time
         return None
-    
+
     @property
     def critical_count(self) -> int:
         return sum(1 for f in self.findings if f.severity == FindingSeverity.CRITICAL)
-    
+
     @property
     def high_count(self) -> int:
         return sum(1 for f in self.findings if f.severity == FindingSeverity.HIGH)
-    
+
     @property
     def medium_count(self) -> int:
         return sum(1 for f in self.findings if f.severity == FindingSeverity.MEDIUM)
-    
+
     @property
     def low_count(self) -> int:
         return sum(1 for f in self.findings if f.severity == FindingSeverity.LOW)
-    
+
     @property
     def info_count(self) -> int:
         return sum(1 for f in self.findings if f.severity == FindingSeverity.INFO)
@@ -188,22 +189,22 @@ class AuditSession:
 @dataclass
 class ReportConfig:
     """Report generation configuration."""
-    output_dir: Optional[str] = None
+    output_dir: str | None = None
     template_dir: str = "/opt/urban-hs/templates/reports"
-    gpg_key_id: Optional[str] = None
-    gpg_passphrase_provider: Optional[Callable[[], str]] = None
+    gpg_key_id: str | None = None
+    gpg_passphrase_provider: Callable[[], str] | None = None
     include_evidence: bool = True
     include_poc: bool = True
     include_raw_output: bool = False
     sign_report: bool = True
-    watermark: Optional[str] = None
-    logo_path: Optional[str] = None
+    watermark: str | None = None
+    logo_path: str | None = None
     company_name: str = "Urban Hack Sentinel"
-    company_logo: Optional[str] = None
+    company_logo: str | None = None
     classification: str = "CONFIDENTIAL"
     language: str = "en"
 
-    def get_gpg_passphrase(self) -> Optional[str]:
+    def get_gpg_passphrase(self) -> str | None:
         """Get GPG passphrase from provider."""
         if self.gpg_passphrase_provider:
             return self.gpg_passphrase_provider()
@@ -222,15 +223,15 @@ class ReportGenerator:
     - Evidence appendix with chain of custody
     - Executive summary with risk scoring
     """
-    
-    def __init__(self, config: Optional[ReportConfig] = None):
+
+    def __init__(self, config: ReportConfig | None = None):
         self.config = config or ReportConfig()
         if self.config.output_dir is None:
             from urban_hs.core.config import get_config
             self.config.output_dir = get_config().storage.resolve_reports_dir()
         self.report_dir = Path(self.config.output_dir)
         self.report_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Setup Jinja2 environment
         self.jinja_env = None
         if JINJA2_AVAILABLE:
@@ -250,13 +251,13 @@ class ReportGenerator:
             self.jinja_env.filters['severity_color'] = self._severity_color
         else:
             logger.warning("Jinja2 not available, using built-in templates")
-    
+
     def _format_datetime(self, dt: datetime, fmt: str = "%Y-%m-%d %H:%M:%S") -> str:
         """Format datetime for templates."""
         if dt:
             return dt.strftime(fmt)
         return "N/A"
-    
+
     def _severity_badge(self, severity: FindingSeverity) -> str:
         """Generate HTML badge for severity."""
         badges = {
@@ -268,7 +269,7 @@ class ReportGenerator:
             FindingSeverity.UNKNOWN: '<span class="badge badge-unknown">UNKNOWN</span>',
         }
         return badges.get(FindingSeverity(severity) if isinstance(severity, str) else severity, '<span class="badge badge-unknown">UNKNOWN</span>')
-    
+
     def _severity_color(self, severity: FindingSeverity) -> str:
         """Get CSS color for severity."""
         colors = {
@@ -280,12 +281,12 @@ class ReportGenerator:
             FindingSeverity.UNKNOWN: "#6c757d",
         }
         return colors.get(FindingSeverity(severity) if isinstance(severity, str) else severity, "#6c757d")
-    
+
     async def generate(
         self,
         session: AuditSession,
         format: ReportFormat = ReportFormat.PDF,
-        custom_template: Optional[str] = None,
+        custom_template: str | None = None,
     ) -> str:
         """
         Generate report from audit session.
@@ -301,10 +302,10 @@ class ReportGenerator:
         # Ensure session has end time
         if not session.end_time:
             session.end_time = datetime.utcnow()
-        
+
         # Sort findings by severity
         session.findings.sort(key=lambda f: f.severity_order)
-        
+
         # Generate report content
         # Handle both string and enum format
         if isinstance(format, str):
@@ -312,23 +313,22 @@ class ReportGenerator:
                 format = ReportFormat(format)
             except ValueError:
                 raise ValueError(f"Unsupported format: {format}")
-        
+
         if format == ReportFormat.MARKDOWN:
             return await self._generate_markdown(session)
-        elif format == ReportFormat.HTML:
+        if format == ReportFormat.HTML:
             return await self._generate_html(session, custom_template)
-        elif format == ReportFormat.PDF:
+        if format == ReportFormat.PDF:
             return await self._generate_pdf(session, custom_template)
-        elif format == ReportFormat.JSON:
+        if format == ReportFormat.JSON:
             return await self._generate_json(session)
-        else:
-            raise ValueError(f"Unsupported format: {format}")
-    
+        raise ValueError(f"Unsupported format: {format}")
+
     async def _generate_markdown(self, session: AuditSession) -> str:
         """Generate Markdown report."""
         output_path = self.report_dir / f"report_{session.id}_{int(time.time())}.md"
         self.report_dir.mkdir(parents=True, exist_ok=True)
-        
+
         md = [
             f"# {session.name} - Penetration Test Report\n",
             f"**Classification:** {self.config.classification}\n",
@@ -342,19 +342,19 @@ class ReportGenerator:
             f"**Classification:** {self.config.classification}\n",
             "---\n",
         ]
-        
+
         # Executive Summary
         md.append("## Executive Summary\n")
         md.append(f"This report details the findings of a penetration test conducted against **{session.name}**.\n")
         md.append(f"The assessment was conducted from {self._format_datetime(session.start_time)} to {self._format_datetime(session.end_time or datetime.utcnow())}.\n\n")
-        
+
         md.append("### Risk Summary\n")
         md.append(f"- **Critical:** {session.critical_count}")
         md.append(f"- **High:** {session.high_count}")
         md.append(f"- **Medium:** {session.medium_count}")
         md.append(f"- **Low:** {session.low_count}")
         md.append(f"- **Info:** {session.info_count}\n")
-        
+
         md.append("### Statistics\n")
         md.append(f"- **Hosts Scanned:** {session.hosts_scanned}")
         md.append(f"- **Services Enumerated:** {session.services_enumerated}")
@@ -362,11 +362,11 @@ class ReportGenerator:
         md.append(f"- **Exploits Attempted:** {session.exploits_attempted}")
         md.append(f"- **Exploits Successful:** {session.exploits_successful}")
         md.append(f"- **Credentials Found:** {session.credentials_found}\n")
-        
+
         # Findings
         if session.findings:
             md.append("## Findings\n")
-            
+
             for finding in session.findings:
                 md.append(f"\n### {finding.title} [{finding.severity.value.upper()}]\n")
                 md.append(f"**Finding ID:** {finding.id}\n")
@@ -381,25 +381,25 @@ class ReportGenerator:
                     md.append(f"**Affected Hosts:** {', '.join(finding.affected_hosts)}")
                 if finding.affected_services:
                     md.append(f"**Affected Services:** {', '.join(finding.affected_services)}")
-                
+
                 md.append(f"\n**Description:**\n{finding.description}\n")
-                
+
                 if finding.proof_of_concept:
                     md.append(f"\n**Proof of Concept:**\n```\n{finding.proof_of_concept}\n```\n")
-                
+
                 if finding.remediation:
                     md.append(f"\n**Remediation:**\n{finding.remediation}\n")
-                
+
                 if finding.references:
-                    md.append(f"\n**References:**")
+                    md.append("\n**References:**")
                     for ref in finding.references:
                         md.append(f"- {ref}")
                     md.append("")
-                
+
                 if finding.tags:
                     md.append(f"**Tags:** {', '.join(finding.tags)}")
                 md.append("---\n")
-        
+
         # Evidence Appendix
         if session.evidence:
             md.append("## Evidence Appendix\n")
@@ -412,40 +412,40 @@ class ReportGenerator:
                     md.append(f"- **GPG Signature:** {evidence.gpg_signature}")
                 md.append(f"- **Collected:** {self._format_datetime(evidence.collected_at)}")
                 md.append(f"- **Collector:** {evidence.collector}\n")
-        
+
         # Notes
         if session.notes:
             md.append("## Notes\n")
             md.append(f"{session.notes}\n")
-        
+
         # Chain of Custody
         md.append("## Chain of Custody\n")
         md.append(f"- **Report Generated:** {self._format_datetime(datetime.utcnow())}")
-        md.append(f"- **Generated By:** Urban Hack Sentinel")
+        md.append("- **Generated By:** Urban Hack Sentinel")
         md.append(f"- **Session ID:** {session.id}")
         if self.config.gpg_key_id:
             md.append(f"- **GPG Key:** {self.config.gpg_key_id}")
-        
+
         content = "\n".join(md)
-        
+
         with open(self.report_dir / f"report_{session.id}_{int(time.time())}.md", 'w') as f:
             f.write(content)
-        
+
         return str(self.report_dir / f"report_{session.id}_{int(time.time())}.md")
-    
-    async def _generate_html(self, session: AuditSession, custom_template: Optional[str] = None) -> str:
+
+    async def _generate_html(self, session: AuditSession, custom_template: str | None = None) -> str:
         """Generate HTML report using Jinja2."""
         if not self.jinja_env:
             raise RuntimeError("Jinja2 not available for HTML generation")
-        
+
         template_name = custom_template or "report.html"
-        
+
         try:
             template = self.jinja_env.get_template(template_name)
         except Exception:
             # Use built-in template
             template = self.jinja_env.from_string(self._get_builtin_html_template())
-        
+
         # Prepare template context
         context = {
             "session": session,
@@ -454,17 +454,17 @@ class ReportGenerator:
             "generated_at": datetime.utcnow(),
             "datetime": datetime,
         }
-        
+
         html_content = template.render(**context)
-        
+
         output_path = self.report_dir / f"report_{session.id}_{int(time.time())}.html"
         self.report_dir.mkdir(parents=True, exist_ok=True)
-        
+
         with open(output_path, 'w') as f:
             f.write(html_content)
-        
+
         return str(output_path)
-    
+
     def _get_builtin_html_template(self) -> str:
         """Built-in HTML template for report generation."""
         return """
@@ -633,8 +633,8 @@ class ReportGenerator:
 </body>
 </html>
 """
-    
-    async def _generate_pdf(self, session: AuditSession, custom_template: Optional[str] = None) -> str:
+
+    async def _generate_pdf(self, session: AuditSession, custom_template: str | None = None) -> str:
         """Generate PDF report using WeasyPrint."""
         if not WEASYPRINT_AVAILABLE:
             raise RuntimeError("WeasyPrint not available for PDF generation")
@@ -657,12 +657,12 @@ class ReportGenerator:
         except Exception as e:
             logger.error("PDF generation failed", error=str(e))
             raise
-    
+
     async def _generate_json(self, session: AuditSession) -> str:
         """Generate JSON report."""
         output_path = self.report_dir / f"report_{session.id}_{int(time.time())}.json"
         self.report_dir.mkdir(parents=True, exist_ok=True)
-        
+
         data = {
             "session": {
                 "id": session.id,
@@ -692,7 +692,7 @@ class ReportGenerator:
                 "classification": self.config.classification,
             }
         }
-        
+
         # Fix serialization of nested objects
         def serialize_obj(obj):
             if hasattr(obj, '__dict__'):
@@ -709,7 +709,7 @@ class ReportGenerator:
                     else:
                         result[k] = str(v)
                 return result
-        
+
         json_data = {
             "session": serialize_obj(session),
             "findings": [serialize_obj(f) for f in session.findings],
@@ -721,29 +721,29 @@ class ReportGenerator:
                 "classification": self.config.classification,
             }
         }
-        
+
         with open(output_path, 'w') as f:
             json.dump(json_data, f, indent=2, default=str)
-        
+
         return str(output_path)
-    
+
     def sign_report(self, report_path: str) -> bool:
         """Sign report with GPG."""
         if not self.config.gpg_key_id:
             logger.warning("No GPG key configured for signing")
             return False
-        
+
         if not GPG_AVAILABLE:
             logger.error("GPG not available for signing")
             return False
-        
+
         try:
             import gnupg as gnupg_module
             gpg_obj = gnupg_module.GPG()
-            
+
             with open(report_path, 'rb') as f:
                 report_data = f.read()
-            
+
             signature = gpg_obj.sign(
                 report_data,
                 keyid=self.config.gpg_key_id,
@@ -751,42 +751,41 @@ class ReportGenerator:
                 detach=True,
                 armor=True,
             )
-            
+
             if signature:
                 sig_path = report_path + ".asc"
                 with open(sig_path, 'w') as f:
                     f.write(str(signature))
                 logger.info("Report signed", signature_path=sig_path)
                 return True
-            else:
-                logger.error("GPG signing failed")
-                return False
-                
+            logger.error("GPG signing failed")
+            return False
+
         except Exception as e:
             logger.error("GPG signing error", error=str(e))
             return False
-    
-    async def sign_and_verify(self, session: AuditSession, format: ReportFormat = ReportFormat.PDF) -> Dict[str, Any]:
+
+    async def sign_and_verify(self, session: AuditSession, format: ReportFormat = ReportFormat.PDF) -> dict[str, Any]:
         """Generate, sign, and verify report."""
         result = {"signed": False, "verified": False, "report_path": "", "signature_path": ""}
-        
+
         # Generate report
         report_path = await self.generate(session, format)
         result["report_path"] = report_path
-        
+
         # Sign report
         if self.config.sign_report and self.config.gpg_key_id:
             if self.sign_report(report_path):
                 result["signed"] = True
                 result["signature_path"] = report_path + ".asc"
-        
+
         return result
 
 
 # Built-in finding templates
 class FindingTemplates:
     """Pre-built finding templates for common vulnerabilities."""
-    
+
     @staticmethod
     def wifi_kr00k() -> Finding:
         return Finding(
@@ -806,7 +805,7 @@ class FindingTemplates:
                 "https://www.eset.com/int/about/newsroom/press-releases/eset-discovers-kr00k-vulnerability/",
             ],
         )
-    
+
     @staticmethod
     def wifi_fragattacks() -> Finding:
         return Finding(
@@ -826,7 +825,7 @@ class FindingTemplates:
                 "https://www.usenix.org/system/files/sec21-vanhoef.pdf",
             ],
         )
-    
+
     @staticmethod
     def bluetooth_knob() -> Finding:
         return Finding(
@@ -846,7 +845,7 @@ class FindingTemplates:
                 "https://francozappa.github.io/knob/",
             ],
         )
-    
+
     @staticmethod
     def whisker_pair() -> Finding:
         return Finding(
@@ -865,7 +864,7 @@ class FindingTemplates:
                 "https://www.securityweek.com/whisperpair-attack-leaves-millions-of-bluetooth-accessories-open-to-hijacking/",
             ],
         )
-    
+
     @staticmethod
     def ssid_confusion() -> Finding:
         return Finding(
@@ -884,7 +883,7 @@ class FindingTemplates:
                 "https://papers.mathyvanhoef.com/wisec2024.pdf",
             ],
         )
-    
+
     @staticmethod
     def bluetooth_hid_injection() -> Finding:
         return Finding(

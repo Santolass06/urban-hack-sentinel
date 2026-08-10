@@ -3,19 +3,22 @@ WiFi Module Plugin - Integrates WiFi scanning and attacks into the core system.
 """
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any
 
 import structlog
 
-from urban_hs.core import Event, get_config, get_event_bus, get_storage
+from urban_hs.core import get_config, get_event_bus, get_storage
 from urban_hs.core.event_bus import Event, EventHandler
 from urban_hs.core.session_scope import get_active_scope
 from urban_hs.modules.wifi.attacks import (
     AttackResult,
     DeauthAttack,
     HandshakeAttack,
+    Kr00kAttack,
     PMKIDAttack,
+    WPA3DowngradeAttack,
     WPSPinAttack,
     WPSPixieAttack,
 )
@@ -32,9 +35,9 @@ class WiFiModuleConfig:
     interface: str = "wlan0"
     scan_strategy: str = "passive_only"
     scan_interval: int = 30
-    channels_2ghz: List[int] = field(default_factory=lambda: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
-    channels_5ghz: List[int] = field(default_factory=lambda: [36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144])
-    channels_6ghz: List[int] = field(default_factory=list)
+    channels_2ghz: list[int] = field(default_factory=lambda: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
+    channels_5ghz: list[int] = field(default_factory=lambda: [36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144])
+    channels_6ghz: list[int] = field(default_factory=list)
     attack_timeout: int = 60
     handshake_timeout: int = 60
     pmkid_timeout: int = 60
@@ -58,19 +61,21 @@ class WiFiPlugin:
     - Handshake management and cracking
     """
 
-    def __init__(self, config: Optional[WiFiModuleConfig] = None):
+    def __init__(self, config: WiFiModuleConfig | None = None):
         self.config = config or WiFiModuleConfig()
-        self.scanner: Optional[WiFiScanner] = None
-        self.handshake_mgr: Optional[HandshakeManager] = None
-        self.mac_changer: Optional[MACChanger] = None
-        self.geo_mapper: Optional[GeoMapper] = None
+        self.scanner: WiFiScanner | None = None
+        self.handshake_mgr: HandshakeManager | None = None
+        self.mac_changer: MACChanger | None = None
+        self.geo_mapper: GeoMapper | None = None
         self._running = False
-        self._scan_task: Optional[asyncio.Task] = None
-        self._handshake_attack: Optional[HandshakeAttack] = None
-        self._pmkid_attack: Optional[PMKIDAttack] = None
-        self._wps_pixie_attack: Optional[WPSPixieAttack] = None
-        self._wps_pin_attack: Optional[WPSPinAttack] = None
-        self._deauth_attack: Optional[DeauthAttack] = None
+        self._scan_task: asyncio.Task | None = None
+        self._handshake_attack: HandshakeAttack | None = None
+        self._pmkid_attack: PMKIDAttack | None = None
+        self._wps_pixie_attack: WPSPixieAttack | None = None
+        self._wps_pin_attack: WPSPinAttack | None = None
+        self._deauth_attack: DeauthAttack | None = None
+        self._kr00k_attack: Kr00kAttack | None = None
+        self._wpa3_downgrade_attack: WPA3DowngradeAttack | None = None
         self._attack_semaphore = asyncio.Semaphore(3)
 
     async def initialize(self) -> None:
@@ -118,6 +123,14 @@ class WiFiPlugin:
             attack_timeout=self.config.wps_timeout,
         )
         self._deauth_attack = DeauthAttack(
+            interface=self.config.interface,
+            attack_timeout=self.config.attack_timeout,
+        )
+        self._kr00k_attack = Kr00kAttack(
+            interface=self.config.interface,
+            attack_timeout=self.config.attack_timeout,
+        )
+        self._wpa3_downgrade_attack = WPA3DowngradeAttack(
             interface=self.config.interface,
             attack_timeout=self.config.attack_timeout,
         )
@@ -199,7 +212,7 @@ class WiFiPlugin:
 
             await asyncio.sleep(self.config.scan_interval)
 
-    def _get_all_channels(self) -> List[int]:
+    def _get_all_channels(self) -> list[int]:
         """Get all configured channels."""
         channels = []
         channels.extend(self.config.channels_2ghz)
@@ -207,7 +220,7 @@ class WiFiPlugin:
         channels.extend(self.config.channels_6ghz)
         return channels
 
-    async def _save_networks(self, networks: List[NetworkInfo]) -> None:
+    async def _save_networks(self, networks: list[NetworkInfo]) -> None:
         """Save networks to storage."""
         storage = get_storage()
         for net in networks:
@@ -237,9 +250,9 @@ class WiFiPlugin:
     async def execute_handshake_attack(
         self,
         bssid: str,
-        essid: Optional[str] = None,
+        essid: str | None = None,
         channel: int = 1,
-        progress_callback: Optional[Callable[[str], None]] = None,
+        progress_callback: Callable[[str], None] | None = None,
     ) -> "AttackResult":
         """Execute handshake capture attack."""
         async with self._attack_semaphore:
@@ -253,9 +266,9 @@ class WiFiPlugin:
     async def execute_pmkid_attack(
         self,
         bssid: str,
-        essid: Optional[str] = None,
+        essid: str | None = None,
         channel: int = 1,
-        progress_callback: Optional[Callable[[str], None]] = None,
+        progress_callback: Callable[[str], None] | None = None,
     ) -> "AttackResult":
         """Execute PMKID attack."""
         async with self._attack_semaphore:
@@ -269,9 +282,9 @@ class WiFiPlugin:
     async def execute_wps_pixie_attack(
         self,
         bssid: str,
-        essid: Optional[str] = None,
+        essid: str | None = None,
         channel: int = 1,
-        progress_callback: Optional[Callable[[str], None]] = None,
+        progress_callback: Callable[[str], None] | None = None,
     ) -> "AttackResult":
         """Execute WPS Pixie Dust attack."""
         async with self._attack_semaphore:
@@ -285,9 +298,9 @@ class WiFiPlugin:
     async def execute_wps_pin_attack(
         self,
         bssid: str,
-        essid: Optional[str] = None,
+        essid: str | None = None,
         channel: int = 1,
-        progress_callback: Optional[Callable[[str], None]] = None,
+        progress_callback: Callable[[str], None] | None = None,
     ) -> "AttackResult":
         """Execute WPS PIN dictionary attack."""
         async with self._attack_semaphore:
@@ -301,11 +314,11 @@ class WiFiPlugin:
     async def execute_deauth(
         self,
         bssid: str,
-        essid: Optional[str] = None,
+        essid: str | None = None,
         channel: int = 1,
-        client_mac: Optional[str] = None,
+        client_mac: str | None = None,
         count: int = 10,
-        progress_callback: Optional[Callable[[str], None]] = None,
+        progress_callback: Callable[[str], None] | None = None,
     ) -> "AttackResult":
         """Execute deauthentication attack."""
         if not self.config.enable_active_attacks:
@@ -321,7 +334,49 @@ class WiFiPlugin:
                 callback=progress_callback,
             )
 
-    def get_known_networks(self) -> List[NetworkInfo]:
+    async def execute_kr00k(
+        self,
+        bssid: str,
+        essid: str | None = None,
+        channel: int = 1,
+        client_mac: str | None = None,
+        progress_callback: Callable[[str], None] | None = None,
+    ) -> "AttackResult":
+        """Execute Kr00k (CVE-2019-15126) attack."""
+        if not self.config.enable_active_attacks:
+            raise RuntimeError("Active attacks disabled in configuration")
+
+        async with self._attack_semaphore:
+            return await self._kr00k_attack.execute(
+                target_bssid=bssid,
+                target_essid=essid,
+                channel=channel,
+                client_mac=client_mac,
+                callback=progress_callback,
+            )
+
+    async def execute_wpa3_downgrade(
+        self,
+        bssid: str,
+        essid: str | None = None,
+        channel: int = 1,
+        client_mac: str | None = None,
+        progress_callback: Callable[[str], None] | None = None,
+    ) -> "AttackResult":
+        """Execute WPA3 transition-mode downgrade attack."""
+        if not self.config.enable_active_attacks:
+            raise RuntimeError("Active attacks disabled in configuration")
+
+        async with self._attack_semaphore:
+            return await self._wpa3_downgrade_attack.execute(
+                target_bssid=bssid,
+                target_essid=essid,
+                channel=channel,
+                client_mac=client_mac,
+                callback=progress_callback,
+            )
+
+    def get_known_networks(self) -> list[NetworkInfo]:
         """Get all known networks."""
         if self.scanner:
             return self.scanner.get_known_networks()
@@ -344,7 +399,7 @@ class WiFiEventHandler(EventHandler):
         self.plugin = plugin
 
     @property
-    def event_types(self) -> Set[str]:
+    def event_types(self) -> set[str]:
         return {"config.loaded", "config.reloaded", "wifi.scan_request", "wifi.attack_request"}
 
     async def handle(self, event: Event) -> None:
@@ -355,7 +410,7 @@ class WiFiEventHandler(EventHandler):
         elif event.type == "wifi.attack_request":
             await self._handle_attack_request(event)
 
-    async def _update_config(self, config_data: Dict[str, Any]) -> None:
+    async def _update_config(self, config_data: dict[str, Any]) -> None:
         """Update plugin configuration from config payload."""
         wifi_config = config_data.get("wifi", {})
         for key, value in wifi_config.items():
@@ -450,6 +505,22 @@ class WiFiEventHandler(EventHandler):
                     count=payload.get("count", 10),
                     progress_callback=lambda m: progress_updates.append(m),
                 )
+            elif attack_type == "krook":
+                result = await self.plugin.execute_kr00k(
+                    bssid=bssid,
+                    essid=payload.get("essid"),
+                    channel=payload.get("channel", 1),
+                    client_mac=payload.get("client_mac"),
+                    progress_callback=lambda m: progress_updates.append(m),
+                )
+            elif attack_type == "wpa3_downgrade":
+                result = await self.plugin.execute_wpa3_downgrade(
+                    bssid=bssid,
+                    essid=payload.get("essid"),
+                    channel=payload.get("channel", 1),
+                    client_mac=payload.get("client_mac"),
+                    progress_callback=lambda m: progress_updates.append(m),
+                )
 
             bus = get_event_bus()
             await bus.publish(Event(
@@ -474,7 +545,7 @@ class WiFiEventHandler(EventHandler):
 
 
 # Plugin entry point
-async def create_wifi_plugin(config: Optional[WiFiModuleConfig] = None) -> "WiFiPlugin":
+async def create_wifi_plugin(config: WiFiModuleConfig | None = None) -> "WiFiPlugin":
     """Factory function to create WiFi plugin."""
     plugin = WiFiPlugin(config)
     await plugin.initialize()

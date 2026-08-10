@@ -8,19 +8,17 @@ Tests for Sprint 8B forensics primitives:
 from __future__ import annotations
 
 import json
-import os
-import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
+from urban_hs.core.forensics import EvidenceBundle, RetentionPolicy
 from urban_hs.core.mac_anonymiser import (
     pseudonymise_mac,
     pseudonymise_macs,
     redact_text,
 )
-from urban_hs.core.forensics import EvidenceBundle, RetentionPolicy
 
 
 class TestMacAnonymiser:
@@ -68,12 +66,12 @@ class TestMacAnonymiser:
 class TestRetentionPolicy:
     def test_expired_future_timestamp_is_false(self):
         policy = RetentionPolicy(default_ttl_days=30, grace_days=7)
-        future = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+        future = (datetime.now(UTC) + timedelta(days=1)).isoformat()
         assert policy.expired(future) is False
 
     def test_expired_old_timestamp_is_true(self):
         policy = RetentionPolicy(default_ttl_days=0, grace_days=0)
-        old = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        old = (datetime.now(UTC) - timedelta(days=1)).isoformat()
         assert policy.expired(old) is True
 
     def test_expired_none_is_true(self):

@@ -4,7 +4,6 @@ WiFi Managers - Handshake management, MAC changing, Geo mapping.
 
 import asyncio
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -12,7 +11,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import structlog
 
@@ -26,21 +25,21 @@ class HandshakeInfo:
     """Information about a captured handshake."""
     id: str
     bssid: str
-    essid: Optional[str]
+    essid: str | None
     capture_path: str
-    hash_path: Optional[str]
+    hash_path: str | None
     hashcat_mode: int  # 22000 for PMKID, 2500 for WPA
     crack_status: str = "uncracked"  # uncracked, cracked, failed, in_progress
-    password: Optional[str] = None
-    cracked_at: Optional[datetime] = None
+    password: str | None = None
+    cracked_at: datetime | None = None
     capture_time: datetime = field(default_factory=datetime.utcnow)
-    gps_lat: Optional[float] = None
-    gps_lon: Optional[float] = None
-    vendor: Optional[str] = None
+    gps_lat: float | None = None
+    gps_lon: float | None = None
+    vendor: str | None = None
     signal_dbm: int = -100
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "bssid": self.bssid,
@@ -73,9 +72,9 @@ class HandshakeManager:
 
     def __init__(
         self,
-        handshake_dir: Optional[str] = None,
-        hash_dir: Optional[str] = None,
-        cracked_dir: Optional[str] = None,
+        handshake_dir: str | None = None,
+        hash_dir: str | None = None,
+        cracked_dir: str | None = None,
     ):
         if handshake_dir is None or hash_dir is None or cracked_dir is None:
             from urban_hs.core.config import get_config
@@ -89,7 +88,7 @@ class HandshakeManager:
         self.handshake_dir = Path(handshake_dir)
         self.hash_dir = Path(hash_dir)
         self.cracked_dir = Path(cracked_dir)
-        
+
         for d in [self.handshake_dir, self.hash_dir, self.cracked_dir]:
             try:
                 d.mkdir(parents=True, exist_ok=True)
@@ -103,7 +102,7 @@ class HandshakeManager:
                 elif d == self.cracked_dir:
                     self.cracked_dir = fallback_d
 
-        self._handshakes: Dict[str, HandshakeInfo] = {}
+        self._handshakes: dict[str, HandshakeInfo] = {}
         self._load_existing()
 
     def _load_existing(self) -> None:
@@ -116,30 +115,34 @@ class HandshakeManager:
             except Exception as e:
                 logger.warning("Failed to load handshake", file=hash_file, error=str(e))
 
-    def _parse_hash_file(self, hash_file: Path) -> Optional[HandshakeInfo]:
+    def _parse_hash_file(self, hash_file: Path) -> HandshakeInfo | None:
         """Parse hashcat 22000 file to extract handshake info."""
         try:
-            with open(hash_file, 'r') as f:
+            with open(hash_file) as f:
                 line = f.readline().strip()
-            
+
             if not line:
                 return None
 
-            # Parse hccapx/22000 format
+            # hashcat 22000 (WPA-PBKDF2-PMKID+EAPOL) line format:
+            #   WPA*<type>*<pmkid|mic>*<mac_ap>*<mac_sta>*<essid_hex>*...
+            # type 01 = PMKID, type 02 = EAPOL/4-way handshake.
             parts = line.split('*')
-            if len(parts) < 6:
+            if len(parts) < 6 or parts[0].upper() != "WPA":
                 return None
 
-            # Extract BSSID, ESSID from hash
-            # Format: WPA*PMKID*version*ESSID_len*ESSID*bssid*...
-            # This is simplified - real parsing is more complex
-            
-            handshake_id = hash_file.stem
-            
+            mac_ap = parts[3].lower()
+            bssid = ":".join(mac_ap[i:i + 2] for i in range(0, 12, 2)) if len(mac_ap) >= 12 else mac_ap
+
+            try:
+                essid = bytes.fromhex(parts[5]).decode("utf-8", errors="replace") or None
+            except ValueError:
+                essid = None
+
             return HandshakeInfo(
-                id=handshake_id,
-                bssid="",  # Would parse from hash
-                essid=None,
+                id=hash_file.stem,
+                bssid=bssid,
+                essid=essid,
                 capture_path="",
                 hash_path=str(hash_file),
                 hashcat_mode=22000,
@@ -150,19 +153,19 @@ class HandshakeManager:
     def add_handshake(
         self,
         bssid: str,
-        essid: Optional[str],
+        essid: str | None,
         capture_path: str,
-        hash_path: Optional[str] = None,
+        hash_path: str | None = None,
         hashcat_mode: int = 22000,
-        gps_lat: Optional[float] = None,
-        gps_lon: Optional[float] = None,
-        vendor: Optional[str] = None,
+        gps_lat: float | None = None,
+        gps_lon: float | None = None,
+        vendor: str | None = None,
         signal_dbm: int = -100,
     ) -> HandshakeInfo:
         """Add or update a handshake record."""
         # Create unique key
         key = f"{bssid.replace(':', '_')}_{essid or 'hidden'}"
-        
+
         if key in self._handshakes:
             # Update existing
             existing = self._handshakes[key]
@@ -182,28 +185,28 @@ class HandshakeManager:
             gps_lon=gps_lon,
             vendor=vendor,
         )
-        
+
         self._handshakes[key] = handshake
         return handshake
 
-    def get_handshake(self, bssid: str, essid: Optional[str] = None) -> Optional[HandshakeInfo]:
+    def get_handshake(self, bssid: str, essid: str | None = None) -> HandshakeInfo | None:
         """Get handshake by BSSID and optional ESSID."""
         key = f"{bssid.replace(':', '_')}_{essid or 'hidden'}"
         return self._handshakes.get(key)
 
     def list_handshakes(
         self,
-        status: Optional[str] = None,
-        hashcat_mode: Optional[int] = None,
-    ) -> List[HandshakeInfo]:
+        status: str | None = None,
+        hashcat_mode: int | None = None,
+    ) -> list[HandshakeInfo]:
         """List handshakes with optional filters."""
         results = list(self._handshakes.values())
-        
+
         if status:
             results = [h for h in results if h.crack_status == status]
         if hashcat_mode:
             results = [h for h in results if h.hashcat_mode == hashcat_mode]
-        
+
         return sorted(results, key=lambda h: h.capture_time, reverse=True)
 
     def mark_cracked(self, handshake_id: str, password: str) -> bool:
@@ -213,27 +216,27 @@ class HandshakeManager:
             handshake.crack_status = "cracked"
             handshake.password = password
             handshake.cracked_at = datetime.utcnow()
-            
+
             # Move to cracked directory
             if handshake.hash_path:
                 src = Path(handshake.hash_path)
                 dst = self.cracked_dir / (src.stem + "_CRACKED" + src.suffix)
                 shutil.move(str(src), str(dst))
                 handshake.hash_path = str(dst)
-            
+
             return True
         return False
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get statistics about captured handshakes."""
         total = len(self._handshakes)
         cracked = len([h for h in self._handshakes.values() if h.crack_status == "cracked"])
         uncracked = total - cracked
-        
-        by_mode: Dict[int, int] = {}
+
+        by_mode: dict[int, int] = {}
         for h in self._handshakes.values():
             by_mode[h.hashcat_mode] = by_mode.get(h.hashcat_mode, 0) + 1
-        
+
         return {
             "total": total,
             "cracked": cracked,
@@ -242,7 +245,7 @@ class HandshakeManager:
         }
 
     # Export functions
-    def export_hashcat(self, output_file: Path, status: Optional[str] = None) -> int:
+    def export_hashcat(self, output_file: Path, status: str | None = None) -> int:
         """Export hashes in hashcat format."""
         count = 0
         with open(output_file, 'w') as f:
@@ -261,7 +264,7 @@ class HandshakeManager:
         with open(output_file, 'w') as f:
             f.write("WigleWifi-1.6,appRelease=2.55,model=UrbanHS,release=3.0.0,device=Pi5,display=UrbanHS,board=RaspberryPi,brand=UrbanHS\n")
             f.write("MAC,SSID,AuthMode,FirstSeen,Channel,RSSI,CurrentLatitude,CurrentLongitude,AltitudeMeters,AccuracyMeters,Type\n")
-            
+
             for h in self._handshakes.values():
                 if h.gps_lat is not None and h.gps_lon is not None:
                     line = f"{h.bssid},{h.essid or ''},,{h.capture_time.isoformat()},{h.metadata.get('channel', '')},{h.metadata.get('signal_dbm', '')},{h.gps_lat},{h.gps_lon},,,WIFI\n"
@@ -270,10 +273,58 @@ class HandshakeManager:
         return count
 
     def export_kismet_netxml(self, output_file: Path) -> int:
-        """Export to Kismet netxml format."""
-        # Implementation would generate proper netxml
-        # Simplified for now
-        return 0
+        """Export captured networks to Kismet legacy .netxml format."""
+        from xml.sax.saxutils import escape
+
+        count = 0
+        blocks: list[str] = []
+        for h in self._handshakes.values():
+            ts = h.capture_time.strftime("%a %b %d %H:%M:%S %Y")
+            channel = h.metadata.get("channel", "")
+            signal = h.metadata.get("signal_dbm", "")
+            essid = escape(h.essid or "")
+            cloaked = "false" if h.essid else "true"
+
+            gps = ""
+            if h.gps_lat is not None and h.gps_lon is not None:
+                gps = (
+                    "  <gps-info>\n"
+                    f"   <min-lat>{h.gps_lat}</min-lat>\n"
+                    f"   <min-lon>{h.gps_lon}</min-lon>\n"
+                    f"   <max-lat>{h.gps_lat}</max-lat>\n"
+                    f"   <max-lon>{h.gps_lon}</max-lon>\n"
+                    f"   <peak-lat>{h.gps_lat}</peak-lat>\n"
+                    f"   <peak-lon>{h.gps_lon}</peak-lon>\n"
+                    f"   <avg-lat>{h.gps_lat}</avg-lat>\n"
+                    f"   <avg-lon>{h.gps_lon}</avg-lon>\n"
+                    "  </gps-info>\n"
+                )
+
+            count += 1
+            blocks.append(
+                f' <wireless-network number="{count}" type="infrastructure" '
+                f'first-time="{ts}" last-time="{ts}">\n'
+                f'  <SSID first-time="{ts}" last-time="{ts}">\n'
+                "   <type>Beacon</type>\n"
+                "   <encryption>WPA+PSK</encryption>\n"
+                f'   <essid cloaked="{cloaked}">{essid}</essid>\n'
+                "  </SSID>\n"
+                f"  <BSSID>{escape(h.bssid)}</BSSID>\n"
+                f"  <channel>{channel}</channel>\n"
+                f"  <snr-info>\n   <last_signal_dbm>{signal}</last_signal_dbm>\n  </snr-info>\n"
+                f"{gps}"
+                " </wireless-network>\n"
+            )
+
+        now = datetime.utcnow().strftime("%a %b %d %H:%M:%S %Y")
+        with open(output_file, "w") as f:
+            f.write('<?xml version="1.0" encoding="ISO-8859-1"?>\n')
+            f.write(
+                f'<detection-run kismet-version="urban-hs-3.0.0" start-time="{now}">\n'
+            )
+            f.writelines(blocks)
+            f.write("</detection-run>\n")
+        return count
 
 
 class MACChanger:
@@ -368,10 +419,10 @@ class MACChanger:
 
     def __init__(self, interface: str):
         self.interface = interface
-        self.current_mac: Optional[str] = None
-        self.original_mac: Optional[str] = None
+        self.current_mac: str | None = None
+        self.original_mac: str | None = None
 
-    def get_current_mac(self) -> Optional[str]:
+    def get_current_mac(self) -> str | None:
         """Get current MAC address of interface."""
         try:
             result = subprocess.run(
@@ -401,13 +452,13 @@ class MACChanger:
         try:
             # Bring interface down
             subprocess.run(["ip", "link", "set", self.interface, "down"], check=True, timeout=10)
-            
+
             # Set MAC
             subprocess.run(["macchanger", "-m", mac, self.interface], check=True, timeout=10)
-            
+
             # Bring interface up
             subprocess.run(["ip", "link", "set", self.interface, "up"], check=True, timeout=10)
-            
+
             self.current_mac = mac
             logger.info("MAC changed", interface=self.interface, mac=mac)
             return True
@@ -418,7 +469,7 @@ class MACChanger:
             logger.error("MAC change error", error=str(e))
             return False
 
-    def randomize_mac(self, profile: str = "random") -> Optional[str]:
+    def randomize_mac(self, profile: str = "random") -> str | None:
         """Generate and set a random MAC with optional vendor profile."""
         if profile == "random" or profile not in self.OUI_PROFILES:
             # Fully random MAC
@@ -436,24 +487,23 @@ class MACChanger:
             return mac
         return None
 
-    def get_current_vendor(self) -> Optional[str]:
+    def get_current_vendor(self) -> str | None:
         """Identify vendor from current MAC."""
         mac = self.get_current_mac()
         if not mac:
             return None
-        
+
         oui = mac[:8].upper()
         for vendor, ouis in self.OUI_PROFILES.items():
             if isinstance(ouis, list) and any(mac.startswith(oui) for oui in ouis):
                 return vendor
         return "unknown"
 
-    def list_profiles(self) -> Dict[str, int]:
+    def list_profiles(self) -> dict[str, int]:
         """List available profiles with OUI counts."""
         return {k: len(v) if v else 0 for k, v in self.OUI_PROFILES.items()}
 
 
-import re
 
 class NMEAParser:
     """Parse NMEA sentences emitted by u-blox and most GPS receivers."""
@@ -461,7 +511,7 @@ class NMEAParser:
     SENTENCE_RE = re.compile(r"^\$([A-Z]{5}),([^*]+)\*([0-9A-F]{2})$")
 
     @classmethod
-    def parse_line(cls, line: str) -> Optional[Dict[str, Any]]:
+    def parse_line(cls, line: str) -> dict[str, Any] | None:
         match = cls.SENTENCE_RE.match(line.strip())
         if not match:
             return None
@@ -488,7 +538,7 @@ class NMEAParser:
         return f"{checksum:02X}".lower()
 
     @staticmethod
-    def _parse_gprmc(fields: List[str]) -> Dict[str, Any]:
+    def _parse_gprmc(fields: list[str]) -> dict[str, Any]:
         if len(fields) < 11 or fields[1] != "A":
             return {}
         return {
@@ -504,7 +554,7 @@ class NMEAParser:
         }
 
     @staticmethod
-    def _parse_gpgga(fields: List[str]) -> Dict[str, Any]:
+    def _parse_gpgga(fields: list[str]) -> dict[str, Any]:
         if len(fields) < 10 or fields[6] == "0":
             return {}
         return {
@@ -524,7 +574,7 @@ class NMEAParser:
         }
 
     @staticmethod
-    def _parse_gpgsa(fields: List[str]) -> Dict[str, Any]:
+    def _parse_gpgsa(fields: list[str]) -> dict[str, Any]:
         if len(fields) < 18 or fields[1] == "1":
             return {}
         return {
@@ -561,11 +611,11 @@ class GeoMapper:
     def __init__(self, gpsd_host: str = "localhost", gpsd_port: int = 2947, event_bus=None):
         self.gpsd_host = gpsd_host
         self.gpsd_port = gpsd_port
-        self._gps_data: Dict[str, Any] = {}
+        self._gps_data: dict[str, Any] = {}
         self._running = False
-        self._reader_task: Optional[asyncio.Task] = None
+        self._reader_task: asyncio.Task | None = None
         self.event_bus = event_bus
-        self._snapshots: List[Dict[str, Any]] = []
+        self._snapshots: list[dict[str, Any]] = []
         self._last_fix: bool = False
 
     async def start(self) -> None:
@@ -592,17 +642,17 @@ class GeoMapper:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect((self.gpsd_host, self.gpsd_port))
             sock.send(b'?WATCH={"enable":true,"json":true}\n')
-            
+
             buffer = b""
             while self._running:
                 data = sock.recv(4096)
                 if not data:
                     break
-                
+
                 buffer += data
                 lines = buffer.split(b'\n')
                 buffer = lines[-1]
-                
+
                 for line in lines[:-1]:
                     try:
                         data = json.loads(line.decode())
@@ -620,7 +670,7 @@ class GeoMapper:
                             }
                     except json.JSONDecodeError:
                         pass
-                        
+
         except Exception as e:
             logger.error("GPS read error", error=str(e))
         finally:
@@ -629,7 +679,7 @@ class GeoMapper:
             except Exception:
                 pass
 
-    def get_position(self) -> Optional[Dict[str, float]]:
+    def get_position(self) -> dict[str, float] | None:
         """Get current GPS position."""
         if self._gps_data.get("lat") is not None and self._gps_data.get("lon") is not None:
             return {
@@ -647,10 +697,10 @@ class GeoMapper:
         """Check if GPS has a valid fix (mode >= 2)."""
         return self._gps_data.get("mode", 0) >= 2
 
-    def get_gps_data(self) -> Dict[str, Any]:
+    def get_gps_data(self) -> dict[str, Any]:
         return dict(self._gps_data)
 
-    def _publish(self, event_type: str, payload: Dict[str, Any]) -> None:
+    def _publish(self, event_type: str, payload: dict[str, Any]) -> None:
         if self.event_bus is None:
             return
         try:
@@ -662,9 +712,9 @@ class GeoMapper:
         except RuntimeError:
             pass
 
-    def add_snapshot(self, bssid: str, essid: Optional[str] = None, **kwargs: Any) -> Dict[str, Any]:
+    def add_snapshot(self, bssid: str, essid: str | None = None, **kwargs: Any) -> dict[str, Any]:
         position = self.get_position()
-        snapshot: Dict[str, Any] = {
+        snapshot: dict[str, Any] = {
             "bssid": bssid,
             "essid": essid,
             "timestamp": datetime.utcnow().isoformat(),
@@ -803,7 +853,7 @@ class WardriveMode:
         self.scanner = scanner
         self.event_bus = event_bus
         self._running = False
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
 
     async def start(self, scan_interval: float = 5.0) -> None:
         self._running = True
@@ -857,7 +907,7 @@ class WardriveMode:
                 logger.error("Wardrive loop error", error=str(exc))
             await asyncio.sleep(scan_interval)
 
-    async def _safe_publish(self, event_type: str, payload: Dict[str, Any]) -> None:
+    async def _safe_publish(self, event_type: str, payload: dict[str, Any]) -> None:
         if self.event_bus is None:
             return
         try:

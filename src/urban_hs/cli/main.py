@@ -21,7 +21,6 @@ import shutil
 import signal
 import sys
 from pathlib import Path
-from typing import List, Optional
 
 import typer
 from rich.console import Console
@@ -74,7 +73,7 @@ def info(
 
 @app.command()
 def run(
-    config_file: Optional[str] = typer.Option(None, "--config", "-c", help="Config YAML path."),
+    config_file: str | None = typer.Option(None, "--config", "-c", help="Config YAML path."),
     log_level: str = typer.Option("INFO", "--log-level", help="Logging level."),
     wardrive: bool = typer.Option(False, "--wardrive", "-w", help="Enable dedicated wardrive mode (continuous scan + GPS logging, no active attacks)."),
 ) -> None:
@@ -172,7 +171,7 @@ def _detect_capabilities() -> dict[str, bool]:
 @app.command(name="verify")
 def verify_session(
     session_id: str = typer.Argument(..., help="Session ID to verify."),
-    index: Optional[str] = typer.Option(None, "--index", help="Evidence index path."),
+    index: str | None = typer.Option(None, "--index", help="Evidence index path."),
 ) -> None:
     """Verify evidence bundle integrity (GPG + hashes + chain)."""
     try:
@@ -230,7 +229,7 @@ def verify_session(
 @app.command(name="seal")
 def seal_session(
     session_id: str = typer.Argument(..., help="Session ID to seal."),
-    target_dir: Optional[str] = typer.Option(None, "--target-dir", help="Destination path for sealed storage."),
+    target_dir: str | None = typer.Option(None, "--target-dir", help="Destination path for sealed storage."),
 ) -> None:
     """Move session artifacts to append-only / read-only sealed storage."""
     try:
@@ -261,7 +260,7 @@ def seal_session(
 @app.command(name="audit-trail")
 def audit_trail(
     session_id: str = typer.Argument(..., help="Session ID to inspect."),
-    index: Optional[str] = typer.Option(None, "--index", help="Evidence index path."),
+    index: str | None = typer.Option(None, "--index", help="Evidence index path."),
 ) -> None:
     """Print readable audit/custody timeline for a session."""
     try:
@@ -307,18 +306,46 @@ def audit_trail(
 def generate_report(
     session_id: str = typer.Option("default", "--session", help="Session ID."),
     format_type: str = typer.Option("markdown", "--format", "-f", help="Output format: markdown, html, json."),
-    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output destination file path."),
+    output: str | None = typer.Option(None, "--output", "-o", help="Output destination file path."),
 ) -> None:
     """Generate executive audit report for session (Issue #2.1)."""
     try:
-        from urban_hs.modules.reporting.generator import ReportFormat, ReportGenerator
+        from urban_hs.modules.reporting.generator import (
+            AuditSession,
+            ReportFormat,
+            ReportGenerator,
+        )
 
         fmt = ReportFormat(format_type.lower())
-        generator = ReportGenerator(session_id=session_id)
-        report_data = generator.generate_summary_report(fmt=fmt)
-        out_path = Path(output) if output else Path.cwd() / f"report_{session_id}.{format_type}"
-        out_path.write_text(report_data, encoding="utf-8")
-        console.print(f"[bold green]Audit report generated successfully:[bold green] [cyan]{out_path}[/cyan]")
+
+        # Build the audit session, enriching it from the evidence custody
+        # trail if one exists (same index the seal/audit-trail commands use).
+        from datetime import UTC, datetime
+
+        session = AuditSession(id=session_id, name=f"Session {session_id}")
+        session.end_time = datetime.now(UTC)
+        try:
+            from urban_hs.core.forensics import EvidenceBundle
+
+            idx = EvidenceBundle(session_id=session_id).index_path()
+            if os.path.exists(idx):
+                data = json.loads(Path(idx).read_text(encoding="utf-8"))
+                custody = data.get("custody", [])
+                session.metadata["custody_entries"] = custody
+                session.metadata["custody_count"] = len(custody)
+        except Exception:
+            pass  # Report is still valid without the custody trail.
+
+        generator = ReportGenerator()
+        generated_path = Path(asyncio.run(generator.generate(session, format=fmt)))
+
+        if output:
+            out_path = Path(output)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(generated_path), str(out_path))
+        else:
+            out_path = generated_path
+        console.print(f"[bold green]Audit report generated successfully:[/bold green] [cyan]{out_path}[/cyan]")
     except Exception as exc:
         console.print(f"[red]Report generation failed:[/red] {exc}")
         raise typer.Exit(1)

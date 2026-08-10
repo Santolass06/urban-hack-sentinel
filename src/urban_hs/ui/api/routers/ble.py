@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import APIRouter, Request
 
@@ -23,9 +23,9 @@ router = APIRouter(dependencies=[require_auth()])
 
 @router.post("/scan")
 @limiter.limit("10/minute")
-async def start_ble_scan(request: Request, duration: int = 10) -> Dict[str, Any]:
+async def start_ble_scan(request: Request, duration: int = 10) -> dict[str, Any]:
     job_id = str(uuid.uuid4())
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "job_id": job_id,
         "duration": duration,
         "status": "queued",
@@ -90,5 +90,5 @@ async def start_ble_scan(request: Request, duration: int = 10) -> Dict[str, Any]
 
 
 @router.get("/jobs/{job_id}")
-async def get_ble_scan_job(job_id: str) -> Dict[str, Any]:
+async def get_ble_scan_job(job_id: str) -> dict[str, Any]:
     return {"job_id": job_id, "status": "unknown"}

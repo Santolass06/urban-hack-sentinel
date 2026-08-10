@@ -12,24 +12,24 @@ This module only coordinates the capture; audio plumbing is host-dependent.
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 import shlex
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
 
-from urban_hs.core.event_bus import Event, EventBus
+import structlog
 
-logger = logging.getLogger(__name__)
+from urban_hs.core.event_bus import EventBus
+
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
 class HFPSession:
     target_address: str
-    audio_file: Optional[Path] = None
-    pcm_device: Optional[str] = None
+    audio_file: Path | None = None
+    pcm_device: str | None = None
 
 
 class HFPAudioCapture:
@@ -38,9 +38,9 @@ class HFPAudioCapture:
     def __init__(
         self,
         target_address: str,
-        output_file: Optional[Path] = None,
-        duration: Optional[float] = None,
-        event_bus: Optional[EventBus] = None,
+        output_file: Path | None = None,
+        duration: float | None = None,
+        event_bus: EventBus | None = None,
     ):
         if not target_address:
             raise ValueError("target_address is required for HFP audio capture")
@@ -50,7 +50,7 @@ class HFPAudioCapture:
         ) / f"hfp_{target_address.replace(':', '')}.wav"
         self.duration = duration
         self.event_bus = event_bus
-        self._process: Optional[asyncio.subprocess.Process] = None
+        self._process: asyncio.subprocess.Process | None = None
         self.session = HFPSession(target_address=target_address)
 
     async def start(self) -> None:
@@ -64,7 +64,7 @@ class HFPAudioCapture:
         self.session.pcm_device = pcm
         if self.event_bus is not None:
             try:
-                self.event_bus.publish(
+                await self.event_bus.publish(
                     "hfp.started",
                     {"target_address": self.target_address, "pcm": pcm, "output": str(self.output_file)},
                 )
@@ -86,7 +86,7 @@ class HFPAudioCapture:
         logger.info("HFP capture complete", output=str(self.output_file))
         if self.event_bus is not None:
             try:
-                self.event_bus.publish(
+                await self.event_bus.publish(
                     "hfp.completed",
                     {"target_address": self.target_address, "output": str(self.output_file)},
                 )
@@ -104,7 +104,7 @@ class HFPAudioCapture:
         finally:
             return await self.stop()
 
-    def _detect_pcm_device(self) -> Optional[str]:
+    def _detect_pcm_device(self) -> str | None:
         """Return the first matching bluealsa HFP PCM device."""
         try:
             cmd = shlex.join(["find", "/dev/snd", "-name", "bluealsa*"])

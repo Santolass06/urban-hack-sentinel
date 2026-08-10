@@ -13,7 +13,6 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
-from typing import Optional
 
 from urban_hs.core.mac_anonymiser import redact_text
 

@@ -8,9 +8,10 @@ import os
 import shlex
 import signal
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, AsyncIterator, Dict, List, Optional, Union
+from typing import Any
 
 import structlog
 
@@ -21,7 +22,7 @@ logger = structlog.get_logger(__name__)
 class ProcessResult:
     """Result of a completed process execution."""
     cmd: str
-    args: List[str]
+    args: list[str]
     stdout: str
     stderr: str
     exit_code: int
@@ -38,15 +39,15 @@ class ProcessResult:
 @dataclass
 class ProcessLimits:
     """Resource limits for process execution."""
-    max_memory_mb: Optional[int] = None  # MB
-    max_cpu_percent: Optional[float] = None  # percentage
-    max_duration_sec: Optional[int] = None
+    max_memory_mb: int | None = None  # MB
+    max_cpu_percent: float | None = None  # percentage
+    max_duration_sec: int | None = None
     max_output_mb: int = 100  # Limit output capture
 
 
 class ProcessCallback(ABC):
     """Abstract callback interface for process output handling."""
-    
+
     @abstractmethod
     async def on_stdout(self, line: str) -> None:
         pass
@@ -62,12 +63,12 @@ class ProcessCallback(ABC):
 
 class StreamCallback(ProcessCallback):
     """Callback that yields lines via async iterators."""
-    
+
     def __init__(self):
         self._stdout_queue: asyncio.Queue[str] = asyncio.Queue()
         self._stderr_queue: asyncio.Queue[str] = asyncio.Queue()
         self._exit_event = asyncio.Event()
-        self._exit_code: Optional[int] = None
+        self._exit_code: int | None = None
 
     async def on_stdout(self, line: str) -> None:
         await self._stdout_queue.put(line)
@@ -84,7 +85,7 @@ class StreamCallback(ProcessCallback):
             try:
                 line = await asyncio.wait_for(self._stdout_queue.get(), timeout=0.1)
                 yield line
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 if self._exit_event.is_set() and self._stdout_queue.empty():
                     break
 
@@ -93,7 +94,7 @@ class StreamCallback(ProcessCallback):
             try:
                 line = await asyncio.wait_for(self._stderr_queue.get(), timeout=0.1)
                 yield line
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 if self._exit_event.is_set() and self._stderr_queue.empty():
                     break
 
@@ -105,27 +106,27 @@ class StreamCallback(ProcessCallback):
 @dataclass
 class ProcessContext:
     """Holds process execution state."""
-    cmd: List[str]
+    cmd: list[str]
     cwd: str
-    env: Dict[str, str]
+    env: dict[str, str]
     limits: ProcessLimits
-    callback: Optional[ProcessCallback]
-    stdin_data: Optional[bytes] = None
+    callback: ProcessCallback | None
+    stdin_data: bytes | None = None
     use_chroot: bool = False
     chroot_path: str = "/opt/urban-chroot"
-    chroot_bind_mounts: Dict[str, str] = field(default_factory=dict)
-    module_name: Optional[str] = None
-    
+    chroot_bind_mounts: dict[str, str] = field(default_factory=dict)
+    module_name: str | None = None
+
     # Execution state
-    process: Optional[asyncio.subprocess.Process] = None
-    pid: Optional[int] = None
-    started_at: Optional[datetime] = None
-    finished_at: Optional[datetime] = None
-    stdout_buffer: List[str] = field(default_factory=list)
-    stderr_buffer: List[str] = field(default_factory=list)
+    process: asyncio.subprocess.Process | None = None
+    pid: int | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    stdout_buffer: list[str] = field(default_factory=list)
+    stderr_buffer: list[str] = field(default_factory=list)
     stdout_bytes: int = 0
     stderr_bytes: int = 0
-    monitor_task: Optional[asyncio.Task] = None
+    monitor_task: asyncio.Task | None = None
 
 
 class ProcessManager:
@@ -142,28 +143,28 @@ class ProcessManager:
     def __init__(
         self,
         default_cwd: str = "/",
-        default_env: Optional[Dict[str, str]] = None,
-        default_limits: Optional[ProcessLimits] = None,
+        default_env: dict[str, str] | None = None,
+        default_limits: ProcessLimits | None = None,
     ):
         self.default_cwd = default_cwd
         self.default_env = {**os.environ, **(default_env or {})}
         self.default_limits = default_limits or ProcessLimits()
-        self._active_processes: Dict[int, ProcessContext] = {}
+        self._active_processes: dict[int, ProcessContext] = {}
         self._lock = asyncio.Lock()
 
     async def run(
         self,
-        cmd: Union[str, List[str]],
-        cwd: Optional[str] = None,
-        env: Optional[Dict[str, str]] = None,
-        limits: Optional[ProcessLimits] = None,
-        callback: Optional[ProcessCallback] = None,
-        stdin_data: Optional[bytes] = None,
+        cmd: str | list[str],
+        cwd: str | None = None,
+        env: dict[str, str] | None = None,
+        limits: ProcessLimits | None = None,
+        callback: ProcessCallback | None = None,
+        stdin_data: bytes | None = None,
         use_chroot: bool = False,
         chroot_path: str = "/opt/urban-chroot",
-        chroot_bind_mounts: Optional[Dict[str, str]] = None,
+        chroot_bind_mounts: dict[str, str] | None = None,
         capture_output: bool = True,
-        module_name: Optional[str] = None,
+        module_name: str | None = None,
     ) -> ProcessResult:
         """
         Run a command with full control and monitoring.
@@ -213,10 +214,10 @@ class ProcessManager:
 
     async def run_streaming(
         self,
-        cmd: Union[str, List[str]],
-        cwd: Optional[str] = None,
-        env: Optional[Dict[str, str]] = None,
-        limits: Optional[ProcessLimits] = None,
+        cmd: str | list[str],
+        cwd: str | None = None,
+        env: dict[str, str] | None = None,
+        limits: ProcessLimits | None = None,
         use_chroot: bool = False,
         chroot_path: str = "/opt/urban-chroot",
     ) -> StreamCallback:
@@ -332,7 +333,7 @@ class ProcessManager:
                 await asyncio.wait_for(proc.wait(), timeout=ctx.limits.max_duration_sec)
             else:
                 await proc.wait()
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Process timeout, killing", pid=proc.pid, timeout=ctx.limits.max_duration_sec)
             await self._kill_process_tree(proc.pid)
             raise
@@ -374,13 +375,13 @@ class ProcessManager:
         logger.debug("Process finished", pid=proc.pid, exit_code=exit_code, duration_ms=duration_ms)
         return result
 
-    def _build_chroot_command(self, ctx: ProcessContext) -> List[str]:
+    def _build_chroot_command(self, ctx: ProcessContext) -> list[str]:
         """Build command to execute inside Alpine chroot."""
         # Build bind mount args for nsexec / chroot
         bind_args = []
         for src, dst in ctx.chroot_bind_mounts.items():
             bind_args.extend(["--bind", f"{src}:{dst}"])
-        
+
         # Add default binds
         binds = {
             "/data": "/data",
@@ -423,14 +424,19 @@ class ProcessManager:
             return
 
         try:
-            from urban_hs.core.security import CapabilitySet, SeccompFilter, SECCOMP_PROFILES, SeccompProfile
+            from urban_hs.core.security import (
+                SECCOMP_PROFILES,
+                CapabilitySet,
+                SeccompFilter,
+                SeccompProfile,
+            )
         except ImportError:
             return
 
         if ctx.use_chroot:
             return
 
-        profile: Optional[SeccompProfile] = SECCOMP_PROFILES.get(module)
+        profile: SeccompProfile | None = SECCOMP_PROFILES.get(module)
         if profile is not None:
             try:
                 SeccompFilter(profile=profile).load()
@@ -446,7 +452,7 @@ class ProcessManager:
 
     async def _read_stream(
         self,
-        stream: Optional[asyncio.StreamReader],
+        stream: asyncio.StreamReader | None,
         ctx: ProcessContext,
         stream_name: str,
     ) -> None:
@@ -491,7 +497,7 @@ class ProcessManager:
         while True:
             try:
                 await asyncio.sleep(1)
-                
+
                 if proc.returncode is not None:
                     break
 
@@ -517,28 +523,28 @@ class ProcessManager:
             # Get child PIDs
             child_pids = await self._get_child_pids(pid)
             all_pids = [pid] + child_pids
-            
+
             # Send SIGTERM
             for p in all_pids:
                 try:
                     os.kill(p, signal_num)
                 except ProcessLookupError:
                     pass
-            
+
             if force_after > 0:
                 await asyncio.sleep(force_after)
-                
+
                 # Force kill with SIGKILL
                 for p in all_pids:
                     try:
                         os.kill(p, signal.SIGKILL)
                     except ProcessLookupError:
                         pass
-                        
+
         except Exception as e:
             logger.error("Error killing process tree", pid=pid, error=str(e))
 
-    async def _get_child_pids(self, pid: int) -> List[int]:
+    async def _get_child_pids(self, pid: int) -> list[int]:
         """Get all descendant PIDs of a process."""
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -558,7 +564,7 @@ class ProcessManager:
             pass
         return []
 
-    async def get_active_processes(self) -> List[Dict[str, Any]]:
+    async def get_active_processes(self) -> list[dict[str, Any]]:
         """Get info about all currently running processes."""
         async with self._lock:
             return [
@@ -588,7 +594,7 @@ class ProcessManager:
     async def shutdown(self, timeout: float = 10.0) -> None:
         """Graceful shutdown - wait for processes then force kill."""
         logger.info("Shutting down process manager")
-        
+
         # Wait for active processes
         async with self._lock:
             for ctx in list(self._active_processes.values()):
@@ -598,19 +604,19 @@ class ProcessManager:
         try:
             await asyncio.wait_for(
                 asyncio.gather(*[
-                    ctx.process.wait() 
+                    ctx.process.wait()
                     for ctx in self._active_processes.values()
                     if ctx.process and ctx.process.returncode is None
                 ]),
                 timeout=timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Force killing remaining processes")
             await self.kill_all(signal.SIGKILL)
 
 
 # Global instance
-_process_manager: Optional[ProcessManager] = None
+_process_manager: ProcessManager | None = None
 
 
 def get_process_manager() -> ProcessManager:

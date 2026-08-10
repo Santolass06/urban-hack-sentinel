@@ -15,7 +15,6 @@ from __future__ import annotations
 import platform
 from dataclasses import dataclass
 from enum import Enum
-from typing import Set
 
 
 class Arch(Enum):
@@ -31,7 +30,7 @@ class Platform:
     system: str
     release: str
     python: str
-    features: Set[str]
+    features: set[str]
 
     @property
     def is_arm64(self) -> bool:
@@ -69,7 +68,7 @@ def detect_platform() -> Platform:
     )
 
 
-def _probe_features() -> Set[str]:
+def _probe_features() -> set[str]:
     import shutil
 
     tools = [

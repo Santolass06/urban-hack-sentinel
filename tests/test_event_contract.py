@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Set
 
 import pytest
-from urban_hs.core.event_bus import Event, EventHandler, get_event_bus
+
 from urban_hs.core.attack_event_adapter import AttackEventNormalizer
+from urban_hs.core.event_bus import Event, EventHandler, get_event_bus
 
 
 class _Collector(EventHandler):
@@ -15,7 +15,7 @@ class _Collector(EventHandler):
         self.events: list[Event] = []
 
     @property
-    def event_types(self) -> Set[str]:
+    def event_types(self) -> set[str]:
         return {"*"}
 
     async def handle(self, event: Event) -> None:

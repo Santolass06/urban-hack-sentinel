@@ -11,11 +11,12 @@ import asyncio
 import os
 import platform
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any
 
 import psutil
 import structlog
@@ -52,7 +53,7 @@ class HealthCheckResult:
     message: str = ""
     latency_ms: float = 0.0
     timestamp: datetime = field(default_factory=datetime.utcnow)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -66,7 +67,7 @@ class SystemMetrics:
     network_connections: int = 0
     process_count: int = 0
     uptime_seconds: float = 0.0
-    load_average: List[float] = field(default_factory=list)
+    load_average: list[float] = field(default_factory=list)
 
 
 class HealthChecker:
@@ -79,12 +80,12 @@ class HealthChecker:
     - Detailed health status with metadata
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         self.config = config or {}
-        self.checks: Dict[str, Callable[[], Awaitable[HealthCheckResult]]] = {}
+        self.checks: dict[str, Callable[[], Awaitable[HealthCheckResult]]] = {}
         self.start_time = time.time()
         self._register_default_checks()
-        
+
         # Prometheus metrics
         if PROMETHEUS_AVAILABLE:
             self.registry = CollectorRegistry()
@@ -99,7 +100,7 @@ class HealthChecker:
         self.register_check("disk_space", self._check_disk_space)
         self.register_check("memory_usage", self._check_memory_usage)
         self.register_check("cpu_usage", self._check_cpu_usage)
-        
+
         # Check critical paths
         from urban_hs.core.config import get_config
         config = get_config()
@@ -111,7 +112,7 @@ class HealthChecker:
             ("artifacts_dir", config.storage.resolve_artifact_root()),
         ]:
             self.register_check(f"path_{path_name}", self._make_path_check(path_str))
-        
+
         # Check systemd services if applicable
         self.register_check("systemd", self._check_systemd_services)
 
@@ -129,14 +130,13 @@ class HealthChecker:
                         latency_ms=(time.time() - start) * 1000,
                         metadata={"path": path_str, "is_dir": path.is_dir()}
                     )
-                else:
-                    return HealthCheckResult(
-                        name=f"path_{path_str}",
-                        status=HealthStatus.UNHEALTHY,
-                        message=f"Path missing: {path_str}",
-                        latency_ms=(time.time() - start) * 1000,
-                        metadata={"path": path_str}
-                    )
+                return HealthCheckResult(
+                    name=f"path_{path_str}",
+                    status=HealthStatus.UNHEALTHY,
+                    message=f"Path missing: {path_str}",
+                    latency_ms=(time.time() - start) * 1000,
+                    metadata={"path": path_str}
+                )
             except Exception as e:
                 return HealthCheckResult(
                     name=f"path_{path_str}",
@@ -172,7 +172,7 @@ class HealthChecker:
             usage = psutil.disk_usage("/")
             free_gb = usage.free / (1024**3)
             percent = (usage.used / usage.total) * 100
-            
+
             if percent > 95:
                 status = HealthStatus.UNHEALTHY
                 message = f"Critical disk usage: {percent:.1f}%"
@@ -182,7 +182,7 @@ class HealthChecker:
             else:
                 status = HealthStatus.HEALTHY
                 message = f"Disk usage OK: {percent:.1f}%"
-            
+
             return HealthCheckResult(
                 name="disk_space",
                 status=status,
@@ -205,7 +205,7 @@ class HealthChecker:
             mem = psutil.virtual_memory()
             available_mb = mem.available / (1024**2)
             percent = mem.percent
-            
+
             if percent > 95:
                 status = HealthStatus.UNHEALTHY
                 message = f"Critical memory usage: {percent:.1f}%"
@@ -215,7 +215,7 @@ class HealthChecker:
             else:
                 status = HealthStatus.HEALTHY
                 message = f"Memory usage OK: {percent:.1f}%"
-            
+
             return HealthCheckResult(
                 name="memory_usage",
                 status=status,
@@ -237,7 +237,7 @@ class HealthChecker:
         try:
             cpu_percent = psutil.cpu_percent(interval=0.1)
             load_avg = psutil.getloadavg() if hasattr(psutil, 'getloadavg') else [0, 0, 0]
-            
+
             if cpu_percent > 95:
                 status = HealthStatus.UNHEALTHY
                 message = f"Critical CPU usage: {cpu_percent:.1f}%"
@@ -247,7 +247,7 @@ class HealthChecker:
             else:
                 status = HealthStatus.HEALTHY
                 message = f"CPU usage OK: {cpu_percent:.1f}%"
-            
+
             return HealthCheckResult(
                 name="cpu_usage",
                 status=status,
@@ -270,10 +270,10 @@ class HealthChecker:
             "bluetooth",  # For BLE
             "gpsd",       # For GPS
         ]
-        
+
         results = {}
         all_ok = True
-        
+
         for service in critical_services:
             try:
                 proc = await asyncio.create_subprocess_exec(
@@ -289,7 +289,7 @@ class HealthChecker:
             except Exception as e:
                 results[service] = f"error: {e}"
                 all_ok = False
-        
+
         return HealthCheckResult(
             name="systemd_services",
             status=HealthStatus.HEALTHY if all_ok else HealthStatus.DEGRADED,
@@ -298,11 +298,11 @@ class HealthChecker:
             metadata={"services": results}
         )
 
-    async def run_checks(self, check_names: Optional[List[str]] = None) -> Dict[str, HealthCheckResult]:
+    async def run_checks(self, check_names: list[str] | None = None) -> dict[str, HealthCheckResult]:
         """Run specified health checks or all if none specified."""
         names = check_names or list(self.checks.keys())
         results = {}
-        
+
         for name in names:
             if name in self.checks:
                 try:
@@ -320,19 +320,19 @@ class HealthChecker:
                     status=HealthStatus.UNKNOWN,
                     message="Check not registered"
                 )
-        
+
         return results
 
-    async def get_overall_status(self, results: Optional[Dict[str, HealthCheckResult]] = None) -> HealthStatus:
+    async def get_overall_status(self, results: dict[str, HealthCheckResult] | None = None) -> HealthStatus:
         """Determine overall health status from check results."""
         if results is None:
             results = await self.run_checks()
-        
+
         if not results:
             return HealthStatus.UNKNOWN
-        
+
         statuses = [r.status for r in results.values()]
-        
+
         if HealthStatus.UNHEALTHY in statuses:
             return HealthStatus.UNHEALTHY
         if HealthStatus.DEGRADED in statuses:
@@ -351,7 +351,7 @@ class HealthChecker:
             proc_count = len(psutil.pids())
             uptime = time.time() - self.start_time
             load_avg = psutil.getloadavg() if hasattr(psutil, 'getloadavg') else [0, 0, 0]
-            
+
             return SystemMetrics(
                 cpu_percent=cpu,
                 memory_percent=mem.percent,
@@ -377,11 +377,11 @@ class HealthChecker:
         self.prom_disk_free = Gauge('uhs_disk_free_gb', 'Free disk space in GB', registry=self.registry)
         self.prom_uptime = Gauge('uhs_uptime_seconds', 'Process uptime in seconds', registry=self.registry)
         self.prom_load = Gauge('uhs_load_average', 'Load average', ['period'], registry=self.registry)
-        
+
         # Health check metrics
         self.prom_health = Gauge('uhs_health_status', 'Health check status (1=healthy, 0.5=degraded, 0=unhealthy)', ['check'], registry=self.registry)
         self.prom_health_latency = Histogram('uhs_health_check_latency_ms', 'Health check latency', ['check'], registry=self.registry)
-        
+
         # Application metrics
         self.prom_scans_total = Counter('uhs_scans_total', 'Total scans performed', ['type'], registry=self.registry)
         self.prom_attacks_total = Counter('uhs_attacks_total', 'Total attacks attempted', ['type', 'result'], registry=self.registry)
@@ -393,10 +393,10 @@ class HealthChecker:
         """Update Prometheus metrics from current system state."""
         if not PROMETHEUS_AVAILABLE or not self.registry:
             return
-        
+
         try:
             metrics = self.get_system_metrics()
-            
+
             self.prom_cpu.set(metrics.cpu_percent)
             self.prom_memory.set(metrics.memory_percent)
             self.prom_memory_available.set(metrics.memory_available_mb)
@@ -404,11 +404,11 @@ class HealthChecker:
             self.prom_disk_free.set(metrics.disk_free_gb)
             self.prom_uptime.set(metrics.uptime_seconds)
             self.prom_active_connections.set(metrics.network_connections)
-            
+
             for i, period in enumerate(['1m', '5m', '15m']):
                 if i < len(metrics.load_average):
                     self.prom_load.labels(period=period).set(metrics.load_average[i])
-            
+
         except Exception as e:
             logger.error("Failed to update Prometheus metrics", error=str(e))
 
@@ -416,7 +416,7 @@ class HealthChecker:
         """Record health check result in Prometheus."""
         if not PROMETHEUS_AVAILABLE or not self.registry:
             return
-        
+
         try:
             status_map = {
                 HealthStatus.HEALTHY: 1.0,
@@ -433,11 +433,11 @@ class HealthChecker:
         """Get Prometheus metrics in exposition format."""
         if not PROMETHEUS_AVAILABLE or not self.registry:
             return b"# Prometheus not available\n"
-        
+
         self.update_prometheus_metrics()
         return generate_latest(self.registry)
 
-    def get_health_summary(self) -> Dict[str, Any]:
+    def get_health_summary(self) -> dict[str, Any]:
         """Get a summary suitable for JSON response."""
         return {
             "status": "healthy",  # Will be updated by run_all
@@ -460,9 +460,9 @@ class HealthCheckMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        
+
         path = scope.get("path", "")
-        
+
         if path == "/healthz":
             await self._handle_liveness(scope, receive, send)
         elif path == "/readyz":
@@ -491,7 +491,7 @@ class HealthCheckMiddleware:
             "path_credentials_dir", "path_artifacts_dir"
         ])
         overall = await self.health.get_overall_status(results)
-        
+
         await self._send_json(send, 200 if overall == HealthStatus.HEALTHY else 503, {
             "status": overall.value,
             "checks": {k: {"status": v.status.value, "message": v.message} for k, v in results.items()},
@@ -501,7 +501,7 @@ class HealthCheckMiddleware:
     async def _handle_metrics(self, scope, receive, send):
         """Prometheus metrics endpoint."""
         metrics_data = self.health.get_prometheus_metrics()
-        
+
         await send({
             "type": "http.response.start",
             "status": 200,
@@ -530,10 +530,10 @@ class HealthCheckMiddleware:
             }
             for k, v in results.items()
         }
-        
+
         await self._send_json(send, 200 if overall == HealthStatus.HEALTHY else 503, summary)
 
-    async def _send_json(self, send, status: int, data: Dict[str, Any]):
+    async def _send_json(self, send, status: int, data: dict[str, Any]):
         """Send JSON response."""
         import json
         body = json.dumps(data).encode()
@@ -552,7 +552,7 @@ class HealthCheckMiddleware:
 
 
 # Convenience function to create health checker with default config
-def create_health_checker(config: Optional[Dict[str, Any]] = None) -> HealthChecker:
+def create_health_checker(config: dict[str, Any] | None = None) -> HealthChecker:
     """Create a health checker with default configuration."""
     return HealthChecker(config)
 

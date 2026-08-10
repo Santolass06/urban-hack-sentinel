@@ -15,13 +15,13 @@ import sys
 from contextvars import ContextVar
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import structlog
 from structlog.types import EventDict, WrappedLogger
 
 # Context variable for correlation ID
-_correlation_id: ContextVar[Optional[str]] = ContextVar("correlation_id", default=None)
+_correlation_id: ContextVar[str | None] = ContextVar("correlation_id", default=None)
 
 # Custom log levels
 TRACE_LEVEL = 5
@@ -50,7 +50,7 @@ def add_level(logger: WrappedLogger, method_name: str, event_dict: EventDict) ->
 
 def setup_logging(
     level: str = "INFO",
-    jsonl_dir: Optional[str] = None,
+    jsonl_dir: str | None = None,
     console: bool = True,
     console_format: str = "rich",
 ) -> None:
@@ -76,29 +76,29 @@ def setup_logging(
     if jsonl_dir:
         log_dir = Path(jsonl_dir)
         log_dir.mkdir(parents=True, exist_ok=True)
-        
+
         class JSONLFileLogger:
             def __init__(self, log_dir: Path):
                 self.log_dir = log_dir
-                self._files: Dict[str, Any] = {}
-            
+                self._files: dict[str, Any] = {}
+
             def _get_file(self, module: str) -> Any:
                 if module not in self._files:
                     file_path = self.log_dir / f"{module}.jsonl"
                     self._files[module] = open(file_path, "a", buffering=1)
                 return self._files[module]
-            
+
             def __call__(self, logger: Any, method_name: str, event_dict: EventDict) -> None:
                 module = event_dict.get("module", "root")
                 file = self._get_file(module)
                 file.write(structlog.processors.JSONRenderer()(None, None, event_dict) + "\n")
                 file.flush()
-            
+
             def close(self) -> None:
                 for f in self._files.values():
                     f.close()
                 self._files.clear()
-        
+
         jsonl_logger = JSONLFileLogger(Path(jsonl_dir))
 
     # Configure structlog
@@ -147,7 +147,7 @@ def set_correlation_id(cid: str) -> None:
     _correlation_id.set(cid)
 
 
-def get_correlation_id() -> Optional[str]:
+def get_correlation_id() -> str | None:
     """Get current correlation ID."""
     return _correlation_id.get()
 
@@ -160,15 +160,15 @@ def clear_correlation_id() -> None:
 # Context manager for correlation ID
 class correlation_context:
     """Context manager for setting correlation ID."""
-    
-    def __init__(self, cid: Optional[str] = None):
+
+    def __init__(self, cid: str | None = None):
         self.cid = cid or f"req-{os.urandom(8).hex()}"
         self._token = None
-    
+
     def __enter__(self) -> str:
         self._token = _correlation_id.set(self.cid)
         return self.cid
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         _correlation_id.reset(self._token)
 

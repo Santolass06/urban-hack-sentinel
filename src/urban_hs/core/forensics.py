@@ -13,17 +13,20 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import structlog
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 
 if TYPE_CHECKING:
     from urban_hs.modules.reporting.gpg_evidence import (
         EvidenceLogger as EvidenceLogger,
+    )
+    from urban_hs.modules.reporting.gpg_evidence import (
         GPGSigner as GPGSigner,
     )
 
@@ -48,12 +51,12 @@ class RetentionPolicy:
     grace_days: int = 7
     base_dir: str = "/var/lib/urban-hs/artifacts"
 
-    def expired(self, updated_at: Optional[str]) -> bool:
+    def expired(self, updated_at: str | None) -> bool:
         if not updated_at:
             return True
         try:
             dt = datetime.fromisoformat(updated_at)
-            age = (datetime.now(timezone.utc) - dt).total_seconds() / 86400
+            age = (datetime.now(UTC) - dt).total_seconds() / 86400
             return age > (self.default_ttl_days + self.grace_days)
         except Exception:
             return True
@@ -66,12 +69,12 @@ class EvidenceBundle:
     session_id: str
     base_dir: str = ""
     retention: RetentionPolicy = field(default_factory=RetentionPolicy)
-    records: List[Dict[str, Any]] = field(default_factory=list)
-    custody_entries: List[Dict[str, Any]] = field(default_factory=list)
-    gpg_signer: Optional[GPGSigner] = None
-    evidence_logger: Optional[EvidenceLogger] = None
+    records: list[dict[str, Any]] = field(default_factory=list)
+    custody_entries: list[dict[str, Any]] = field(default_factory=list)
+    gpg_signer: GPGSigner | None = None
+    evidence_logger: EvidenceLogger | None = None
 
-    def add(self, path: str) -> Dict[str, Any]:
+    def add(self, path: str) -> dict[str, Any]:
         abs_path = str(Path(path).resolve())
         if not os.path.exists(abs_path):
             raise FileNotFoundError(abs_path)
@@ -79,7 +82,7 @@ class EvidenceBundle:
         size = os.path.getsize(abs_path)
         sha256 = self._sha256(abs_path)
         blake2b = self._blake2b(abs_path)
-        created_at = datetime.now(timezone.utc).isoformat()
+        created_at = datetime.now(UTC).isoformat()
 
         record = {
             "path": abs_path,
@@ -109,11 +112,11 @@ class EvidenceBundle:
         ).resolve().parent
         return str(base / f"{self.session_id}-evidence-index.json")
 
-    def write_index(self, path: Optional[str] = None) -> str:
+    def write_index(self, path: str | None = None) -> str:
         target = path or self.index_path()
         payload = {
             "session_id": self.session_id,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
             "artifacts": self.records,
             "custody": self.custody_entries,
         }
@@ -123,7 +126,7 @@ class EvidenceBundle:
         )
         return target
 
-    def seal(self, target_dir: Optional[str] = None) -> str:
+    def seal(self, target_dir: str | None = None) -> str:
         """Relocate session artifacts to append-only/read-only sealed storage and create signed manifest."""
         base_sealed = Path(target_dir) if target_dir else Path(self.retention.base_dir) / "sealed" / self.session_id
         try:
@@ -145,7 +148,7 @@ class EvidenceBundle:
                 new_record["sha256"] = self._sha256(str(dest_path))
                 new_record["blake2b"] = self._blake2b(str(dest_path))
                 sealed_records.append(new_record)
-                self._append_custody("seal", str(dest_path), {"src": str(src_path), "sealed_at": datetime.now(timezone.utc).isoformat()})
+                self._append_custody("seal", str(dest_path), {"src": str(src_path), "sealed_at": datetime.now(UTC).isoformat()})
 
         self.records = sealed_records
         manifest_path = str(base_sealed / f"{self.session_id}-sealed-manifest.json")
@@ -153,10 +156,10 @@ class EvidenceBundle:
         os.chmod(manifest_path, 0o444)
         return manifest_path
 
-    def _append_custody(self, action: str, path: str, meta: Dict[str, Any]) -> None:
+    def _append_custody(self, action: str, path: str, meta: dict[str, Any]) -> None:
         self.custody_entries.append(
             {
-                "ts": datetime.now(timezone.utc).isoformat(),
+                "ts": datetime.now(UTC).isoformat(),
                 "action": action,
                 "path": path,
                 "meta": meta,

@@ -12,7 +12,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, TypeVar
+from typing import Any, TypeVar
 from weakref import WeakSet
 
 import structlog
@@ -36,9 +36,9 @@ class Event:
     payload: Any = None
     timestamp: datetime = field(default_factory=datetime.utcnow)
     correlation_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    source: Optional[str] = None
+    source: str | None = None
     priority: EventPriority = EventPriority.NORMAL
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __lt__(self, other: "Event") -> bool:
         return self.priority.value > other.priority.value  # Higher priority first
@@ -53,7 +53,7 @@ class EventHandler(ABC):
 
     @property
     @abstractmethod
-    def event_types(self) -> Set[str]:
+    def event_types(self) -> set[str]:
         pass
 
 
@@ -75,7 +75,7 @@ class DeadLetterQueue:
                 pass
             await self.add(event, error)
 
-    async def get_all(self) -> List[tuple[Event, Exception]]:
+    async def get_all(self) -> list[tuple[Event, Exception]]:
         items = []
         while not self._queue.empty():
             try:
@@ -105,9 +105,9 @@ class EventBus:
     ):
         self.max_queue_size = max_queue_size
         self._queue: asyncio.Queue[Event] = asyncio.Queue(maxsize=max_queue_size)
-        self._subscribers: Dict[str, WeakSet[EventHandler]] = defaultdict(WeakSet)
+        self._subscribers: dict[str, WeakSet[EventHandler]] = defaultdict(WeakSet)
         self._running = False
-        self._workers: List[asyncio.Task] = []
+        self._workers: list[asyncio.Task] = []
         self._worker_count = worker_count
         self._dlq = DeadLetterQueue(dlq_max_size)
         self._stats = {
@@ -152,12 +152,18 @@ class EventBus:
         for event_type in handler.event_types:
             self._subscribers[event_type].discard(handler)
 
-    async def publish(self, event: Event) -> bool:
+    async def publish(self, event: "Event | str", payload: Any = None) -> bool:
         """
         Publish an event to the bus.
-        
-        Returns True if queued, False if queue full (backpressure).
+
+        Accepts either an :class:`Event` or a ``(event_type, payload)`` pair;
+        the latter is a back-compatible form several callers (scheduler,
+        plugin manager, BLE modules) rely on. Returns True if queued, False
+        if the queue is full (backpressure).
         """
+        if isinstance(event, str):
+            event = Event(type=event, payload=payload)
+
         if not self._running:
             logger.warning("Event bus not running, dropping event", event_type=event.type)
             return False
@@ -186,7 +192,7 @@ class EventBus:
                 await self._dispatch(event)
                 self._queue.task_done()
                 self._stats["delivered"] += 1
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             except asyncio.CancelledError:
                 break
@@ -197,7 +203,7 @@ class EventBus:
     async def _dispatch(self, event: Event) -> None:
         """Dispatch event to all matching subscribers."""
         handlers = self._subscribers.get(event.type, set())
-        
+
         # Also dispatch to wildcard subscribers
         wildcard_handlers = self._subscribers.get("*", set())
         all_handlers = list(handlers) + list(wildcard_handlers)
@@ -224,7 +230,7 @@ class EventBus:
             )
             await self._dlq.add(event, e)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         return {
             **self._stats,
             "queue_size": self._queue.qsize(),
@@ -232,12 +238,12 @@ class EventBus:
             "dlq_size": self._dlq.max_size,
         }
 
-    async def get_dlq_events(self) -> List[tuple[Event, Exception]]:
+    async def get_dlq_events(self) -> list[tuple[Event, Exception]]:
         return await self._dlq.get_all()
 
 
 # Singleton instance for global access
-_event_bus: Optional[EventBus] = None
+_event_bus: EventBus | None = None
 
 
 def get_event_bus() -> EventBus:

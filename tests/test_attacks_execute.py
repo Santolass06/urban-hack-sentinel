@@ -8,8 +8,8 @@ from fastapi.testclient import TestClient
 
 from urban_hs.core.config import get_config
 from urban_hs.core.session_scope import SessionScope
-from urban_hs.ui.api.main import app as api_app
 from urban_hs.ui.api.auth import create_access_token
+from urban_hs.ui.api.main import app as api_app
 from urban_hs.ui.api.rate_limit import limiter
 from urban_hs.ui.api.routers.attacks import set_session_scope
 
@@ -186,6 +186,29 @@ def test_execute_dry_run_bypasses_guard_rails(client: TestClient, auth_headers: 
     )
 
     assert response.status_code == 200
+
+
+def test_execute_non_exploit_dispatches_to_event_bus(
+    client: TestClient, auth_headers: dict
+) -> None:
+    """A real (non-dry-run) non-exploit attack is published to the audited bus.
+
+    Replaces the former inert `echo` placeholder — the endpoint now emits a
+    "<module>.attack_request" event consumed by the plugin handlers.
+    """
+    from unittest.mock import AsyncMock, patch
+
+    bus = AsyncMock()
+    with patch("urban_hs.ui.api.routers.attacks.get_event_bus", return_value=bus):
+        response = client.post(
+            "/api/v1/attacks/wifi/execute",
+            json={"params": {"target": "*", "type": "deauth"}, "dry_run": False},
+            headers=auth_headers,
+        )
+
+    assert response.status_code == 200
+    published = [call.args[0] for call in bus.publish.await_args_list]
+    assert any(getattr(ev, "type", None) == "wifi.attack_request" for ev in published)
 
 
 def test_execute_rate_limit_triggers_429(client: TestClient, auth_headers: dict) -> None:

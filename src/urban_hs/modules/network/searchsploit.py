@@ -5,7 +5,7 @@ SearchSploit integration for ExploitDB searches.
 import asyncio
 import json
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import structlog
 
@@ -20,7 +20,7 @@ class SearchSploitIntegration:
     def __init__(self, searchsploit_path: str = "searchsploit"):
         self.searchsploit_path = searchsploit_path
 
-    async def search(self, query: str, exact: bool = False, json_output: bool = True) -> List[Dict[str, Any]]:
+    async def search(self, query: str, exact: bool = False, json_output: bool = True) -> list[dict[str, Any]]:
         cmd = [self.searchsploit_path]
 
         if json_output:
@@ -56,7 +56,7 @@ class SearchSploitIntegration:
 
         return []
 
-    async def get_exploit(self, exploit_id: str, output_dir: str) -> Optional[str]:
+    async def get_exploit(self, exploit_id: str, output_dir: str) -> str | None:
         if not re.match(r'^\d+$', exploit_id):
             logger.error("Invalid exploit_id format", exploit_id=exploit_id)
             return None

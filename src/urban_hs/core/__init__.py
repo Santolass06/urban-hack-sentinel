@@ -109,7 +109,7 @@ __all__ = [
     "get_config",
     "init_config",
     "shutdown_config",
-    
+
     # Event Bus
     "Event",
     "EventBus",
@@ -119,7 +119,7 @@ __all__ = [
     "get_event_bus",
     "init_event_bus",
     "shutdown_event_bus",
-    
+
     # Logger
     "get_logger",
     "get_module_logger",
@@ -128,13 +128,13 @@ __all__ = [
     "set_correlation_id",
     "get_correlation_id",
     "trace",
-    
+
     # Storage
     "Storage",
     "get_storage",
     "init_storage",
     "shutdown_storage",
-    
+
     # Process Manager
     "ProcessManager",
     "ProcessLimits",
@@ -145,7 +145,7 @@ __all__ = [
     "get_process_manager",
     "init_process_manager",
     "shutdown_process_manager",
-    
+
     # Health
     "HealthStatus",
     "HealthCheckResult",
@@ -153,13 +153,13 @@ __all__ = [
     "HealthChecker",
     "HealthCheckMiddleware",
     "create_health_checker",
-    
+
     # Scheduler
     "TriggerType",
     "JobStatus",
     "ScheduledJob",
     "Scheduler",
-    
+
     # Concurrency
     "ResourceType",
     "ResourcePriority",
@@ -168,7 +168,7 @@ __all__ = [
     "ResourcePool",
     "ResourceManager",
     "get_resource_manager",
-    
+
     # Memory
     "MemorySnapshot",
     "AllocationRecord",
@@ -184,7 +184,7 @@ __all__ = [
     "alimit",
     "afilter",
     "amap",
-    
+
     # Security
     "Capability",
     "CapabilitySet",
@@ -200,7 +200,7 @@ __all__ = [
     "SupplyChainConfig",
     "SupplyChainVerifier",
     "harden_process",
-    
+
     # Plugins
     "PluginStatus",
     "PluginType",
@@ -215,13 +215,13 @@ __all__ = [
 
 # Convenience function for bootstrapping
 async def init_core(
-    config_file: Optional[str] = None,
+    config_file: str | None = None,
     log_level: str = "INFO",
-    jsonl_dir: Optional[str] = None,
-    sqlite_path: Optional[str] = None,
-    redis_url: Optional[str] = None,
+    jsonl_dir: str | None = None,
+    sqlite_path: str | None = None,
+    redis_url: str | None = None,
     **kwargs,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Initialize all core services.
     
@@ -229,10 +229,10 @@ async def init_core(
     """
     import os
     from pathlib import Path
-    
+
     # Initialize config first to get paths
     config = await init_config(config_file=config_file)
-    
+
     # Resolve paths from config
     if jsonl_dir is None:
         jsonl_dir = config.storage.resolve_jsonl_dir()
@@ -240,20 +240,20 @@ async def init_core(
         sqlite_path = config.storage.resolve_sqlite_path()
     if redis_url is None:
         redis_url = config.storage.redis_url
-    
+
     # Ensure directories exist
     Path(config.storage.data_root).mkdir(parents=True, exist_ok=True)
     Path(jsonl_dir).mkdir(parents=True, exist_ok=True)
     Path(config.storage.log_root).mkdir(parents=True, exist_ok=True)
     Path(config.storage.resolve_hashes_dir()).mkdir(parents=True, exist_ok=True)
     Path(config.storage.resolve_pcaps_dir()).mkdir(parents=True, exist_ok=True)
-    
+
     # Setup logging first
     setup_logging(level=log_level, jsonl_dir=jsonl_dir)
-    
+
     logger = get_logger("core.init")
     logger.info("Initializing core services")
-    
+
     # Initialize services
     bus = await init_event_bus()
     storage = await init_storage(
@@ -261,9 +261,9 @@ async def init_core(
         redis_url=redis_url,
     )
     pm = await init_process_manager()
-    
+
     logger.info("Core services initialized", services=["event_bus", "config", "storage", "process_manager"])
-    
+
     return {
         "event_bus": bus,
         "config": config,
@@ -276,10 +276,10 @@ async def shutdown_core() -> None:
     """Shutdown all core services gracefully."""
     logger = get_logger("core.shutdown")
     logger.info("Shutting down core services")
-    
+
     await shutdown_process_manager()
     await shutdown_storage()
     await shutdown_config()
     await shutdown_event_bus()
-    
+
     logger.info("Core services shut down")

@@ -1,8 +1,8 @@
 """Tests for attack base classes and types."""
 
-import pytest
 from datetime import datetime
-from urban_hs.modules.wifi.attacks.base import AttackStatus, AttackResult
+
+from urban_hs.modules.wifi.attacks.base import AttackResult, AttackStatus
 
 
 class TestAttackStatus:

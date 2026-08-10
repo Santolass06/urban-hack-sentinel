@@ -12,18 +12,17 @@ Sprint 8A hardening supports environment modes:
 
 from __future__ import annotations
 
-import asyncio
 import logging
+import os
 import uuid
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from urban_hs.core.config import get_config
 from urban_hs.core.event_bus import Event, EventPriority, get_event_bus
-from urban_hs.core.process_mgr import ProcessLimits, ProcessManager
 from urban_hs.core.session_scope import (
     SessionScope,
     get_active_scope,
@@ -36,11 +35,11 @@ from urban_hs.ui.api.rate_limit import limiter
 logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[require_auth()])
-_process_manager = ProcessManager()
 
-# The only registry entry currently wired to a real execution engine.
-# Other module names keep returning the inert placeholder below until
-# they get an equivalent, audited execution path.
+# "exploit" runs synchronously through the in-process ExploitRunner (with its
+# own enable_active_attacks/legal_warning guard). Every other module is
+# dispatched asynchronously onto the event bus, where the plugin handlers
+# registered in the API lifespan consume "<module>.attack_request".
 EXPLOIT_ATTACK_NAME = "exploit"
 
 # The session scope is a process-wide singleton owned by
@@ -64,12 +63,12 @@ class AttackSummary(BaseModel):
 
 
 class AttackInventory(BaseModel):
-    attacks: List[AttackSummary]
+    attacks: list[AttackSummary]
     total: int
 
 
 class ExecuteRequest(BaseModel):
-    params: Dict[str, Any] = Field(default_factory=dict)
+    params: dict[str, Any] = Field(default_factory=dict)
     dry_run: bool = False
 
 
@@ -80,8 +79,8 @@ class ExecuteResponse(BaseModel):
 
 @router.get("/attacks", response_model=AttackInventory)
 async def list_attacks() -> AttackInventory:
-    raw: Dict[str, str] = list_modules()
-    attacks: List[AttackSummary] = []
+    raw: dict[str, str] = list_modules()
+    attacks: list[AttackSummary] = []
     for name, class_path in raw.items():
         attacks.append(
             AttackSummary(
@@ -105,10 +104,13 @@ def _infer_plugin_type(name: str, class_path: str) -> str:
 
 
 def _environment_mode() -> str:
-    try:
-        return get_config().environment.mode.lower()
-    except Exception:
-        return "lab"
+    """Return the deployment environment mode: lab (default), field, or airgap.
+
+    Sourced from the ``URBAN_HS_ENVIRONMENT_MODE`` env var. (Previously this
+    read ``config.environment.mode``, a field that does not exist, so the
+    airgap gate below was permanently unreachable.)
+    """
+    return os.environ.get("URBAN_HS_ENVIRONMENT_MODE", "lab").strip().lower()
 
 
 def _raise_if_airgap() -> None:
@@ -139,6 +141,9 @@ async def execute_attack(
         )
         return ExecuteResponse(job_id=job_id, attack=attack_name)
 
+    # Airgap mode forbids any real (non-dry-run) execution.
+    _raise_if_airgap()
+
     # --- Session scope guard rail (blocks real execution) ---
     category = attack_name.split("_", 1)[0] if "_" in attack_name else attack_name
     target = payload.params.get("target") or payload.params.get("interface") or ""
@@ -159,10 +164,19 @@ async def execute_attack(
     if attack_name == EXPLOIT_ATTACK_NAME:
         return await _execute_exploit(attack_name, payload, job_id)
 
-    cmd = f"echo 'Executing {attack_name} with params={payload.params}'"
-    limits = ProcessLimits(max_duration_sec=60)
-    asyncio.create_task(_process_manager.run(cmd, limits=limits))
-    await _audit_log(attack_name, payload.params, job_id, "queued")
+    # Dispatch to the audited event-bus path: the plugin handlers registered
+    # in the API lifespan consume "<module>.attack_request" and execute the
+    # request (re-validating the session scope). Replaces the former inert
+    # `echo` placeholder.
+    await get_event_bus().publish(
+        Event(
+            type=f"{attack_name}.attack_request",
+            payload={"job_id": job_id, **payload.params},
+            source="api",
+            priority=EventPriority.HIGH,
+        )
+    )
+    await _audit_log(attack_name, payload.params, job_id, "dispatched")
 
     return ExecuteResponse(job_id=job_id, attack=attack_name)
 
@@ -232,10 +246,10 @@ async def _execute_exploit(
 
 async def _audit_log(
     attack_name: str,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     job_id: str,
     outcome: str,
-    error: Optional[str] = None,
+    error: str | None = None,
     simulated: bool = False,
 ) -> None:
     """Persist an auditable record of every execution attempt.
@@ -249,7 +263,7 @@ async def _audit_log(
         await get_storage().log_jsonl(
             "attack_audit",
             {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "job_id": job_id,
                 "attack": attack_name,
                 "target": params.get("target") or params.get("target_address"),
@@ -265,13 +279,13 @@ async def _audit_log(
         )
 
 
-async def _publish(event_type: str, payload: Dict[str, Any]) -> None:
+async def _publish(event_type: str, payload: dict[str, Any]) -> None:
     event_bus = get_event_bus()
     await event_bus.publish(
         Event(
             type=event_type,
             payload=payload,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             correlation_id=payload.get("job_id", str(uuid.uuid4())),
             source="api.attacks",
             priority=EventPriority.NORMAL,

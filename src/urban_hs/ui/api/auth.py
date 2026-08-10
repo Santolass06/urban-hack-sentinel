@@ -7,17 +7,17 @@ Tokens are JWT-based, with secret persisted to disk on first run.
 
 from __future__ import annotations
 
-import logging
 import os
 import secrets
+from datetime import UTC
 from pathlib import Path
-from typing import Optional
 
+import structlog
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _SECRET_FILE = Path("~/.config/urban-hs/jwt_secret").expanduser()
 _security = HTTPBearer(auto_error=False)
@@ -41,7 +41,7 @@ def _load_or_create_secret() -> str:
     return secret
 
 
-_jwt_secret: Optional[str] = None
+_jwt_secret: str | None = None
 
 
 def get_jwt_secret() -> str:
@@ -57,8 +57,8 @@ def create_access_token(
     algorithm: str = "HS256",
 ) -> str:
     """Create a signed JWT access token."""
-    from datetime import datetime, timedelta, timezone
-    now = datetime.now(timezone.utc)
+    from datetime import datetime, timedelta
+    now = datetime.now(UTC)
     payload = {
         "sub": subject,
         "iat": now,
@@ -73,7 +73,7 @@ def decode_access_token(token: str, algorithm: str = "HS256") -> dict:
 
 
 async def verify_bearer(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(_security),
 ) -> str:
     """FastAPI dependency: verify Bearer token, return subject."""
     if credentials is None:

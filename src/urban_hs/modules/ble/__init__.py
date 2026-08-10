@@ -2,6 +2,7 @@
 BLE Module - Fast Pair, WhisperPair, and Bluetooth LE auditing.
 """
 
+from urban_hs.modules.ble.bettercap import BettercapBLEClient, BettercapBLEDevice
 from urban_hs.modules.ble.exploit_chain import (
     AccountKeyManager,
     BlueZBondingManager,
@@ -25,7 +26,6 @@ from urban_hs.modules.ble.fastpair import (
     _load_device_quirks,
     get_device_quirks,
 )
-from urban_hs.modules.ble.bettercap import BettercapBLEClient, BettercapBLEDevice
 
 __all__ = [
     "FastPairScanner",

@@ -11,12 +11,16 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
+import structlog
+
 from urban_hs.hal.types import BLEDevice, BLEDeviceType
+
+logger = structlog.get_logger(__name__)
 
 
 class BLEBackend(ABC):
     @abstractmethod
-    async def scan(self, duration: int = 10) -> List[Any]:
+    async def scan(self, duration: int = 10) -> list[Any]:
         ...
 
     @abstractmethod
@@ -28,7 +32,7 @@ class BLEBackend(ABC):
         ...
 
     @abstractmethod
-    def devices(self) -> List[Any]:
+    def devices(self) -> list[Any]:
         ...
 
     @abstractmethod
@@ -42,7 +46,7 @@ class _BleakBackend(BLEBackend):
     def __init__(self, adapter: str = "hci0") -> None:
         self.adapter = adapter
         self._scanner: Any = None
-        self._devices: Dict[str, Any] = {}
+        self._devices: dict[str, Any] = {}
 
     async def start(self) -> None:
         try:
@@ -59,7 +63,7 @@ class _BleakBackend(BLEBackend):
             except Exception:
                 pass
 
-    async def scan(self, duration: int = 10) -> List[Any]:
+    async def scan(self, duration: int = 10) -> list[Any]:
         await self.start()
         import asyncio
         await asyncio.sleep(duration)
@@ -67,7 +71,7 @@ class _BleakBackend(BLEBackend):
         self._devices = {d.address: d for d in self._scanner.get_devices()}
         return list(self._devices.values())
 
-    def devices(self) -> List[Any]:
+    def devices(self) -> list[Any]:
         return list(self._devices.values())
 
     def name(self) -> str:
@@ -84,7 +88,7 @@ class _BlueZBackend(BLEBackend):
 
     def __init__(self, adapter: str = "hci0") -> None:
         self.adapter = adapter
-        self._devices: Dict[str, Any] = {}
+        self._devices: dict[str, Any] = {}
         self._bus: Any = None
         self._adapter_path = f"/org/bluez/{adapter}"
         self._scanning = False
@@ -134,7 +138,7 @@ class _BlueZBackend(BLEBackend):
             self._bus.disconnect()
             self._bus = None
 
-    async def scan(self, duration: int = 10) -> List[Any]:
+    async def scan(self, duration: int = 10) -> list[Any]:
         if not self._bus:
             await self.start()
 
@@ -192,7 +196,7 @@ class _BlueZBackend(BLEBackend):
         except Exception as exc:
             logger.debug("BlueZ device enumeration failed", error=str(exc))
 
-    def devices(self) -> List[Any]:
+    def devices(self) -> list[Any]:
         return list(self._devices.values())
 
     def name(self) -> str:

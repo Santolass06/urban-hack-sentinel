@@ -5,7 +5,7 @@ IP camera discovery and enumeration.
 import asyncio
 import re
 import socket
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import structlog
 
@@ -42,7 +42,7 @@ class CameraDiscovery:
             ("admin", "888888"),
         ]
 
-    async def discover_cameras(self, network: str = "192.168.1.0/24") -> List[Dict[str, Any]]:
+    async def discover_cameras(self, network: str = "192.168.1.0/24") -> list[dict[str, Any]]:
         cameras = []
 
         mdns_cameras = await self._mdns_discovery()
@@ -70,7 +70,7 @@ class CameraDiscovery:
 
         return unique
 
-    async def _mdns_discovery(self) -> List[Dict[str, Any]]:
+    async def _mdns_discovery(self) -> list[dict[str, Any]]:
         cameras = []
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -97,7 +97,7 @@ class CameraDiscovery:
 
         return cameras
 
-    async def _upnp_discovery(self) -> List[Dict[str, Any]]:
+    async def _upnp_discovery(self) -> list[dict[str, Any]]:
         cameras = []
         try:
             ssdp_request = (
@@ -120,7 +120,7 @@ class CameraDiscovery:
                     while True:
                         data, addr = sock.recvfrom(65535)
                         responses.append((data, addr))
-                except socket.timeout:
+                except TimeoutError:
                     pass
                 finally:
                     sock.close()
@@ -142,7 +142,7 @@ class CameraDiscovery:
 
         return cameras
 
-    async def _onvif_discovery(self) -> List[Dict[str, Any]]:
+    async def _onvif_discovery(self) -> list[dict[str, Any]]:
         cameras = []
         try:
             ws_discovery = (
@@ -181,7 +181,7 @@ class CameraDiscovery:
                                 "xaddrs": xaddrs_match.group(1) if xaddrs_match else None,
                                 "types": types_match.group(1) if types_match else None,
                             })
-                except socket.timeout:
+                except TimeoutError:
                     pass
                 finally:
                     sock.close()
@@ -193,7 +193,7 @@ class CameraDiscovery:
             logger.warning("ONVIF discovery failed", error=str(e))
         return cameras
 
-    async def _rtsp_scan(self, network: str) -> List[Dict[str, Any]]:
+    async def _rtsp_scan(self, network: str) -> list[dict[str, Any]]:
         cameras = []
         try:
             nmap = NmapScanner()
@@ -217,14 +217,14 @@ class CameraDiscovery:
             logger.warning("RTSP scan failed", error=str(e))
         return cameras
 
-    async def _rtsp_describe(self, ip: str, port: int) -> Optional[Dict[str, Any]]:
+    async def _rtsp_describe(self, ip: str, port: int) -> dict[str, Any] | None:
         try:
             url = f"rtsp://{ip}:{port}/"
             return {"url": url}
         except Exception:
             return None
 
-    async def _http_fingerprint(self, network: str) -> List[Dict[str, Any]]:
+    async def _http_fingerprint(self, network: str) -> list[dict[str, Any]]:
         if not AIOHTTP_AVAILABLE:
             logger.warning("HTTP fingerprinting requires aiohttp package, skipping")
             return []
@@ -249,7 +249,7 @@ class CameraDiscovery:
                 "/ISAPI/Streaming/channels/101/picture", "/onvif/Device"
             ]
 
-            async def check_http_camera(host_ip: str, port: int) -> Optional[Dict[str, Any]]:
+            async def check_http_camera(host_ip: str, port: int) -> dict[str, Any] | None:
                 try:
                     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
                         for path in camera_paths:
@@ -287,7 +287,7 @@ class CameraDiscovery:
 
             results = await asyncio.gather(*tasks, return_exceptions=True)
             for result in results:
-                if result and not isinstance(result, Exception):
+                if result and not isinstance(result, BaseException):
                     cameras.append(result)
 
         except Exception as e:

@@ -12,10 +12,11 @@ from __future__ import annotations
 
 import hashlib
 import os
-import structlog
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional
+from shutil import which as shutil_which
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 
@@ -26,7 +27,7 @@ class BinaryRecord:
 
     name: str
     path: str
-    sha256: Optional[str] = None  # hex digest; empty means not enforced
+    sha256: str | None = None  # hex digest; empty means not enforced
     description: str = ""
 
 
@@ -34,12 +35,12 @@ class BinaryRecord:
 class BinaryManifest:
     """Registry of trusted binaries grouped by logical key."""
 
-    records: Dict[str, BinaryRecord] = field(default_factory=dict)
+    records: dict[str, BinaryRecord] = field(default_factory=dict)
 
     def add(self, record: BinaryRecord) -> None:
         self.records[record.name] = record
 
-    def get(self, name: str) -> Optional[BinaryRecord]:
+    def get(self, name: str) -> BinaryRecord | None:
         return self.records.get(name)
 
 
@@ -48,7 +49,7 @@ class BinaryVerifier:
 
     def __init__(
         self,
-        manifest: Optional[BinaryManifest] = None,
+        manifest: BinaryManifest | None = None,
         enforcement: str = "warn",
     ):
         """
@@ -62,7 +63,7 @@ class BinaryVerifier:
         self.manifest = manifest or BinaryManifest()
         self.enforcement = enforcement
 
-    def resolve_path(self, name: str) -> Optional[str]:
+    def resolve_path(self, name: str) -> str | None:
         """Resolve a binary name to an absolute path using PATH."""
         record = self.manifest.get(name)
         if record is None:
@@ -74,7 +75,7 @@ class BinaryVerifier:
         abs_path = shutil_which(name)
         return abs_path
 
-    def sha256_of(self, path: str) -> Optional[str]:
+    def sha256_of(self, path: str) -> str | None:
         try:
             h = hashlib.sha256()
             with open(path, "rb") as f:
@@ -120,7 +121,7 @@ class BinaryVerifier:
         logger.debug("Binary verified", name=name, path=path)
         return True
 
-    def check_all(self) -> Dict[str, bool]:
+    def check_all(self) -> dict[str, bool]:
         return {name: self.check(name) for name in self.manifest.records}
 
     def _handle_failure(self, name: str, reason: str) -> bool:
@@ -260,7 +261,7 @@ def build_manifest() -> BinaryManifest:
 
 
 # shared manifest instance
-_default_manifest: Optional[BinaryManifest] = None
+_default_manifest: BinaryManifest | None = None
 
 
 def get_binary_verifier(enforcement: str = "warn") -> BinaryVerifier:
@@ -270,11 +271,11 @@ def get_binary_verifier(enforcement: str = "warn") -> BinaryVerifier:
     return BinaryVerifier(manifest=_default_manifest, enforcement=enforcement)
 
 
-def verify_binary(name: str, verifier: Optional[BinaryVerifier] = None) -> bool:
+def verify_binary(name: str, verifier: BinaryVerifier | None = None) -> bool:
     return (verifier or get_binary_verifier()).check(name)
 
 
-def verify_required_binaries(names, verifier: Optional[BinaryVerifier] = None) -> bool:
+def verify_required_binaries(names, verifier: BinaryVerifier | None = None) -> bool:
     item = verifier or get_binary_verifier()
     results = [item.check(name) for name in names]
     return all(results)

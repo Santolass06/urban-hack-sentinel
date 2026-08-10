@@ -1,15 +1,15 @@
 """Tests for WPA/WPS/Deauth attack classes with mocked subprocess calls."""
 
 import asyncio
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from urban_hs.modules.wifi.attacks.base import AttackStatus
-from urban_hs.modules.wifi.attacks.wpa import HandshakeAttack, PMKIDAttack
-from urban_hs.modules.wifi.attacks.wps import WPSPixieAttack, WPSPinAttack
 from urban_hs.modules.wifi.attacks.deauth import DeauthAttack, Kr00kAttack
+from urban_hs.modules.wifi.attacks.wpa import HandshakeAttack, PMKIDAttack
+from urban_hs.modules.wifi.attacks.wps import WPSPixieAttack
 
 
 @pytest.fixture
@@ -38,7 +38,6 @@ class TestHandshakeAttack:
 
         mock_verify = AsyncMock(return_value=True)
 
-        import urban_hs.modules.wifi.attacks.wpa as wpa_mod
 
         original_start = attack._start_airodump
 

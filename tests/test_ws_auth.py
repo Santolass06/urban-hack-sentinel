@@ -7,8 +7,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from urban_hs.ui.api.main import app as api_app
 from urban_hs.ui.api.auth import create_access_token
+from urban_hs.ui.api.main import app as api_app
 
 
 @pytest.fixture()
@@ -23,9 +23,8 @@ def client(application: FastAPI):
 
 
 def test_websocket_events_without_token_rejected(client: TestClient) -> None:
-    with pytest.raises(WebSocketDisconnect):
-        with client.websocket_connect("/events"):
-            pass
+    with pytest.raises(WebSocketDisconnect), client.websocket_connect("/events"):
+        pass
 
 
 def test_websocket_events_with_invalid_token_rejected(client: TestClient) -> None:

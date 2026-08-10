@@ -14,13 +14,14 @@ Tool: https://github.com/vanhoefm/fragattacks
 
 import asyncio
 import os
+import re
 import shutil
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Callable, List, Optional
 
 import structlog
 
@@ -39,15 +40,15 @@ class FragAttackType(Enum):
 class FragAttackConfig:
     """Configuration for FragAttacks."""
     interface: str = "wlan0"
-    monitor_interface: Optional[str] = None
-    output_dir: Optional[str] = None
+    monitor_interface: str | None = None
+    output_dir: str | None = None
     attack_timeout: int = 120
-    attack_types: Optional[List[FragAttackType]] = None
+    attack_types: list[FragAttackType] | None = None
     target_bssid: str = ""
-    target_essid: Optional[str] = None
+    target_essid: str | None = None
     channel: int = 1
-    client_mac: Optional[str] = None
-    fragattacks_path: Optional[str] = None  # Path to fragattacks repo
+    client_mac: str | None = None
+    fragattacks_path: str | None = None  # Path to fragattacks repo
 
 
 @dataclass
@@ -79,7 +80,7 @@ class FragAttacksWrapper:
             from urban_hs.core.config import get_config
             config.output_dir = str(Path(get_config().storage.resolve_wifi_attacks_dir()) / "fragattacks")
         self.config = config
-        self.results: List[FragAttackResult] = []
+        self.results: list[FragAttackResult] = []
         self._running = False
 
         # Find fragattacks installation
@@ -88,7 +89,7 @@ class FragAttacksWrapper:
         if not self.fragattacks_path:
             logger.warning("fragattacks tool not found. Install from https://github.com/vanhoefm/fragattacks")
 
-    def _find_fragattacks(self) -> Optional[str]:
+    def _find_fragattacks(self) -> str | None:
         """Find fragattacks installation."""
         # Check configured path
         if self.config.fragattacks_path and Path(self.config.fragattacks_path).exists():
@@ -166,11 +167,11 @@ class FragAttacksWrapper:
     async def run_tests(
         self,
         target_bssid: str,
-        target_essid: Optional[str] = None,
+        target_essid: str | None = None,
         channel: int = 1,
-        client_mac: Optional[str] = None,
-        callback: Optional[Callable[[str], None]] = None,
-    ) -> List[FragAttackResult]:
+        client_mac: str | None = None,
+        callback: Callable[[str], None] | None = None,
+    ) -> list[FragAttackResult]:
         """
         Run all configured FragAttacks tests.
 
@@ -225,10 +226,10 @@ class FragAttacksWrapper:
         self,
         attack_type: FragAttackType,
         target_bssid: str,
-        target_essid: Optional[str],
+        target_essid: str | None,
         channel: int,
-        client_mac: Optional[str],
-        callback: Optional[Callable[[str], None]],
+        client_mac: str | None,
+        callback: Callable[[str], None] | None,
     ) -> FragAttackResult:
         """Run a single FragAttack test."""
 
@@ -267,7 +268,7 @@ class FragAttacksWrapper:
                     proc.communicate(),
                     timeout=self.config.attack_timeout,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
                 await proc.wait()
                 return FragAttackResult(
@@ -287,7 +288,7 @@ class FragAttacksWrapper:
                 attack_type=attack_type,
                 vulnerable=vulnerable,
                 details=details,
-                affected_frames=0,  # TODO: parse from output
+                affected_frames=self._count_affected_frames(stdout_text),
             )
 
         except Exception as e:
@@ -303,8 +304,8 @@ class FragAttacksWrapper:
         attack_type: FragAttackType,
         target: str,
         channel: int,
-        client_mac: Optional[str],
-    ) -> Optional[List[str]]:
+        client_mac: str | None,
+    ) -> list[str] | None:
         """Build command for fragattacks tool."""
         if not self.fragattacks_path:
             return None
@@ -331,6 +332,21 @@ class FragAttacksWrapper:
 
         return base_cmd
 
+    @staticmethod
+    def _count_affected_frames(output: str) -> int:
+        """Count frames the FragAttacks tool reports as injected/received.
+
+        Prefers an explicit ``<n> frame(s)`` count in the output; otherwise
+        counts the per-frame event lines the tool prints.
+        """
+        counts = [int(n) for n in re.findall(r"(\d+)\s+frames?\b", output, re.IGNORECASE)]
+        if counts:
+            return max(counts)
+        keywords = ("injected", "received frame", "sent frame", "fragment")
+        return sum(
+            1 for line in output.splitlines() if any(k in line.lower() for k in keywords)
+        )
+
     def _parse_result(self, output: str, attack_type: FragAttackType) -> bool:
         """Parse tool output to determine vulnerability."""
         output_lower = output.lower()
@@ -353,8 +369,8 @@ class FragAttacksWrapper:
 async def scan_fragattacks_targets(
     interface: str = "wlan0",
     channel: int = 1,
-    callback: Optional[Callable[[str], None]] = None,
-) -> List[str]:
+    callback: Callable[[str], None] | None = None,
+) -> list[str]:
     """Scan for targets vulnerable to FragAttacks using wireless scan."""
     # This would integrate with WiFi scanner to find WPA2/WPA3 networks
     return []

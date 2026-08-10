@@ -9,11 +9,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-import urllib.request
 import urllib.parse
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
 
 import structlog
 
@@ -31,7 +30,7 @@ class HashtopolisTask:
 class HashtopolisClient:
     """Async Hashtopolis REST API Client for hash offloading."""
 
-    def __init__(self, server_url: Optional[str] = None, api_token: Optional[str] = None):
+    def __init__(self, server_url: str | None = None, api_token: str | None = None):
         if server_url is None or api_token is None:
             from urban_hs.core.config import get_config
             cfg = get_config()
@@ -40,7 +39,7 @@ class HashtopolisClient:
         self.server_url = server_url.rstrip("/")
         self.api_token = api_token
 
-    async def upload_hash_file(self, hash_file: Path, task_name: str = "urban-hs-auto") -> Optional[HashtopolisTask]:
+    async def upload_hash_file(self, hash_file: Path, task_name: str = "urban-hs-auto") -> HashtopolisTask | None:
         """Upload a .22000 hash file to Hashtopolis for remote cracking."""
         if not hash_file.exists():
             logger.warning("Hash file does not exist", path=str(hash_file))

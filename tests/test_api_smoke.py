@@ -6,7 +6,6 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from urban_hs.ui.api.main import app
-from urban_hs.ui.api.auth import create_access_token
 
 
 @pytest.mark.asyncio

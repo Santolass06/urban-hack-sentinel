@@ -61,6 +61,7 @@ async def system_status() -> dict[str, Any]:
 async def list_cracked_hashes() -> dict[str, Any]:
     """Get list of cracked hashes from potfile / storage (F2.6)."""
     from pathlib import Path
+
     from urban_hs.core.config import get_config
 
     cracked_dir = Path(get_config().storage.resolve_wifi_attacks_dir()) / "cracked"

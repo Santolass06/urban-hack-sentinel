@@ -11,7 +11,7 @@ import asyncio
 import json
 import logging
 import uuid
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import APIRouter, Request
 
@@ -24,7 +24,7 @@ router = APIRouter(dependencies=[require_auth()])
 
 
 @router.get("/interfaces")
-async def list_wifi_interfaces() -> Dict[str, Any]:
+async def list_wifi_interfaces() -> dict[str, Any]:
     import os
     import shutil
 
@@ -62,9 +62,9 @@ async def list_wifi_interfaces() -> Dict[str, Any]:
 @limiter.limit("10/minute")
 async def start_wifi_scan(
     request: Request, interface: str = "wlan1", strategy: str = "passive_only"
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     job_id = str(uuid.uuid4())
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "job_id": job_id,
         "interface": interface,
         "strategy": strategy,
@@ -124,12 +124,12 @@ async def start_wifi_scan(
 
 
 @router.get("/jobs/{job_id}")
-async def get_wifi_scan_job(job_id: str) -> Dict[str, Any]:
+async def get_wifi_scan_job(job_id: str) -> dict[str, Any]:
     return {"job_id": job_id, "status": "unknown"}
 
 
 @router.get("/capabilities/{interface}")
-async def get_interface_capabilities(interface: str) -> Dict[str, Any]:
+async def get_interface_capabilities(interface: str) -> dict[str, Any]:
     """Return auto-detected capabilities for a given Wi-Fi interface (Issue #1.1)."""
     from urban_hs.hal.wifi import detect_interface_capabilities
 
@@ -138,14 +138,14 @@ async def get_interface_capabilities(interface: str) -> Dict[str, Any]:
 
 
 @router.get("/map-data")
-async def get_map_data() -> Dict[str, Any]:
+async def get_map_data() -> dict[str, Any]:
     """Return GPS-localized Wi-Fi and BLE networks for Leaflet map rendering (Issue #1.2)."""
     from urban_hs.core.storage import get_storage
 
     try:
         storage = get_storage()
         # Query devices with GPS metadata or coordinates
-        rows = await storage.query("SELECT id, mac, type, meta FROM devices WHERE meta LIKE '%lat%' OR meta LIKE '%gps%'")
+        rows = await storage.fetchall("SELECT id, mac, type, meta FROM devices WHERE meta LIKE '%lat%' OR meta LIKE '%gps%'")
         points = []
         for row in rows:
             meta = json.loads(row.get("meta", "{}"))

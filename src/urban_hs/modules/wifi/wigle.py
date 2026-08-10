@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
 
 import structlog
 
@@ -19,17 +18,17 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class WigleLocation:
     bssid: str
-    ssid: Optional[str] = None
-    lat: Optional[float] = None
-    lon: Optional[float] = None
-    country: Optional[str] = None
-    city: Optional[str] = None
+    ssid: str | None = None
+    lat: float | None = None
+    lon: float | None = None
+    country: str | None = None
+    city: str | None = None
 
 
 class WigleClient:
     """Async WiGLE.net REST API v2 client (Issue #2.2)."""
 
-    def __init__(self, api_name: Optional[str] = None, api_key: Optional[str] = None):
+    def __init__(self, api_name: str | None = None, api_key: str | None = None):
         if api_name is None or api_key is None:
             from urban_hs.core.config import get_config
             cfg = get_config()
@@ -38,16 +37,16 @@ class WigleClient:
         self.api_name = api_name
         self.api_key = api_key
 
-    async def search_bssid(self, bssid: str) -> Optional[WigleLocation]:
+    async def search_bssid(self, bssid: str) -> WigleLocation | None:
         """Query WiGLE API for coordinates matching BSSID."""
         if not self.api_name or not self.api_key:
             logger.info("WiGLE API credentials not set, skipping remote query", bssid=bssid)
             return None
 
-        import urllib.request
-        import urllib.parse
-        import json
         import base64
+        import json
+        import urllib.parse
+        import urllib.request
 
         url = f"https://api.wigle.net/api/v2/network/search?netid={urllib.parse.quote(bssid)}"
         auth_header = base64.b64encode(f"{self.api_name}:{self.api_key}".encode()).decode()

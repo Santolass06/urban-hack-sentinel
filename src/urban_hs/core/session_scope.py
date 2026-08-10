@@ -16,7 +16,6 @@ hardware or scanner code so it can be tested without dependencies.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Set
 
 
 @dataclass
@@ -34,8 +33,8 @@ class SessionScope:
             are blocked regardless of target/category.
     """
 
-    allowed_targets: Set[str] = field(default_factory=set)
-    allowed_categories: Set[str] = field(default_factory=set)
+    allowed_targets: set[str] = field(default_factory=set)
+    allowed_categories: set[str] = field(default_factory=set)
     allow_active: bool = False
 
     # ------------------------------------------------------------------

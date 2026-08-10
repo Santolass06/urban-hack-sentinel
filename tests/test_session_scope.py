@@ -6,7 +6,6 @@ import pytest
 
 from urban_hs.core.session_scope import SessionScope
 
-
 # ------------------------------------------------------------------
 # Construction defaults
 # ------------------------------------------------------------------

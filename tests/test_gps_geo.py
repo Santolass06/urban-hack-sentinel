@@ -5,8 +5,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-import pytest
-from urban_hs.core.event_bus import Event, EventBus
+from urban_hs.core.event_bus import EventBus
 from urban_hs.modules.wifi.managers import GeoMapper, NMEAParser, WardriveMode
 
 

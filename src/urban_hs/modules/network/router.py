@@ -5,8 +5,9 @@ Router vulnerability scanner using RouterSploit and Hydra.
 import asyncio
 import os
 import re
+import shutil
 import tempfile
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import structlog
 
@@ -29,19 +30,71 @@ class RouterScanner:
     async def scan_router(
         self,
         target_ip: str,
-        ports: List[int] = None,
-        modules: List[str] = None,
-    ) -> List[Dict[str, Any]]:
-        return []
+        ports: list[int] = None,
+        modules: list[str] = None,
+    ) -> list[dict[str, Any]]:
+        """Scan a router for known vulnerabilities via RouterSploit.
+
+        Feeds a resource script to the ``routersploit`` console (autopwn by
+        default, or the given exploit modules) and parses the vulnerable
+        findings. Returns an empty list if RouterSploit is not installed.
+        """
+        if not shutil.which(self.routersploit_path) and not os.path.exists(self.routersploit_path):
+            logger.warning("routersploit not found", path=self.routersploit_path)
+            return []
+
+        if modules:
+            script_lines: list[str] = []
+            for module in modules:
+                script_lines += [f"use {module}", f"set target {target_ip}", "run"]
+            script_lines.append("exit")
+        else:
+            script_lines = ["use scanners/autopwn", f"set target {target_ip}", "run", "exit"]
+        script = "\n".join(script_lines) + "\n"
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                self.routersploit_path,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(
+                proc.communicate(script.encode()), timeout=1800
+            )
+        except Exception as exc:
+            logger.warning("routersploit scan failed", target=target_ip, error=str(exc))
+            return []
+
+        return self._parse_autopwn_output(stdout.decode(errors="replace"), target_ip)
+
+    @staticmethod
+    def _parse_autopwn_output(output: str, target_ip: str) -> list[dict[str, Any]]:
+        """Extract vulnerable findings from RouterSploit autopwn/exploit output."""
+        ansi = re.compile(r"\x1b\[[0-9;]*m")
+        results: list[dict[str, Any]] = []
+        for raw in output.splitlines():
+            line = ansi.sub("", raw).strip()
+            low = line.lower()
+            if "vulnerable" not in low or "not vulnerable" in low or "non-vulnerable" in low:
+                continue
+            match = re.search(r"((?:exploits|creds)/\S+)", line)
+            results.append({
+                "ip": target_ip,
+                "module": match.group(1) if match else None,
+                "vulnerable": True,
+                "detail": line,
+            })
+        return results
 
     async def brute_force_credentials(
         self,
         target_ip: str,
         service: str,
-        username_list: List[str],
-        password_list: List[str],
-        port: Optional[int] = None,
-    ) -> List[Dict[str, Any]]:
+        username_list: list[str],
+        password_list: list[str],
+        port: int | None = None,
+    ) -> list[dict[str, Any]]:
         port = port or self._default_port(service)
 
         with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as uf:

@@ -8,34 +8,21 @@ Tests cover:
 - Device quirks loading from JSON
 """
 
-import asyncio
 import json
-import os
-import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from urban_hs.modules.ble import (
-    FastPairScanner,
-    WhisperPairTester,
-    WhisperPairExploit,
-    BLEDevice,
-    BLEDeviceType,
     FAST_PAIR_SERVICE_UUID,
-    KEY_BASED_PAIRING_UUID,
-    get_device_quirks,
+    FastPairScanner,
+    WhisperPairExploit,
     _load_device_quirks,
+    get_device_quirks,
 )
-
 from urban_hs.modules.ble.exploit_chain import (
-    BlueZBondingManager,
-    AccountKeyManager,
-    HFPAudioCapture,
     WhisperPairFullExploit,
-    BondingStatus,
-    CRYPTOGRAPHY_AVAILABLE,
 )
 
 
@@ -76,7 +63,7 @@ class MockBleakClient:
     async def read_gatt_char(self, uuid):
         if "1234" in str(uuid):  # Account Key characteristic
             return b"\x04" + bytes([0] * 15)
-        elif "1235" in str(uuid):  # Passkey characteristic
+        if "1235" in str(uuid):  # Passkey characteristic
             return b"\x00" * 16
         return b""
 
@@ -104,14 +91,14 @@ async def test_fastpair_scanner_initialization(mock_bleak_scanner):
 async def test_parse_fast_pair_advertisement_pairing_mode(mock_bleak_scanner):
     """Test parsing Fast Pair advertisement in pairing mode."""
     scanner = FastPairScanner(adapter="hci0")
-    
+
     ad_data = {
         FAST_PAIR_SERVICE_UUID.lower(): bytes([0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f])
     }
-    
+
     device = MockBLEDevice(address="AA:BB:CC:DD:EE:FF", name="Test Device")
     adv_data = MockAdvertisementData(service_data=ad_data, rssi=-50)
-    
+
     # Call the internal parsing method directly
     fp_device = scanner._parse_fast_pair_advertisement(
         name=device.name,
@@ -119,7 +106,7 @@ async def test_parse_fast_pair_advertisement_pairing_mode(mock_bleak_scanner):
         data=ad_data[FAST_PAIR_SERVICE_UUID.lower()],
         rssi=adv_data.rssi,
     )
-    
+
     assert fp_device.address == "AA:BB:CC:DD:EE:FF"
     assert fp_device.name == "Test Device"
     assert fp_device.rssi == -50
@@ -130,21 +117,21 @@ async def test_parse_fast_pair_advertisement_pairing_mode(mock_bleak_scanner):
 async def test_parse_fast_pair_advertisement_account_key_filter(mock_bleak_scanner):
     """Test parsing Fast Pair advertisement with account key filter."""
     scanner = FastPairScanner(adapter="hci0")
-    
+
     ad_data = {
         FAST_PAIR_SERVICE_UUID.lower(): bytes([0x01] + [0x00] * 15)
     }
-    
+
     device = MockBLEDevice(address="AA:BB:CC:DD:EE:FF")
     adv_data = MockAdvertisementData(service_data=ad_data, rssi=-60)
-    
+
     result = scanner._parse_fast_pair_advertisement(
         name=device.name,
         address=device.address,
         data=ad_data[FAST_PAIR_SERVICE_UUID.lower()],
         rssi=adv_data.rssi,
     )
-    
+
     assert result is not None
 
 
@@ -153,21 +140,21 @@ async def test_parse_fast_pair_advertisement_account_key_filter(mock_bleak_scann
 async def test_parse_fast_pair_advertisement_extended(mock_bleak_scanner):
     """Test parsing extended Fast Pair advertisement."""
     scanner = FastPairScanner(adapter="hci0")
-    
+
     ad_data = {
         FAST_PAIR_SERVICE_UUID.lower(): bytes([0x02] + [0x00] * 15)
     }
-    
+
     device = MockBLEDevice(address="AA:BB:CC:DD:EE:FF")
     adv_data = MockAdvertisementData(service_data=ad_data, rssi=-55)
-    
+
     result = scanner._parse_fast_pair_advertisement(
         name=device.name,
         address=device.address,
         data=ad_data[FAST_PAIR_SERVICE_UUID.lower()],
         rssi=adv_data.rssi,
     )
-    
+
     assert result is not None
     assert result.fast_pair_model_id is not None
 
@@ -179,7 +166,7 @@ async def test_parse_fast_pair_advertisement_extended(mock_bleak_scanner):
 def test_load_device_quirks_default():
     """Test loading default device quirks."""
     quirks = _load_device_quirks()
-    
+
     assert "devices" in quirks
     assert "default_quirks" in quirks
     assert len(quirks["devices"]) > 0
@@ -221,7 +208,7 @@ def exploit():
 async def test_whisperpair_full_exploit_init():
     """Test WhisperPairFullExploit initialization."""
     exploit = WhisperPairFullExploit(target_mac="AA:BB:CC:DD:EE:FF")
-    
+
     assert exploit.target_mac == "AA:BB:CC:DD:EE:FF"
     assert exploit.adapter_ble == "hci0"
     assert exploit.bonding_manager is not None
@@ -238,7 +225,7 @@ async def test_whisperpair_exploit_execute_strategy_success(exploit):
         "AA:BB:CC:DD:EE:FF",
         WhisperPairExploit.Strategy.RAW_KBP,
     )
-    
+
     # Result depends on mocked BleakClient behavior
     assert "status" in result
 
@@ -249,7 +236,7 @@ async def test_whisperpair_exploit_execute_all_strategies(exploit):
     """Test executing all KBP strategies."""
     with patch("urban_hs.modules.ble.fastpair.get_device_quirks", return_value={}):
         result = await exploit.execute_all_strategies("AA:BB:CC:DD:EE:FF")
-    
+
     # Result structure
     assert "strategies" in result
     assert "success" in result
@@ -265,17 +252,17 @@ def test_device_quirks_json_structure():
     if config_path.exists():
         with open(config_path) as f:
             data = json.load(f)
-        
+
         assert "devices" in data
         assert "default_quirks" in data
         assert isinstance(data["devices"], dict)
-        
+
         for model_id, device in data["devices"].items():
             assert "model_name" in device
             assert "manufacturer" in device
             assert "type" in device
             assert "quirks" in device
-            
+
             quirks = device["quirks"]
             assert "needsExtendedResponse" in quirks
             assert "prefersBrEdrBonding" in quirks

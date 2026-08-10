@@ -11,7 +11,7 @@ Supports:
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import structlog
 
@@ -101,35 +101,35 @@ class DuckyCommandType(Enum):
 class DuckyCommand:
     """Parsed DuckyScript command."""
     type: DuckyCommandType
-    args: List[str] = field(default_factory=list)
+    args: list[str] = field(default_factory=list)
     line_number: int = 0
     raw_line: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    
+    metadata: dict[str, Any] = field(default_factory=dict)
+
     # For structured commands (v3)
     loop_count: int = 1
     var_name: str = ""
     var_value: str = ""
     function_name: str = ""
     condition: str = ""
-    body: List['DuckyCommand'] = field(default_factory=list)
+    body: list['DuckyCommand'] = field(default_factory=list)
 
 
 @dataclass
 class ParsedScript:
     """Result of parsing a DuckyScript file."""
-    commands: List[DuckyCommand] = field(default_factory=list)
-    variables: Dict[str, str] = field(default_factory=dict)
-    functions: Dict[str, List[DuckyCommand]] = field(default_factory=dict)
+    commands: list[DuckyCommand] = field(default_factory=list)
+    variables: dict[str, str] = field(default_factory=dict)
+    functions: dict[str, list[DuckyCommand]] = field(default_factory=dict)
     default_delay: int = 0
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 class KeyMapper:
     """Maps keys to HID keycodes for different layouts."""
-    
+
     # US Layout (base)
     US_KEYMAP = {
         'a': 0x04, 'b': 0x05, 'c': 0x06, 'd': 0x07, 'e': 0x08,
@@ -169,7 +169,7 @@ class KeyMapper:
         'right_control': 0xE4, 'right_shift': 0xE5,
         'right_alt': 0xE6, 'right_gui': 0xE7,
     }
-    
+
     # Layout-specific overrides
     LAYOUT_OVERRIDES = {
         KeyboardLayout.GB: {
@@ -195,22 +195,22 @@ class KeyMapper:
             # Russian layout would need full remapping
         },
     }
-    
+
     def __init__(self, layout: KeyboardLayout = KeyboardLayout.US):
         self.layout = layout
         self.keymap = self._build_keymap(layout)
-    
-    def _build_keymap(self, layout: KeyboardLayout) -> Dict[str, int]:
+
+    def _build_keymap(self, layout: KeyboardLayout) -> dict[str, int]:
         keymap = self.US_KEYMAP.copy()
         if layout in self.LAYOUT_OVERRIDES:
             keymap.update(self.LAYOUT_OVERRIDES[layout])
         return keymap
-    
-    def get_keycode(self, key: str) -> Optional[int]:
+
+    def get_keycode(self, key: str) -> int | None:
         """Get keycode for a key name."""
         return self.keymap.get(key.lower())
-    
-    def string_to_keycodes(self, text: str) -> List[tuple]:
+
+    def string_to_keycodes(self, text: str) -> list[tuple]:
         """Convert string to list of (keycode, modifier) tuples."""
         result = []
         for char in text:
@@ -237,29 +237,29 @@ class KeyMapper:
 
 class DuckyParser:
     """DuckyScript parser supporting v1 and v3 syntax."""
-    
+
     def __init__(self, layout: KeyboardLayout = KeyboardLayout.US):
         self.layout = layout
         self.mapper = KeyMapper(layout)
-        self.variables: Dict[str, str] = {}
-        self.functions: Dict[str, List[DuckyCommand]] = {}
+        self.variables: dict[str, str] = {}
+        self.functions: dict[str, list[DuckyCommand]] = {}
         self.default_delay = 0
-        
+
     def parse(self, content: str) -> ParsedScript:
         """Parse DuckyScript content."""
         script = ParsedScript()
         lines = content.split('\n')
-        
+
         i = 0
         while i < len(lines):
             line = lines[i].rstrip()
             line_num = i + 1
-            
+
             # Skip empty lines and comments
             if not line.strip() or line.strip().startswith(('#', 'REM')):
                 i += 1
                 continue
-            
+
             # Parse command
             try:
                 cmd, consumed = self._parse_line(line, line_num, lines, i)
@@ -282,51 +282,51 @@ class DuckyParser:
                         continue
             except Exception as e:
                 script.errors.append(f"Line {line_num}: {str(e)}")
-            
+
             i += 1
-        
+
         script.metadata = {
             'layout': self.layout.value,
             'variable_count': len(script.variables),
             'function_count': len(script.functions),
             'command_count': len(script.commands),
         }
-        
+
         return script
-    
-    def _parse_line(self, line: str, line_num: int, all_lines: List[str], current_idx: int) -> tuple:
+
+    def _parse_line(self, line: str, line_num: int, all_lines: list[str], current_idx: int) -> tuple:
         """Parse a single line into a DuckyCommand."""
         stripped = line.strip()
         if not stripped:
             return None, 0
-        
+
         # Split into command and args
         parts = stripped.split(' ', 1)
         cmd_str = parts[0].upper()
         args_str = parts[1] if len(parts) > 1 else ''
-        
+
         # Parse arguments (respect quotes)
         args = self._parse_args(args_str)
-        
+
         # Map command
         cmd_type = self._map_command(cmd_str)
-        
+
         cmd = DuckyCommand(
             type=cmd_type,
             args=args,
             line_number=line_num,
             raw_line=line,
         )
-        
+
         return cmd, 0
-    
-    def _parse_args(self, args_str: str) -> List[str]:
+
+    def _parse_args(self, args_str: str) -> list[str]:
         """Parse arguments respecting quotes."""
         args = []
         current = ''
         in_quotes = False
         quote_char = None
-        
+
         i = 0
         while i < len(args_str):
             char = args_str[i]
@@ -343,12 +343,12 @@ class DuckyParser:
             else:
                 current += char
             i += 1
-        
+
         if current:
             args.append(current)
-        
+
         return args
-    
+
     def _map_command(self, cmd_str: str) -> DuckyCommandType:
         """Map command string to DuckyCommandType."""
         # Handle aliases
@@ -361,67 +361,67 @@ class DuckyParser:
             'ESCAPE': 'ESC',
             'DELETE': 'DELETE',
         }
-        
+
         cmd = aliases.get(cmd_str, cmd_str)
-        
+
         try:
             return DuckyCommandType(cmd)
         except ValueError:
             # Unknown command, treat as STRING
             return DuckyCommandType.STRING
-    
-    def _parse_function_body(self, lines: List[str], start_idx: int) -> tuple:
+
+    def _parse_function_body(self, lines: list[str], start_idx: int) -> tuple:
         """Parse function body until ENDFUNCTION."""
         body = []
         i = start_idx
         while i < len(lines):
             line = lines[i].rstrip()
             stripped = line.strip()
-            
+
             if stripped.upper() == 'ENDFUNCTION':
                 return body, i - start_idx
-            
+
             if stripped and not stripped.startswith(('#', 'REM')):
                 cmd, _ = self._parse_line(line, i + 1, lines, i)
                 if cmd:
                     body.append(cmd)
             i += 1
-        
+
         return body, i - start_idx
 
 
 class DuckyEncoder:
     """Encodes DuckyScript commands to HID reports."""
-    
+
     def __init__(self, layout: KeyboardLayout = KeyboardLayout.US):
         self.mapper = KeyMapper(layout)
         self.default_delay = 0
-    
-    def encode(self, script: ParsedScript) -> List[bytes]:
+
+    def encode(self, script: ParsedScript) -> list[bytes]:
         """Encode parsed script to HID reports."""
         reports = []
-        
+
         for cmd in script.commands:
             reports.extend(self._encode_command(cmd))
-            
+
             # Add default delay between commands
             if self.default_delay > 0 and cmd.type != DuckyCommandType.DELAY:
                 reports.append(self._create_delay_report(self.default_delay))
-        
+
         return reports
-    
-    def _encode_command(self, cmd: DuckyCommand) -> List[bytes]:
+
+    def _encode_command(self, cmd: DuckyCommand) -> list[bytes]:
         """Encode a single command to HID reports."""
         reports = []
-        
+
         if cmd.type == DuckyCommandType.DELAY:
             delay_ms = int(cmd.args[0]) if cmd.args else 0
             reports.append(self._create_delay_report(delay_ms))
-            
+
         elif cmd.type == DuckyCommandType.STRING:
             text = ' '.join(cmd.args)
             reports.extend(self._encode_string(cmd.args))
-            
+
         elif cmd.type in (DuckyCommandType.GUI, DuckyCommandType.WINDOWS, DuckyCommandType.COMMAND):
             reports.append(self._create_modifier_report(0xE3))  # Left GUI
             if cmd.args:
@@ -432,7 +432,7 @@ class DuckyEncoder:
                     reports.append(self._create_key_report(keycode))
                 reports.append(self._create_key_report(0x00))  # Release
             reports.append(self._create_modifier_report(0x00))  # Release all
-            
+
         elif cmd.type in (DuckyCommandType.CTRL, DuckyCommandType.CONTROL):
             reports.append(self._create_modifier_report(0xE0))  # Left Ctrl
             if cmd.args:
@@ -442,7 +442,7 @@ class DuckyEncoder:
                     reports.append(self._create_key_report(keycode))
                 reports.append(self._create_key_report(0x00))
             reports.append(self._create_modifier_report(0x00))
-            
+
         elif cmd.type in (DuckyCommandType.ALT,):
             reports.append(self._create_modifier_report(0xE2))  # Left Alt
             if cmd.args:
@@ -452,7 +452,7 @@ class DuckyEncoder:
                     reports.append(self._create_key_report(keycode))
                 reports.append(self._create_key_report(0x00))
             reports.append(self._create_modifier_report(0x00))
-            
+
         elif cmd.type in (DuckyCommandType.SHIFT,):
             reports.append(self._create_modifier_report(0xE1))  # Left Shift
             if cmd.args:
@@ -462,16 +462,16 @@ class DuckyEncoder:
                     reports.append(self._create_key_report(keycode))
                 reports.append(self._create_key_report(0x00))
             reports.append(self._create_modifier_report(0x00))
-            
+
         elif cmd.type == DuckyCommandType.ENTER:
             reports.append(self._create_key_report(0x28))
-            
+
         elif cmd.type == DuckyCommandType.TAB:
             reports.append(self._create_key_report(0x2B))
-            
+
         elif cmd.type == DuckyCommandType.SPACE:
             reports.append(self._create_key_report(0x2C))
-            
+
         elif cmd.type == DuckyCommandType.UP:
             reports.append(self._create_key_report(0x52))
         elif cmd.type == DuckyCommandType.DOWN:
@@ -480,15 +480,15 @@ class DuckyEncoder:
             reports.append(self._create_key_report(0x50))
         elif cmd.type == DuckyCommandType.RIGHT:
             reports.append(self._create_key_report(0x4F))
-            
+
         elif cmd.type == DuckyCommandType.DELETE:
             reports.append(self._create_key_report(0x4C))
         elif cmd.type == DuckyCommandType.BACKSPACE:
             reports.append(self._create_key_report(0x2A))
-            
+
         elif cmd.type == DuckyCommandType.ESC:
             reports.append(self._create_key_report(0x29))
-            
+
         elif cmd.type in (DuckyCommandType.F1, DuckyCommandType.F2, DuckyCommandType.F3,
                           DuckyCommandType.F4, DuckyCommandType.F5, DuckyCommandType.F6,
                           DuckyCommandType.F7, DuckyCommandType.F8, DuckyCommandType.F9,
@@ -499,18 +499,18 @@ class DuckyEncoder:
                 'F9': 0x42, 'F10': 0x43, 'F11': 0x44, 'F12': 0x45,
             }
             reports.append(self._create_key_report(fkey_map[cmd.type.value]))
-            
+
         elif cmd.type == DuckyCommandType.REPEAT:
             # Handled at higher level
             pass
-            
+
         return reports
-    
-    def _encode_string(self, args: List[str]) -> List[bytes]:
+
+    def _encode_string(self, args: list[str]) -> list[bytes]:
         """Encode string arguments to key reports."""
         reports = []
         text = ' '.join(args)
-        
+
         for keycode, modifier in self.mapper.string_to_keycodes(text):
             if modifier:
                 reports.append(self._create_modifier_report(modifier))
@@ -518,18 +518,18 @@ class DuckyEncoder:
             reports.append(self._create_key_report(0x00))  # Release
             if modifier:
                 reports.append(self._create_modifier_report(0x00))
-        
+
         return reports
-    
+
     def _create_key_report(self, keycode: int) -> bytes:
         """Create 8-byte keyboard report."""
         # Format: [modifier, reserved, keycode1, keycode2, keycode3, keycode4, keycode5, keycode6]
         return bytes([0x00, 0x00, keycode, 0x00, 0x00, 0x00, 0x00, 0x00])
-    
+
     def _create_modifier_report(self, modifier: int) -> bytes:
         """Create 8-byte modifier report."""
         return bytes([modifier, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-    
+
     def _create_delay_report(self, ms: int) -> bytes:
         """Create a special delay marker report."""
         # Use a special report format for delays
@@ -539,26 +539,26 @@ class DuckyEncoder:
 
 class DuckyCompiler:
     """Compiles DuckyScript from file or string to executable format."""
-    
+
     def __init__(self, layout: KeyboardLayout = KeyboardLayout.US):
         self.parser = DuckyParser(layout)
         self.encoder = DuckyEncoder(layout)
-    
-    def compile_file(self, filepath: Union[str, Path]) -> ParsedScript:
+
+    def compile_file(self, filepath: str | Path) -> ParsedScript:
         """Compile DuckyScript from file."""
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(filepath, encoding='utf-8') as f:
             content = f.read()
         return self.compile_string(content)
-    
+
     def compile_string(self, content: str) -> ParsedScript:
         """Compile DuckyScript from string."""
         return self.parser.parse(content)
-    
-    def encode_to_hid(self, script: ParsedScript) -> List[bytes]:
+
+    def encode_to_hid(self, script: ParsedScript) -> list[bytes]:
         """Encode parsed script to HID reports."""
         return self.encoder.encode(script)
-    
-    def save_compiled(self, script: ParsedScript, output_path: Union[str, Path]):
+
+    def save_compiled(self, script: ParsedScript, output_path: str | Path):
         """Save compiled script to binary format."""
         import json
         with open(output_path, 'w') as f:
@@ -568,11 +568,11 @@ class DuckyCompiler:
                 'functions': {k: [cmd.__dict__ for cmd in v] for k, v in script.functions.items()},
                 'default_delay': script.default_delay,
             }, f)
-    
-    def load_compiled(self, input_path: Union[str, Path]) -> ParsedScript:
+
+    def load_compiled(self, input_path: str | Path) -> ParsedScript:
         """Load compiled script from binary format."""
         import json
-        with open(input_path, 'r') as f:
+        with open(input_path) as f:
             data = json.load(f)
         script = ParsedScript()
         script.commands = [DuckyCommand(**cmd) for cmd in data.get('commands', [])]
@@ -597,7 +597,7 @@ def create_compiler(layout: KeyboardLayout = KeyboardLayout.US) -> DuckyCompiler
     return DuckyCompiler(layout)
 
 
-def load_ducky_file(filepath: Union[str, Path], layout: KeyboardLayout = KeyboardLayout.US) -> ParsedScript:
+def load_ducky_file(filepath: str | Path, layout: KeyboardLayout = KeyboardLayout.US) -> ParsedScript:
     """Convenience function to load and parse a DuckyScript file."""
     compiler = DuckyCompiler(layout)
     return compiler.compile_file(filepath)
@@ -607,7 +607,7 @@ def load_ducky_file(filepath: Union[str, Path], layout: KeyboardLayout = Keyboar
 def main():
     """Command-line interface for DuckyScript compilation."""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description='DuckyScript Compiler')
     parser.add_argument('input', help='Input DuckyScript file')
     parser.add_argument('-o', '--output', help='Output compiled file')
@@ -615,25 +615,25 @@ def main():
                         default='us', help='Keyboard layout')
     parser.add_argument('--encode', action='store_true', help='Encode to HID reports')
     parser.add_argument('--encode-output', help='Output encoded HID reports')
-    
+
     args = parser.parse_args()
-    
+
     layout = KeyboardLayout(args.layout)
     compiler = DuckyCompiler(KeyboardLayout(args.layout))
-    
+
     script = compiler.compile_file(args.input)
-    
+
     if script.errors:
         for error in script.errors:
             print(f"ERROR: {error}")
     if script.warnings:
         for warning in script.warnings:
             print(f"WARNING: {warning}")
-    
+
     if args.output:
         compiler.save_compiled(script, args.output)
         print(f"Saved compiled script to {args.output}")
-    
+
     if args.encode:
         reports = compiler.encode_to_hid(script)
         if args.encode_output:

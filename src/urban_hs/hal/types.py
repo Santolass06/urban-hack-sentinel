@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class BLEDeviceType(Enum):
@@ -24,24 +24,24 @@ class BLEDeviceType(Enum):
 class BLEDevice:
     """Information about a discovered BLE device."""
     address: str
-    name: Optional[str] = None
+    name: str | None = None
     rssi: int = -100
     device_type: BLEDeviceType = BLEDeviceType.UNKNOWN
-    fast_pair_model_id: Optional[str] = None
+    fast_pair_model_id: str | None = None
     fast_pair_in_pairing_mode: bool = False
     has_account_key_filter: bool = False
-    manufacturer_data: Dict[int, bytes] = field(default_factory=dict)
-    service_uuids: List[str] = field(default_factory=list)
+    manufacturer_data: dict[int, bytes] = field(default_factory=dict)
+    service_uuids: list[str] = field(default_factory=list)
     last_seen: int = field(default_factory=lambda: int(datetime.utcnow().timestamp() * 1000))
-    gps_lat: Optional[float] = None
-    gps_lon: Optional[float] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    gps_lat: float | None = None
+    gps_lon: float | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def is_fast_pair(self) -> bool:
         return self.device_type in (BLEDeviceType.FAST_PAIR, BLEDeviceType.WHISPER_PAIR_VULNERABLE)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "address": self.address,
             "name": self.name,

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 from fastapi import FastAPI
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
-from urban_hs.ui.api.main import app as api_app
 from urban_hs.ui.api.auth import create_access_token
+from urban_hs.ui.api.main import app as api_app
 
 
 @pytest.fixture()

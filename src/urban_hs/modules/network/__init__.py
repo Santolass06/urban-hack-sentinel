@@ -10,16 +10,18 @@ import json
 import os
 import re
 import socket
-import structlog
 import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable, Set, Union
 from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Union
 from urllib.parse import urlparse
+
+import structlog
 
 try:
     import aiohttp
@@ -53,47 +55,47 @@ class PortInfo:
     port: int
     protocol: str  # tcp/udp
     state: str  # open/closed/filtered
-    service: Optional[str] = None
-    version: Optional[str] = None
-    product: Optional[str] = None
-    extrainfo: Optional[str] = None
-    scripts: List[Dict[str, Any]] = field(default_factory=list)
+    service: str | None = None
+    version: str | None = None
+    product: str | None = None
+    extrainfo: str | None = None
+    scripts: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
 class HostInfo:
     ip: str
-    hostname: Optional[str] = None
-    mac: Optional[str] = None
-    vendor: Optional[str] = None
-    os_guess: Optional[str] = None
-    os_accuracy: Optional[int] = None
+    hostname: str | None = None
+    mac: str | None = None
+    vendor: str | None = None
+    os_guess: str | None = None
+    os_accuracy: int | None = None
     state: str = "up"
-    ports: List[PortInfo] = field(default_factory=list)
-    vulns: List[Dict[str, Any]] = field(default_factory=list)
+    ports: list[PortInfo] = field(default_factory=list)
+    vulns: list[dict[str, Any]] = field(default_factory=list)
     last_seen: datetime = field(default_factory=datetime.utcnow)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class Vulnerability:
     id: str
-    cve_id: Optional[str] = None
+    cve_id: str | None = None
     name: str = ""
     severity: Severity = Severity.UNKNOWN
-    cvss_score: Optional[float] = None
+    cvss_score: float | None = None
     description: str = ""
     target_ip: str = ""
-    target_port: Optional[int] = None
+    target_port: int | None = None
     exploit_available: bool = False
-    exploit_path: Optional[str] = None
-    metasploit_module: Optional[str] = None
-    nuclei_template: Optional[str] = None
+    exploit_path: str | None = None
+    metasploit_module: str | None = None
+    nuclei_template: str | None = None
     status: str = "identified"  # identified, exploited, failed, patched
-    exploited_at: Optional[datetime] = None
-    proof: Dict[str, Any] = field(default_factory=dict)
-    references: List[str] = field(default_factory=list)
-    tags: List[str] = field(default_factory=list)
+    exploited_at: datetime | None = None
+    proof: dict[str, Any] = field(default_factory=dict)
+    references: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     discovered_at: datetime = field(default_factory=datetime.utcnow)
 
 
@@ -115,7 +117,7 @@ class NmapScanner:
         nmap_path: str = "nmap",
         default_timing: str = "3",
         default_ports: str = "1-1000",
-        default_scripts: List[str] = None,
+        default_scripts: list[str] = None,
     ):
         self.nmap_path = nmap_path
         self.default_timing = default_timing
@@ -124,20 +126,20 @@ class NmapScanner:
 
     async def scan(
         self,
-        targets: Union[str, List[str]],
+        targets: str | list[str],
         scan_type: ScanType = ScanType.FULL_SCAN,
-        ports: Optional[str] = None,
-        timing: Optional[str] = None,
-        scripts: Optional[List[str]] = None,
-        extra_args: List[str] = None,
+        ports: str | None = None,
+        timing: str | None = None,
+        scripts: list[str] | None = None,
+        extra_args: list[str] = None,
         timeout: int = 300,
-    ) -> List[HostInfo]:
+    ) -> list[HostInfo]:
         """
         Execute nmap scan and return parsed HostInfo objects.
         """
         if isinstance(targets, str):
             targets = [targets]
-        
+
         # Validate targets to prevent argument injection
         validated_targets = []
         for target in targets:
@@ -156,24 +158,24 @@ class NmapScanner:
                         validated_targets.append(target)
                     else:
                         logger.warning("Skipping invalid target", target=target)
-        
+
         targets = validated_targets
         if not targets:
             logger.error("No valid targets provided")
             return []
-        
+
         cmd = [self.nmap_path]
-        
+
         # Timing template
         cmd.extend(["-T", timing or self.default_timing])
-        
+
         # Output format
         cmd.extend(["-oX", "-"])  # XML to stdout
-        
+
         # Scan type specific options
         # Check for root privileges for OS fingerprinting
         has_root = os.geteuid() == 0
-        
+
         if scan_type == ScanType.HOST_DISCOVERY:
             cmd.append("-sn")
         elif scan_type == ScanType.PORT_SCAN:
@@ -201,15 +203,15 @@ class NmapScanner:
                 logger.warning("OS fingerprinting (-O) requires root privileges, skipping")
             cmd.extend(["-p", ports or self.default_ports])
             cmd.extend(["--script", ",".join(self.default_scripts)])
-        
+
         # Custom scripts
         if scripts:
             cmd.extend(["--script", ",".join(scripts)])
-        
+
         # Extra arguments
         if extra_args:
             cmd.extend(extra_args)
-        
+
         # Targets
         cmd.extend(targets)
 
@@ -221,7 +223,7 @@ class NmapScanner:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            
+
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
 
             if proc.returncode != 0 and proc.returncode != 1:  # 1 = hosts down
@@ -231,14 +233,14 @@ class NmapScanner:
 
             return self._parse_xml_output(stdout.decode())
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("Nmap scan timeout", timeout=timeout)
             return []
         except Exception as e:
             logger.error("Nmap scan error", error=str(e))
             return []
 
-    def _parse_xml_output(self, xml_str: str) -> List[HostInfo]:
+    def _parse_xml_output(self, xml_str: str) -> list[HostInfo]:
         """Parse nmap XML output into HostInfo objects."""
         hosts = []
         try:
@@ -257,7 +259,7 @@ class NmapScanner:
 
         return hosts
 
-    def _parse_host_element(self, host_elem: ET.Element) -> Optional[HostInfo]:
+    def _parse_host_element(self, host_elem: ET.Element) -> HostInfo | None:
         """Parse individual host XML element."""
         # Host state
         status = host_elem.find("status")
@@ -317,15 +319,15 @@ class NmapScanner:
             ports=ports,
         )
 
-    def _parse_port_element(self, port_elem: ET.Element) -> Optional[PortInfo]:
+    def _parse_port_element(self, port_elem: ET.Element) -> PortInfo | None:
         """Parse individual port element."""
         try:
             port = int(port_elem.get("portid", 0))
             protocol = port_elem.get("protocol", "tcp")
-            
+
             state_elem = port_elem.find("state")
             state = state_elem.get("state", "unknown") if state_elem is not None else "unknown"
-            
+
             if state != "open":
                 return PortInfo(port=port, protocol=protocol, state=state)
 
@@ -334,7 +336,7 @@ class NmapScanner:
             version = None
             product = None
             extrainfo = None
-            
+
             if service_elem is not None:
                 service = service_elem.get("name")
                 version = service_elem.get("version")
@@ -374,9 +376,9 @@ class NucleiRunner:
     def __init__(
         self,
         nuclei_path: str = "nuclei",
-        templates_dir: Optional[str] = None,
-        severity_levels: List[str] = None,
-        tags: List[str] = None,
+        templates_dir: str | None = None,
+        severity_levels: list[str] = None,
+        tags: list[str] = None,
         rate_limit: int = 150,
         timeout: int = 300,
     ):
@@ -389,42 +391,42 @@ class NucleiRunner:
 
     async def scan(
         self,
-        targets: Union[str, List[str]],
-        template_dirs: List[str] = None,
-        exclude_tags: List[str] = None,
-        extra_args: List[str] = None,
-    ) -> List[Vulnerability]:
+        targets: str | list[str],
+        template_dirs: list[str] = None,
+        exclude_tags: list[str] = None,
+        extra_args: list[str] = None,
+    ) -> list[Vulnerability]:
         """Execute nuclei scan and return vulnerabilities."""
         if isinstance(targets, str):
             targets = [targets]
 
         cmd = [self.nuclei_path]
-        
+
         # Targets
         cmd.extend(["-target", ",".join(targets)])
-        
+
         # Template directories
         if template_dirs:
             for d in template_dirs:
                 cmd.extend(["-t", d])
-        
+
         # Severity filter
         if self.severity_levels:
             cmd.extend(["-severity", ",".join(self.severity_levels)])
-        
+
         # Tags
         if self.tags:
             cmd.extend(["-tags", ",".join(self.tags)])
         if exclude_tags:
             for tag in exclude_tags:
                 cmd.extend(["-exclude-tags", tag])
-        
+
         # Rate limiting
         cmd.extend(["-rate-limit", str(self.rate_limit)])
-        
+
         # Output format
         cmd.extend(["-jsonl", "-"])
-        
+
         # Extra args
         if extra_args:
             cmd.extend(extra_args)
@@ -439,7 +441,7 @@ class NucleiRunner:
             )
 
             vulnerabilities = []
-            
+
             # Read JSONL output line by line
             async for line in proc.stdout:
                 line = line.decode().strip()
@@ -458,14 +460,14 @@ class NucleiRunner:
             logger.info("Nuclei scan completed", vulns_found=len(vulnerabilities))
             return vulnerabilities
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("Nuclei scan timeout")
             return []
         except Exception as e:
             logger.error("Nuclei scan error", error=str(e))
             return []
 
-    def _parse_nuclei_finding(self, data: Dict[str, Any]) -> Optional[Vulnerability]:
+    def _parse_nuclei_finding(self, data: dict[str, Any]) -> Vulnerability | None:
         """Parse nuclei JSONL finding into Vulnerability object."""
         try:
             info = data.get("info", {})
@@ -477,7 +479,7 @@ class NucleiRunner:
                 "low": Severity.LOW,
                 "info": Severity.INFO,
             }
-            
+
             # Extract CVSS if available
             cvss = None
             cvss_str = info.get("classification", {}).get("cvss-metrics", "")
@@ -524,15 +526,15 @@ class SearchSploitIntegration:
     def __init__(self, searchsploit_path: str = "searchsploit"):
         self.searchsploit_path = searchsploit_path
 
-    async def search(self, query: str, exact: bool = False, json_output: bool = True) -> List[Dict[str, Any]]:
+    async def search(self, query: str, exact: bool = False, json_output: bool = True) -> list[dict[str, Any]]:
         """Search ExploitDB for exploits matching query."""
         cmd = [self.searchsploit_path]
-        
+
         if json_output:
             cmd.append("-j")
         if exact:
             cmd.append("-e")
-        
+
         cmd.append(query)
 
         try:
@@ -561,13 +563,13 @@ class SearchSploitIntegration:
 
         return []
 
-    async def get_exploit(self, exploit_id: str, output_dir: str) -> Optional[str]:
+    async def get_exploit(self, exploit_id: str, output_dir: str) -> str | None:
         """Download exploit by ID to output directory."""
         # Validate exploit_id - ExploitDB IDs are integers
         if not re.match(r'^\d+$', exploit_id):
             logger.error("Invalid exploit_id format", exploit_id=exploit_id)
             return None
-        
+
         try:
             cmd = [self.searchsploit_path, "-m", exploit_id, "-p", output_dir]
             proc = await asyncio.create_subprocess_exec(
@@ -609,9 +611,9 @@ class RouterScanner:
     async def scan_router(
         self,
         target_ip: str,
-        ports: Optional[List[int]] = None,
-        modules: Optional[List[str]] = None,
-    ) -> List[Dict[str, Any]]:
+        ports: list[int] | None = None,
+        modules: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         """Run RouterSploit modules against target."""
         if not modules:
             modules = ["scanners/autopwn"]
@@ -632,7 +634,7 @@ class RouterScanner:
                 logger.error("RouterSploit scan failed", returncode=proc.returncode, stderr=stderr.decode()[:500])
                 return []
             return self._parse_routersploit_output(stdout.decode())
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("RouterSploit scan timeout", target_ip=target_ip)
             return []
         except Exception as exc:
@@ -647,14 +649,14 @@ class RouterScanner:
     def _build_routersploit_script(
         self,
         target_ip: str,
-        ports: Optional[List[int]] = None,
-        modules: Optional[List[str]] = None,
+        ports: list[int] | None = None,
+        modules: list[str] | None = None,
     ) -> str:
         modules = modules or ["scanners/autopwn"]
         targets = [f"{target_ip}:{port}" for port in (ports or [80, 443, 8080, 8443])]
-        lines = ["use {}".format(modules[0])]
+        lines = [f"use {modules[0]}"]
         for target in targets:
-            lines.append("set target {}".format(target))
+            lines.append(f"set target {target}")
         lines.extend(["run", "exit"])
         handle, path = tempfile.mkstemp(suffix=".rsf", prefix="routersploit_")
         with os.fdopen(handle, "w") as fh:
@@ -662,8 +664,8 @@ class RouterScanner:
         return path
 
     @staticmethod
-    def _parse_routersploit_output(output: str) -> List[Dict[str, Any]]:
-        findings: List[Dict[str, Any]] = []
+    def _parse_routersploit_output(output: str) -> list[dict[str, Any]]:
+        findings: list[dict[str, Any]] = []
         for raw_line in output.splitlines():
             line = raw_line.strip()
             if not line:
@@ -675,10 +677,10 @@ class RouterScanner:
         self,
         target_ip: str,
         service: str,  # ssh, http, ftp, telnet, etc.
-        username_list: List[str],
-        password_list: List[str],
-        port: Optional[int] = None,
-    ) -> List[Dict[str, Any]]:
+        username_list: list[str],
+        password_list: list[str],
+        port: int | None = None,
+    ) -> list[dict[str, Any]]:
         """Run Hydra credential brute force."""
         port = port or self._default_port(service)
 
@@ -769,30 +771,30 @@ class CameraDiscovery:
             ("admin", "888888"),
         ]
 
-    async def discover_cameras(self, network: str = "192.168.1.0/24") -> List[Dict[str, Any]]:
+    async def discover_cameras(self, network: str = "192.168.1.0/24") -> list[dict[str, Any]]:
         """Discover cameras via multiple methods."""
         cameras = []
-        
+
         # 1. mDNS/Bonjour discovery
         mdns_cameras = await self._mdns_discovery()
         cameras.extend(mdns_cameras)
-        
+
         # 2. UPnP/SSDP discovery
         upnp_cameras = await self._upnp_discovery()
         cameras.extend(upnp_cameras)
-        
+
         # 3. ONVIF WS-Discovery
         onvif_cameras = await self._onvif_discovery()
         cameras.extend(onvif_cameras)
-        
+
         # 4. RTSP port scan
         rtsp_cameras = await self._rtsp_scan(network)
         cameras.extend(rtsp_cameras)
-        
+
         # 5. HTTP fingerprinting
         http_cameras = await self._http_fingerprint(network)
         cameras.extend(http_cameras)
-        
+
         # Deduplicate by IP/MAC
         seen = set()
         unique = []
@@ -801,10 +803,10 @@ class CameraDiscovery:
             if key and key not in seen:
                 seen.add(key)
                 unique.append(cam)
-        
+
         return unique
 
-    async def _mdns_discovery(self) -> List[Dict[str, Any]]:
+    async def _mdns_discovery(self) -> list[dict[str, Any]]:
         """Discover cameras via mDNS/Bonjour."""
         cameras = []
         try:
@@ -815,7 +817,7 @@ class CameraDiscovery:
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
-            
+
             # Parse avahi output (uses ; as delimiter from -p flag)
             for line in stdout.decode().split("\n"):
                 if "IPv4" in line or "IPv6" in line:
@@ -833,10 +835,10 @@ class CameraDiscovery:
                         })
         except Exception as e:
             logger.warning("mDNS discovery failed", error=str(e))
-        
+
         return cameras
 
-    async def _upnp_discovery(self) -> List[Dict[str, Any]]:
+    async def _upnp_discovery(self) -> list[dict[str, Any]]:
         """Discover devices via UPnP/SSDP."""
         cameras = []
         try:
@@ -849,27 +851,27 @@ class CameraDiscovery:
                 "ST: urn:schemas-upnp-org:device:Basic:1\r\n"
                 "\r\n"
             )
-            
+
             def _recv_responses():
                 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
                 sock.settimeout(5)
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                 sock.sendto(ssdp_request.encode(), ("239.255.255.250", 1900))
-                
+
                 responses = []
                 try:
                     while True:
                         data, addr = sock.recvfrom(65535)
                         responses.append((data, addr))
-                except socket.timeout:
+                except TimeoutError:
                     pass
                 finally:
                     sock.close()
                 return responses
-            
+
             # Run blocking socket I/O in thread pool to not block event loop
             responses = await asyncio.to_thread(_recv_responses)
-            
+
             for data, addr in responses:
                 response = data.decode()
                 if "camera" in response.lower() or "onvif" in response.lower() or "rtsp" in response.lower():
@@ -878,13 +880,13 @@ class CameraDiscovery:
                         "ip": addr[0],
                         "response": response[:500],
                     })
-                
+
         except Exception as e:
             logger.warning("UPnP discovery failed", error=str(e))
-        
+
         return cameras
 
-    async def _onvif_discovery(self) -> List[Dict[str, Any]]:
+    async def _onvif_discovery(self) -> list[dict[str, Any]]:
         """Discover ONVIF cameras via WS-Discovery."""
         cameras = []
         try:
@@ -904,13 +906,13 @@ class CameraDiscovery:
                 '</soap:Body>'
                 '</soap:Envelope>'
             )
-            
+
             # Send to multicast address
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
             sock.settimeout(5)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             sock.sendto(ws_discovery.encode(), ("239.255.255.250", 3702))
-            
+
             async def recv_responses():
                 responses = []
                 try:
@@ -930,19 +932,19 @@ class CameraDiscovery:
                                 "xaddrs": xaddrs_match.group(1) if xaddrs_match else None,
                                 "types": types_match.group(1) if types_match else None,
                             })
-                except socket.timeout:
+                except TimeoutError:
                     pass
                 finally:
                     sock.close()
                 return cameras
-            
+
             await recv_responses()
-            
+
         except Exception as e:
             logger.warning("ONVIF discovery failed", error=str(e))
         return cameras
 
-    async def _rtsp_scan(self, network: str) -> List[Dict[str, Any]]:
+    async def _rtsp_scan(self, network: str) -> list[dict[str, Any]]:
         """Scan for open RTSP ports (554, 8554)."""
         cameras = []
         try:
@@ -953,7 +955,7 @@ class CameraDiscovery:
                 scan_type=ScanType.PORT_SCAN,
                 ports="554,8554",
             )
-            
+
             for host in hosts:
                 for port in host.ports:
                     if port.port in (554, 8554) and port.state == "open":
@@ -969,7 +971,7 @@ class CameraDiscovery:
             logger.warning("RTSP scan failed", error=str(e))
         return cameras
 
-    async def _rtsp_describe(self, ip: str, port: int) -> Optional[Dict[str, Any]]:
+    async def _rtsp_describe(self, ip: str, port: int) -> dict[str, Any] | None:
         """Send RTSP DESCRIBE request to get stream info."""
         try:
             url = f"rtsp://{ip}:{port}/"
@@ -978,12 +980,12 @@ class CameraDiscovery:
         except Exception:
             return None
 
-    async def _http_fingerprint(self, network: str) -> List[Dict[str, Any]]:
+    async def _http_fingerprint(self, network: str) -> list[dict[str, Any]]:
         """Fingerprint cameras via HTTP."""
         if not AIOHTTP_AVAILABLE:
             logger.warning("HTTP fingerprinting requires aiohttp package, skipping")
             return []
-        
+
         cameras = []
         try:
             # Use nmap to find HTTP services on common camera ports
@@ -993,10 +995,11 @@ class CameraDiscovery:
                 scan_type=ScanType.PORT_SCAN,
                 ports="80,8080,8081,8443,8888,8889,5000,5001",
             )
-            
-            import aiohttp
+
             import asyncio
-            
+
+            import aiohttp
+
             # Common camera paths to check
             camera_paths = [
                 "/", "/index.html", "/video", "/stream", "/live",
@@ -1006,8 +1009,8 @@ class CameraDiscovery:
                 "/web/cgi-bin/hi3510/param.cgi", "/cgi-bin/main.cgi",
                 "/ISAPI/Streaming/channels/101/picture", "/onvif/Device"
             ]
-            
-            async def check_http_camera(host_ip: str, port: int) -> Optional[Dict[str, Any]]:
+
+            async def check_http_camera(host_ip: str, port: int) -> dict[str, Any] | None:
                 try:
                     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
                         for path in camera_paths:
@@ -1037,23 +1040,23 @@ class CameraDiscovery:
                 except Exception:
                     pass
                 return None
-            
+
             # Run checks in parallel
             tasks = []
             for host in hosts:
                 for port_info in host.ports:
                     if port_info.port in (80, 8080, 8081, 8443, 8888, 8889, 5000, 5001) and port_info.state == "open":
                         tasks.append(check_http_camera(host.ip, port_info.port))
-            
+
             results = await asyncio.gather(*tasks, return_exceptions=True)
             for result in results:
-                if result and not isinstance(result, Exception):
+                if result and not isinstance(result, BaseException):
                     cameras.append(result)
-                    
+
         except Exception as e:
             logger.warning("HTTP fingerprinting failed", error=str(e))
         return cameras
-    
+
     def _extract_title(self, html: str) -> str:
         """Extract title from HTML content."""
         import re
@@ -1085,8 +1088,8 @@ class NetworkModule:
         self,
         network: str = "192.168.1.0/24",
         scan_type: ScanType = ScanType.FULL_SCAN,
-        progress_callback: Optional[Callable[[str], None]] = None,
-    ) -> Dict[str, Any]:
+        progress_callback: Callable[[str], None] | None = None,
+    ) -> dict[str, Any]:
         results = {
             "hosts": [],
             "vulnerabilities": [],

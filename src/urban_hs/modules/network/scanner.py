@@ -7,7 +7,6 @@ import ipaddress
 import os
 import re
 import xml.etree.ElementTree as ET
-from typing import List, Optional, Union
 
 import structlog
 
@@ -34,7 +33,7 @@ class NmapScanner:
         nmap_path: str = "nmap",
         default_timing: str = "3",
         default_ports: str = "1-1000",
-        default_scripts: List[str] = None,
+        default_scripts: list[str] = None,
     ):
         self.nmap_path = nmap_path
         self.default_timing = default_timing
@@ -43,14 +42,14 @@ class NmapScanner:
 
     async def scan(
         self,
-        targets: Union[str, List[str]],
+        targets: str | list[str],
         scan_type: ScanType = ScanType.FULL_SCAN,
-        ports: Optional[str] = None,
-        timing: Optional[str] = None,
-        scripts: Optional[List[str]] = None,
-        extra_args: List[str] = None,
+        ports: str | None = None,
+        timing: str | None = None,
+        scripts: list[str] | None = None,
+        extra_args: list[str] = None,
         timeout: int = 300,
-    ) -> List[HostInfo]:
+    ) -> list[HostInfo]:
         if isinstance(targets, str):
             targets = [targets]
 
@@ -134,14 +133,14 @@ class NmapScanner:
 
             return self._parse_xml_output(stdout.decode())
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("Nmap scan timeout", timeout=timeout)
             return []
         except Exception as e:
             logger.error("Nmap scan error", error=str(e))
             return []
 
-    def _parse_xml_output(self, xml_str: str) -> List[HostInfo]:
+    def _parse_xml_output(self, xml_str: str) -> list[HostInfo]:
         hosts = []
         try:
             root = ET.fromstring(xml_str)
@@ -159,7 +158,7 @@ class NmapScanner:
 
         return hosts
 
-    def _parse_host_element(self, host_elem: ET.Element) -> Optional[HostInfo]:
+    def _parse_host_element(self, host_elem: ET.Element) -> HostInfo | None:
         status = host_elem.find("status")
         if status is None or status.get("state") != "up":
             return None
@@ -213,7 +212,7 @@ class NmapScanner:
             ports=ports,
         )
 
-    def _parse_port_element(self, port_elem: ET.Element) -> Optional[PortInfo]:
+    def _parse_port_element(self, port_elem: ET.Element) -> PortInfo | None:
         try:
             port = int(port_elem.get("portid", 0))
             protocol = port_elem.get("protocol", "tcp")

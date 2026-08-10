@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import hashlib
 import re
+from typing import Any
+
 import structlog
-from typing import Any, Dict, Optional, Union
 
 logger = structlog.get_logger(__name__)
 
@@ -40,13 +41,13 @@ def _pseudonymise_mac_raw(mac: str) -> str:
     return f"{digest[:2]}:{digest[2:4]}:{digest[4:6]}:{digest[6:8]}:{digest[8:10]}:{digest[10:12]}"
 
 
-def _pseudonymise_mac(mac: Optional[str]) -> str:
+def _pseudonymise_mac(mac: str | None) -> str:
     if not mac:
         return ""
     return _pseudonymise_mac_raw(mac)
 
 
-def pseudonymise_mac(mac: Optional[str]) -> str:
+def pseudonymise_mac(mac: str | None) -> str:
     if not mac:
         return mac if mac is not None else ""
     return _pseudonymise_mac(mac)
@@ -57,7 +58,7 @@ def pseudonymise_mac(mac: Optional[str]) -> str:
 
 def pseudonymise_macs(value: Any) -> Any:
     if isinstance(value, dict):
-        out: Dict[str, Any] = {}
+        out: dict[str, Any] = {}
         for k, v in value.items():
             lowered = k.lower()
             if lowered in {"mac", "bssid", "address", "source", "destination", "client", "device_id"}:

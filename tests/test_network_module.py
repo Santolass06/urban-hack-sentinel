@@ -1,9 +1,14 @@
 """Tests for network module types and classes."""
 
+
 import pytest
-from datetime import datetime
+
 from urban_hs.modules.network.types import (
-    ScanType, Severity, PortInfo, HostInfo, Vulnerability,
+    HostInfo,
+    PortInfo,
+    ScanType,
+    Severity,
+    Vulnerability,
 )
 
 

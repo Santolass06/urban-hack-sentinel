@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any, Dict, Optional, Set
+from typing import Any
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
 from jose import JWTError
@@ -22,7 +22,7 @@ class WebSocketConnectionManager:
     """Track active WebSocket connections for broadcast."""
 
     def __init__(self) -> None:
-        self._active: Set[WebSocket] = set()
+        self._active: set[WebSocket] = set()
 
     async def connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
@@ -31,7 +31,7 @@ class WebSocketConnectionManager:
     def disconnect(self, websocket: WebSocket) -> None:
         self._active.discard(websocket)
 
-    async def broadcast(self, message: Dict[str, Any]) -> None:
+    async def broadcast(self, message: dict[str, Any]) -> None:
         if not self._active:
             return
         payload = json.dumps(message)
@@ -54,7 +54,7 @@ class WebSocketEventHandler(EventHandler):
     """Forward selected events to connected WebSocket clients."""
 
     @property
-    def event_types(self) -> Set[str]:
+    def event_types(self) -> set[str]:
         return {"*"}
 
     async def handle(self, event: Event) -> None:
@@ -69,7 +69,7 @@ class WebSocketEventHandler(EventHandler):
         )
 
 
-def _extract_ws_token(websocket: WebSocket, token: Optional[str]) -> Optional[str]:
+def _extract_ws_token(websocket: WebSocket, token: str | None) -> str | None:
     """Pull a Bearer token from the Authorization header, falling back to ?token=."""
     auth_header = websocket.headers.get("authorization")
     if auth_header and auth_header.lower().startswith("bearer "):
@@ -79,7 +79,7 @@ def _extract_ws_token(websocket: WebSocket, token: Optional[str]) -> Optional[st
 
 @router.websocket("/events")
 async def websocket_events(
-    websocket: WebSocket, token: Optional[str] = Query(default=None)
+    websocket: WebSocket, token: str | None = Query(default=None)
 ) -> None:
     bearer = _extract_ws_token(websocket, token)
     if not bearer:

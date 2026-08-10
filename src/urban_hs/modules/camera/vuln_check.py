@@ -12,7 +12,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import structlog
 
@@ -39,18 +39,18 @@ class CameraVulnerability:
     name: str
     description: str
     manufacturer: str
-    models_affected: List[str] = field(default_factory=list)
-    firmware_versions_affected: List[str] = field(default_factory=list)
-    cvss_score: Optional[float] = None
+    models_affected: list[str] = field(default_factory=list)
+    firmware_versions_affected: list[str] = field(default_factory=list)
+    cvss_score: float | None = None
     severity: str = "unknown"  # critical, high, medium, low, info
     exploit_available: bool = False
-    exploit_path: Optional[str] = None
-    metasploit_module: Optional[str] = None
-    nuclei_template: Optional[str] = None
-    references: List[str] = field(default_factory=list)
+    exploit_path: str | None = None
+    metasploit_module: str | None = None
+    nuclei_template: str | None = None
+    references: list[str] = field(default_factory=list)
     status: VulnStatus = VulnStatus.UNKNOWN
-    verified_at: Optional[datetime] = None
-    proof: Dict[str, Any] = field(default_factory=dict)
+    verified_at: datetime | None = None
+    proof: dict[str, Any] = field(default_factory=dict)
 
 
 class CameraVulnChecker:
@@ -67,24 +67,24 @@ class CameraVulnChecker:
 
     def __init__(
         self,
-        cve_db_path: Optional[str] = None,
-        nuclei_runner: Optional[NucleiRunner] = None,
-        exploit_runner: Optional[ExploitRunner] = None,
+        cve_db_path: str | None = None,
+        nuclei_runner: NucleiRunner | None = None,
+        exploit_runner: ExploitRunner | None = None,
     ):
         self.cve_db = self._load_cve_db(cve_db_path) if cve_db_path else DEFAULT_CVE_DB
         self.nuclei = nuclei_runner or NucleiRunner()
         self.exploit_runner = exploit_runner or ExploitRunner()
-        
+
         # Build lookup indices
-        self._by_cve: Dict[str, CameraVulnerability] = {v.cve_id: v for v in self.cve_db}
-        self._by_manufacturer: Dict[str, List[CameraVulnerability]] = {}
+        self._by_cve: dict[str, CameraVulnerability] = {v.cve_id: v for v in self.cve_db}
+        self._by_manufacturer: dict[str, list[CameraVulnerability]] = {}
         for vuln in self.cve_db:
             self._by_manufacturer.setdefault(vuln.manufacturer.lower(), []).append(vuln)
 
-    def _load_cve_db(self, path: str) -> List[CameraVulnerability]:
+    def _load_cve_db(self, path: str) -> list[CameraVulnerability]:
         """Load CVE database from JSON file."""
         try:
-            with open(path, 'r') as f:
+            with open(path) as f:
                 data = json.load(f)
             return [CameraVulnerability(**v) for v in data]
         except Exception as e:
@@ -100,7 +100,7 @@ class CameraVulnChecker:
         except Exception as e:
             logger.error("Failed to save CVE database", path=path, error=str(e))
 
-    def _vuln_to_dict(self, vuln: CameraVulnerability) -> Dict[str, Any]:
+    def _vuln_to_dict(self, vuln: CameraVulnerability) -> dict[str, Any]:
         """Convert vulnerability to dictionary."""
         return {
             "cve_id": vuln.cve_id,
@@ -125,15 +125,15 @@ class CameraVulnChecker:
     # Vulnerability Lookup
     # ============================================================
 
-    def get_by_cve(self, cve_id: str) -> Optional[CameraVulnerability]:
+    def get_by_cve(self, cve_id: str) -> CameraVulnerability | None:
         """Get vulnerability by CVE ID."""
         return self._by_cve.get(cve_id.upper())
 
-    def get_by_manufacturer(self, manufacturer: str) -> List[CameraVulnerability]:
+    def get_by_manufacturer(self, manufacturer: str) -> list[CameraVulnerability]:
         """Get vulnerabilities for manufacturer."""
         return self._by_manufacturer.get(manufacturer.lower(), [])
 
-    def get_by_model(self, manufacturer: str, model: str) -> List[CameraVulnerability]:
+    def get_by_model(self, manufacturer: str, model: str) -> list[CameraVulnerability]:
         """Get vulnerabilities for specific model."""
         vulns = self.get_by_manufacturer(manufacturer)
         return [
@@ -141,7 +141,7 @@ class CameraVulnChecker:
             if not v.models_affected or model.lower() in [m.lower() for m in v.models_affected]
         ]
 
-    def get_by_firmware(self, manufacturer: str, firmware_version: str) -> List[CameraVulnerability]:
+    def get_by_firmware(self, manufacturer: str, firmware_version: str) -> list[CameraVulnerability]:
         """Get vulnerabilities for firmware version."""
         vulns = self.get_by_manufacturer(manufacturer)
         return [
@@ -156,12 +156,12 @@ class CameraVulnChecker:
     async def check_camera_vulnerabilities(
         self,
         manufacturer: str,
-        model: Optional[str] = None,
-        firmware_version: Optional[str] = None,
-        ip: Optional[str] = None,
+        model: str | None = None,
+        firmware_version: str | None = None,
+        ip: str | None = None,
         port: int = 80,
         run_exploits: bool = False,
-    ) -> List[CameraVulnerability]:
+    ) -> list[CameraVulnerability]:
         """
         Check camera for known vulnerabilities.
         
@@ -178,32 +178,32 @@ class CameraVulnChecker:
         """
         # Find relevant CVEs
         vulns = self.get_by_manufacturer(manufacturer)
-        
+
         if model:
             vulns = [v for v in vulns if not v.models_affected or model.lower() in [m.lower() for m in v.models_affected]]
-        
+
         if firmware_version:
             vulns = [v for v in vulns if not v.firmware_versions_affected or firmware_version in v.firmware_versions_affected]
-        
+
         results = []
         for vuln in vulns:
             # Run Nuclei template if available
             if vuln.nuclei_template and ip:
                 await self._verify_with_nuclei(vuln, ip, port)
-            
+
             # Run Metasploit module if available
             if vuln.metasploit_module and ip and run_exploits:
                 await self._verify_with_metasploit(vuln, ip, port)
-            
+
             results.append(vuln)
-        
+
         return results
 
     async def _verify_with_nuclei(self, vuln: CameraVulnerability, ip: str, port: int) -> bool:
         """Verify vulnerability using Nuclei template."""
         if not vuln.nuclei_template:
             return False
-        
+
         try:
             # Run specific template
             vulns = await self.nuclei.scan(
@@ -211,7 +211,7 @@ class CameraVulnChecker:
                 template_dirs=[],
                 extra_args=["-t", vuln.nuclei_template]
             )
-            
+
             if vulns:
                 vuln.status = VulnStatus.CONFIRMED_VULNERABLE
                 vuln.verified_at = datetime.utcnow()
@@ -219,14 +219,14 @@ class CameraVulnChecker:
                 return True
         except Exception as e:
             logger.warning("Nuclei verification failed", cve=vuln.cve_id, error=str(e))
-        
+
         return False
 
     async def _verify_with_metasploit(self, vuln: CameraVulnerability, ip: str, port: int) -> bool:
         """Verify vulnerability using Metasploit module."""
         if not vuln.metasploit_module:
             return False
-        
+
         try:
             target = ExploitTarget(
                 id=f"target_{ip}",
@@ -235,23 +235,23 @@ class CameraVulnChecker:
                 port=port,
                 service="http",
             )
-            
+
             result = await self.exploit_runner.execute(
                 exploit_name=vuln.metasploit_module,
                 target=target,
                 source=ExploitSource.METASPLOIT_RPC,
             )
-            
+
             if result.success:
                 vuln.status = VulnStatus.EXPLOITED
                 vuln.verified_at = datetime.utcnow()
                 vuln.proof["metasploit"] = result.__dict__
                 return True
-            elif vuln.status == VulnStatus.UNKNOWN:
+            if vuln.status == VulnStatus.UNKNOWN:
                 vuln.status = VulnStatus.POTENTIALLY_VULNERABLE
         except Exception as e:
             logger.warning("Metasploit verification failed", cve=vuln.cve_id, error=str(e))
-        
+
         return False
 
     # ============================================================
@@ -264,7 +264,7 @@ class CameraVulnChecker:
         self._by_cve[vuln.cve_id.upper()] = vuln
         self._by_manufacturer.setdefault(vuln.manufacturer.lower(), []).append(vuln)
 
-    def add_cve_from_dict(self, data: Dict[str, Any]):
+    def add_cve_from_dict(self, data: dict[str, Any]):
         """Add vulnerability from dictionary."""
         vuln = CameraVulnerability(
             cve_id=data["cve_id"],
@@ -284,7 +284,7 @@ class CameraVulnChecker:
         )
         self.add_vulnerability(vuln)
 
-    def search(self, query: str) -> List[CameraVulnerability]:
+    def search(self, query: str) -> list[CameraVulnerability]:
         """Search vulnerabilities by keyword."""
         query = query.lower()
         results = []
@@ -297,7 +297,7 @@ class CameraVulnChecker:
                 results.append(vuln)
         return results
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Get database statistics."""
         stats = {
             "total": len(self.cve_db),
@@ -307,14 +307,14 @@ class CameraVulnChecker:
             "with_nuclei": 0,
             "with_metasploit": 0,
         }
-        
+
         for vuln in self.cve_db:
             # By severity
             stats["by_severity"][vuln.severity] = stats["by_severity"].get(vuln.severity, 0) + 1
-            
+
             # By manufacturer
             stats["by_manufacturer"][vuln.manufacturer] = stats["by_manufacturer"].get(vuln.manufacturer, 0) + 1
-            
+
             # Capabilities
             if vuln.exploit_available:
                 stats["exploit_available"] += 1
@@ -322,7 +322,7 @@ class CameraVulnChecker:
                 stats["with_nuclei"] += 1
             if vuln.metasploit_module:
                 stats["with_metasploit"] += 1
-        
+
         return stats
 
 
@@ -364,7 +364,7 @@ DEFAULT_CVE_DB = [
         references=["https://nvd.nist.gov/vuln/detail/CVE-2021-36260"],
         status=VulnStatus.UNKNOWN,
     ),
-    
+
     # Dahua
     CameraVulnerability(
         cve_id="CVE-2018-19061",
@@ -395,7 +395,7 @@ DEFAULT_CVE_DB = [
         references=["https://nvd.nist.gov/vuln/detail/CVE-2021-33044"],
         status=VulnStatus.UNKNOWN,
     ),
-    
+
     # Axis
     CameraVulnerability(
         cve_id="CVE-2019-2337",
@@ -425,7 +425,7 @@ DEFAULT_CVE_DB = [
         references=["https://nvd.nist.gov/vuln/detail/CVE-2022-34818"],
         status=VulnStatus.UNKNOWN,
     ),
-    
+
     # Foscam
     CameraVulnerability(
         cve_id="CVE-2017-8296",
@@ -456,7 +456,7 @@ DEFAULT_CVE_DB = [
         references=["https://nvd.nist.gov/vuln/detail/CVE-2018-16882"],
         status=VulnStatus.UNKNOWN,
     ),
-    
+
     # Reolink
     CameraVulnerability(
         cve_id="CVE-2020-5854",
@@ -472,7 +472,7 @@ DEFAULT_CVE_DB = [
         references=["https://nvd.nist.gov/vuln/detail/CVE-2020-5854"],
         status=VulnStatus.UNKNOWN,
     ),
-    
+
     # TP-Link Tapo
     CameraVulnerability(
         cve_id="CVE-2023-27159",
@@ -488,7 +488,7 @@ DEFAULT_CVE_DB = [
         references=["https://nvd.nist.gov/vuln/detail/CVE-2023-27159"],
         status=VulnStatus.UNKNOWN,
     ),
-    
+
     # Ubiquiti UniFi
     CameraVulnerability(
         cve_id="CVE-2020-8126",
@@ -505,7 +505,7 @@ DEFAULT_CVE_DB = [
         references=["https://nvd.nist.gov/vuln/detail/CVE-2020-8126"],
         status=VulnStatus.UNKNOWN,
     ),
-    
+
     # Generic / Multiple Vendors
     CameraVulnerability(
         cve_id="CVE-2017-7921",
@@ -522,7 +522,7 @@ DEFAULT_CVE_DB = [
         references=["https://nvd.nist.gov/vuln/detail/CVE-2017-7921"],
         status=VulnStatus.UNKNOWN,
     ),
-    
+
     CameraVulnerability(
         cve_id="CVE-2018-12928",
         name="Multiple Vendor GoAhead Webserver Auth Bypass",
@@ -543,12 +543,12 @@ DEFAULT_CVE_DB = [
 
 async def check_camera_vulnerabilities(
     manufacturer: str,
-    model: Optional[str] = None,
-    firmware_version: Optional[str] = None,
-    ip: Optional[str] = None,
+    model: str | None = None,
+    firmware_version: str | None = None,
+    ip: str | None = None,
     port: int = 80,
     run_exploits: bool = False,
-) -> List[CameraVulnerability]:
+) -> list[CameraVulnerability]:
     """Convenience function to check camera vulnerabilities."""
     checker = CameraVulnChecker()
     return await checker.check_camera_vulnerabilities(
@@ -561,10 +561,10 @@ async def check_camera_vulnerabilities(
     )
 
 
-def load_cve_db(path: str) -> List[CameraVulnerability]:
+def load_cve_db(path: str) -> list[CameraVulnerability]:
     """Load CVE database from JSON file."""
     try:
-        with open(path, 'r') as f:
+        with open(path) as f:
             data = json.load(f)
         return [CameraVulnerability(**v) for v in data]
     except Exception as e:

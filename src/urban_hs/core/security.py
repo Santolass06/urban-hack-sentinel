@@ -11,10 +11,11 @@ Provides:
 
 import asyncio
 import os
+import shutil
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 import structlog
 
@@ -83,7 +84,7 @@ class SeccompRule:
     """Single seccomp filter rule."""
     syscall: str
     action: SeccompAction = SeccompAction.ALLOW
-    args: List[Tuple[int, int, int]] = field(default_factory=list)  # (index, op, value)
+    args: list[tuple[int, int, int]] = field(default_factory=list)  # (index, op, value)
     comment: str = ""
 
 
@@ -92,8 +93,8 @@ class SeccompProfile:
     """Complete seccomp-bpf filter profile."""
     name: str
     default_action: SeccompAction = SeccompAction.ERRNO
-    rules: List[SeccompRule] = field(default_factory=list)
-    
+    rules: list[SeccompRule] = field(default_factory=list)
+
     def to_json(self) -> str:
         """Export profile as JSON for libseccomp."""
         import json
@@ -111,7 +112,7 @@ class SeccompProfile:
 
 
 # Predefined capability sets per module
-MODULE_CAPABILITIES: Dict[str, List[Capability]] = {
+MODULE_CAPABILITIES: dict[str, list[Capability]] = {
     "wifi_scanner": [
         Capability.CAP_NET_RAW,
         Capability.CAP_NET_ADMIN,
@@ -158,7 +159,7 @@ MODULE_CAPABILITIES: Dict[str, List[Capability]] = {
 
 
 # Minimal seccomp profiles per module
-SECCOMP_PROFILES: Dict[str, SeccompProfile] = {
+SECCOMP_PROFILES: dict[str, SeccompProfile] = {
     "wifi_scanner": SeccompProfile(
         name="wifi_scanner",
         default_action=SeccompAction.ERRNO,
@@ -227,11 +228,11 @@ SECCOMP_PROFILES: Dict[str, SeccompProfile] = {
 @dataclass
 class CapabilitySet:
     """Set of capabilities with effective/permitted/inheritable flags."""
-    effective: Set[Capability] = field(default_factory=set)
-    permitted: Set[Capability] = field(default_factory=set)
-    inheritable: Set[Capability] = field(default_factory=set)
-    bounding: Set[Capability] = field(default_factory=set)
-    
+    effective: set[Capability] = field(default_factory=set)
+    permitted: set[Capability] = field(default_factory=set)
+    inheritable: set[Capability] = field(default_factory=set)
+    bounding: set[Capability] = field(default_factory=set)
+
     @classmethod
     def from_module(cls, module_name: str) -> "CapabilitySet":
         """Create capability set for a module."""
@@ -242,24 +243,24 @@ class CapabilitySet:
             inheritable=set(),
             bounding=set(caps),
         )
-    
+
     def apply(self) -> bool:
         """Apply capability set to current process."""
         try:
             import libcap
             cap = libcap.Capabilities()
-            
+
             # Clear all
             cap.effective = []
             cap.permitted = []
             cap.inheritable = []
-            
+
             # Set required capabilities
             for cap_name in self.bounding:
                 libcap.cap_set_flag(cap.effective, libcap.CAP_SET, 1, [cap_name.value])
                 libcap.cap_set_flag(cap.permitted, libcap.CAP_SET, 1, [cap_name.value])
                 libcap.cap_set_flag(cap.bounding, libcap.CAP_SET, 1, [cap_name.value])
-            
+
             cap.set_proc()
             return True
         except ImportError:
@@ -268,8 +269,8 @@ class CapabilitySet:
         except Exception as e:
             logger.error("Failed to drop capabilities", error=str(e))
             return False
-    
-    def drop_all_except(self, keep: Set[Capability]) -> bool:
+
+    def drop_all_except(self, keep: set[Capability]) -> bool:
         """Drop all capabilities except those in 'keep'."""
         self.effective &= keep
         self.permitted &= keep
@@ -281,22 +282,22 @@ class CapabilitySet:
 class SeccompFilter:
     """Seccomp filter manager."""
     profile: SeccompProfile
-    _filter: Optional[Any] = None
-    
+    _filter: Any | None = None
+
     def load(self) -> bool:
         """Load seccomp filter into kernel."""
         try:
             import libseccomp as seccomp
-            
+
             ctx = seccomp.SyscallFilter(defaction=self.profile.default_action.value)
-            
+
             for rule in self.profile.rules:
                 ctx.add_rule(
                     rule.action.value,
                     rule.syscall,
                     *[seccomp.Arg(a[0], a[1], a[2]) for a in rule.args]
                 )
-            
+
             ctx.load()
             self._filter = ctx
             logger.info("Seccomp profile loaded", profile=self.profile.name)
@@ -307,7 +308,7 @@ class SeccompFilter:
         except Exception as e:
             logger.error("Failed to load seccomp profile", profile=self.profile.name, error=str(e))
             return False
-    
+
     def unload(self) -> None:
         """Unload seccomp filter (requires restart)."""
         logger.warning("Seccomp filter cannot be unloaded without process restart")
@@ -319,7 +320,7 @@ class RootlessChrootConfig:
     chroot_path: str = "/opt/urban-chroot"
     user_map: str = "0 100000 65536"  # Map root (0) to UID 100000+
     group_map: str = "0 100000 65536"
-    bind_mounts: Dict[str, str] = field(default_factory=lambda: {
+    bind_mounts: dict[str, str] = field(default_factory=lambda: {
         "/data": "/data",
         "/artifacts": "/artifacts",
         "/logs": "/logs",
@@ -329,7 +330,7 @@ class RootlessChrootConfig:
         "/sys": "/sys",
         "/dev": "/dev",
     })
-    env: Dict[str, str] = field(default_factory=lambda: {
+    env: dict[str, str] = field(default_factory=lambda: {
         "HOME": "/root",
         "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "TERM": "xterm-256color",
@@ -338,26 +339,26 @@ class RootlessChrootConfig:
 
 class RootlessChroot:
     """Manage rootless chroot with user namespaces."""
-    
+
     def __init__(self, config: RootlessChrootConfig):
         self.config = config
-        self._ns_pid: Optional[int] = None
-    
+        self._ns_pid: int | None = None
+
     async def enter(self) -> bool:
         """Enter rootless chroot using user namespaces."""
         try:
             # Check if user namespaces are enabled
-            with open("/proc/sys/kernel/unprivileged_userns_clone", "r") as f:
+            with open("/proc/sys/kernel/unprivileged_userns_clone") as f:
                 if f.read().strip() != "1":
                     logger.warning("User namespaces not enabled")
                     return False
-            
+
             # Prepare bind mounts
             bind_args = []
             for src, dst in self.config.bind_mounts.items():
                 if Path(src).exists():
                     bind_args.extend(["--bind", f"{src}:{dst}"])
-            
+
             # Use nsexec for namespace isolation
             # This requires root or user namespace support
             cmd = [
@@ -370,27 +371,27 @@ class RootlessChroot:
                 "/bin/sh", "-c",
                 "exec /bin/bash --login",
             ]
-            
+
             # Start the chroot process
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
                 env={**os.environ, **self.config.env},
                 start_new_session=True,
             )
-            
+
             self._ns_pid = proc.pid
             logger.info("Rootless chroot entered", pid=proc.pid)
             return True
-            
+
         except Exception as e:
             logger.error("Failed to enter rootless chroot", error=str(e))
             return False
-    
-    async def run_in_chroot(self, command: List[str], env: Optional[Dict[str, str]] = None) -> int:
+
+    async def run_in_chroot(self, command: list[str], env: dict[str, str] | None = None) -> int:
         """Run a command inside the chroot."""
         if self._ns_pid is None:
             raise RuntimeError("Chroot not entered")
-        
+
         # Use nsenter to execute in the namespace
         cmd = [
             "nsenter",
@@ -399,15 +400,15 @@ class RootlessChroot:
             "--",
             *command,
         ]
-        
+
         env = {**os.environ, **(env or {})}
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             env=env,
         )
-        
+
         return await proc.wait()
-    
+
     async def exit(self) -> bool:
         """Exit the chroot."""
         if self._ns_pid:
@@ -424,106 +425,139 @@ class RootlessChroot:
 @dataclass
 class SupplyChainConfig:
     """Configuration for supply chain security."""
-    cosign_public_key: Optional[str] = None
-    cosign_key_path: Optional[str] = None
+    cosign_public_key: str | None = None
+    cosign_key_path: str | None = None
     slsa_provenance: bool = True
     sbom_format: str = "spdx-json"
     verify_signatures: bool = True
-    trusted_keys: List[str] = field(default_factory=list)
+    trusted_keys: list[str] = field(default_factory=list)
 
 
 class SupplyChainVerifier:
     """Supply chain security: cosign signing/verification, SLSA, SBOM."""
-    
+
     def __init__(self, config: SupplyChainConfig):
         self.config = config
-    
-    async def sign_artifact(self, artifact_path: str) -> Optional[str]:
+
+    async def sign_artifact(self, artifact_path: str) -> str | None:
         """Sign artifact with cosign, return signature path."""
         if not self.config.cosign_key_path:
             logger.warning("No cosign key configured")
             return None
-        
+
         sig_path = f"{artifact_path}.sig"
-        
+
         cmd = [
             "cosign", "sign-blob",
             "--key", self.config.cosign_key_path,
             "--output-signature", sig_path,
             artifact_path,
         ]
-        
+
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await proc.communicate()
-        
+
         if proc.returncode == 0:
             logger.info("Artifact signed", artifact=artifact_path, signature=sig_path)
             return sig_path
-        else:
-            logger.error("Signing failed", error=stderr.decode())
-            return None
-    
+        logger.error("Signing failed", error=stderr.decode())
+        return None
+
     async def verify_signature(self, artifact_path: str, signature_path: str) -> bool:
         """Verify artifact signature with cosign."""
         if not self.config.cosign_public_key:
             logger.warning("No public key configured for verification")
             return False
-        
+
         cmd = [
             "cosign", "verify-blob",
             "--key", self.config.cosign_public_key,
             "--signature", signature_path,
             artifact_path,
         ]
-        
+
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await proc.communicate()
-        
+
         return proc.returncode == 0
-    
+
     async def generate_sbom(self, target_dir: str, output_path: str) -> bool:
         """Generate SBOM using Syft."""
         cmd = [
             "syft", target_dir,
             "-o", f"{self.config.sbom_format}={output_path}",
         ]
-        
+
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await proc.communicate()
-        
+
         if proc.returncode == 0:
             logger.info("SBOM generated", output=output_path)
             return True
-        else:
-            logger.error("SBOM generation failed", error=stderr.decode())
+        logger.error("SBOM generation failed", error=stderr.decode())
+        return False
+
+    async def verify_slsa_provenance(
+        self,
+        artifact_path: str,
+        provenance_path: str | None = None,
+        source_uri: str | None = None,
+    ) -> bool:
+        """Verify SLSA provenance for an artifact using ``slsa-verifier``.
+
+        Fails closed: returns False if the verifier, the provenance file, or
+        the required source URI is missing, rather than trusting the artifact.
+        """
+        verifier = shutil.which("slsa-verifier")
+        if not verifier:
+            logger.error("slsa-verifier not installed; cannot verify provenance", artifact=artifact_path)
             return False
-    
-    async def verify_slsa_provenance(self, artifact_path: str) -> bool:
-        """Verify SLSA provenance (placeholder)."""
-        # SLSA verification would check:
-        # - Build provenance exists and is signed
-        # - Build was performed on trusted infrastructure
-        # - Source matches expected commit
-        logger.info("SLSA provenance verification", artifact=artifact_path)
-        return True  # Placeholder
+
+        provenance = provenance_path or f"{artifact_path}.intoto.jsonl"
+        if not os.path.exists(provenance):
+            logger.error("SLSA provenance file not found", provenance=provenance)
+            return False
+
+        source = source_uri or getattr(self.config, "slsa_source_uri", None)
+        if not source:
+            logger.error("SLSA source URI required for verification", artifact=artifact_path)
+            return False
+
+        cmd = [
+            verifier, "verify-artifact", artifact_path,
+            "--provenance-path", provenance,
+            "--source-uri", source,
+        ]
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await proc.communicate()
+
+        if proc.returncode == 0:
+            logger.info("SLSA provenance verified", artifact=artifact_path)
+            return True
+        logger.error("SLSA provenance verification failed", error=stderr.decode()[:500])
+        return False
 
 
-async def drop_privileges(module_name: str, keep: Optional[List[str]] = None) -> bool:
+async def drop_privileges(module_name: str, keep: list[str] | None = None) -> bool:
     """Drop all unnecessary capabilities/privileges for a module."""
     caps = CapabilitySet.from_module(module_name)
-    
+
     if keep:
         # Add explicitly kept capabilities
         for cap_name in keep:
@@ -531,30 +565,30 @@ async def drop_privileges(module_name: str, keep: Optional[List[str]] = None) ->
                 caps.bounding.add(Capability(cap_name))
             except ValueError:
                 logger.warning("Unknown capability", name=cap_name)
-    
+
     return caps.apply()
 
 
-async def harden_process(module_name: str) -> Dict[str, bool]:
+async def harden_process(module_name: str) -> dict[str, bool]:
     """Apply all available hardening to current process."""
     results = {}
-    
+
     # Drop capabilities
     results["capabilities"] = await drop_privileges(module_name)
-    
+
     # Load seccomp profile
     profile = SECCOMP_PROFILES.get(module_name)
     if profile:
         seccomp_filter = SeccompFilter(profile)
         results["seccomp"] = seccomp_filter.load()
-    
+
     # Drop supplementary groups
     try:
         os.setgroups([])
         results["drop_groups"] = True
     except Exception:
         results["drop_groups"] = False
-    
+
     # Set no-new-privs
     try:
         import prctl
@@ -562,7 +596,7 @@ async def harden_process(module_name: str) -> Dict[str, bool]:
         results["no_new_privs"] = True
     except ImportError:
         results["no_new_privs"] = False
-    
+
     # Set securebits
     try:
         import prctl
@@ -572,7 +606,7 @@ async def harden_process(module_name: str) -> Dict[str, bool]:
         results["securebits"] = True
     except ImportError:
         results["securebits"] = False
-    
+
     logger.info("Process hardening applied", module=module_name, results=results)
     return results
 
@@ -587,22 +621,22 @@ __all__ = [
     "CapabilitySet",
     "MODULE_CAPABILITIES",
     "drop_privileges",
-    
+
     # Seccomp
     "SeccompAction",
     "SeccompRule",
     "SeccompProfile",
     "SeccompFilter",
     "SECCOMP_PROFILES",
-    
+
     # Rootless chroot
     "RootlessChrootConfig",
     "RootlessChroot",
-    
+
     # Supply chain
     "SupplyChainConfig",
     "SupplyChainVerifier",
-    
+
     # Hardening
     "harden_process",
 ]
