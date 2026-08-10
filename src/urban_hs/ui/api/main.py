@@ -22,7 +22,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -130,8 +130,14 @@ def _build_app() -> FastAPI:
     auth_router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
     @auth_router.post("/token")
-    async def create_token() -> dict[str, str]:
+    async def create_token(request: Request) -> dict[str, str]:
         from urban_hs.ui.api.auth import create_access_token
+
+        # Bootstrap guard (B002): when a bootstrap token is configured, require
+        # it — otherwise any local caller could mint a full-access JWT.
+        bootstrap = cfg.api.bootstrap_token
+        if bootstrap and request.headers.get("X-Bootstrap-Token") != bootstrap:
+            raise HTTPException(status_code=401, detail="Missing or invalid bootstrap token")
 
         token = create_access_token(subject="api-user", expires_minutes=cfg.api.jwt_expire_minutes)
         return {"access_token": token, "token_type": "bearer"}

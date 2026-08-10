@@ -202,6 +202,10 @@ class APIConfig(BaseSettings):
     jwt_secret: str = ""  # Must be set via env/keyring
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60
+    # Optional bootstrap secret guarding POST /auth/token. When set, callers
+    # must send it as the X-Bootstrap-Token header to mint a JWT; empty leaves
+    # the endpoint open (dev only).
+    bootstrap_token: str = ""
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
     tls_enabled: bool = False
     tls_cert_path: str = ""
