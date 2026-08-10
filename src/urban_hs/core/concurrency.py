@@ -332,9 +332,14 @@ class ResourceManager:
     ) -> bool:
         """
         Acquire multiple resources atomically (all or nothing).
+
+        B016: resources are acquired in a deterministic global order (by
+        ResourceType name), so two holders requesting the same set in different
+        orders can never deadlock (classic lock-ordering guarantee).
         """
         acquired = []
-        for resource_type, priority in resources.items():
+        ordered = sorted(resources.items(), key=lambda kv: kv[0].name)
+        for resource_type, priority in ordered:
             acquired_success = await self.pool.acquire(resource_type, holder_id, priority, max_wait)
             if acquired_success:
                 acquired.append(resource_type)

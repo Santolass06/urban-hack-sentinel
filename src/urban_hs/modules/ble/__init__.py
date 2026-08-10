@@ -3,6 +3,7 @@ BLE Module - Fast Pair, WhisperPair, and Bluetooth LE auditing.
 """
 
 from urban_hs.modules.ble.bettercap import BettercapBLEClient, BettercapBLEDevice
+from urban_hs.modules.ble.esp32_hci import ESP32Device, ESP32HCIExploit, ESPCmd, ESPCmdResult
 from urban_hs.modules.ble.exploit_chain import (
     AccountKeyManager,
     BlueZBondingManager,
@@ -26,6 +27,7 @@ from urban_hs.modules.ble.fastpair import (
     _load_device_quirks,
     get_device_quirks,
 )
+from urban_hs.modules.ble.knob_bias import BTClassicVuln, KNOBBiasTester, VulnStatus
 
 __all__ = [
     "FastPairScanner",
@@ -49,4 +51,11 @@ __all__ = [
     "WhisperPairFullExploit",
     "BettercapBLEClient",
     "BettercapBLEDevice",
+    "ESP32HCIExploit",
+    "ESP32Device",
+    "ESPCmd",
+    "ESPCmdResult",
+    "KNOBBiasTester",
+    "BTClassicVuln",
+    "VulnStatus",
 ]

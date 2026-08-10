@@ -16,7 +16,6 @@ import asyncio
 import os
 import re
 import shutil
-import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -111,11 +110,9 @@ class FragAttacksWrapper:
                 return p
 
         # Check if available in PATH
-        if shutil.which("fragattacks"):
-            # Try to find the actual script location
-            result = subprocess.run(["which", "fragattacks"], capture_output=True, text=True)
-            if result.stdout:
-                return str(Path(result.stdout.strip()).parent)
+        frag_path = shutil.which("fragattacks")
+        if frag_path:
+            return str(Path(frag_path).parent)
 
         return None
 

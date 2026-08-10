@@ -170,7 +170,7 @@ class UrbanHackPlugin:
             self.handshake_mgr = HandshakeManager()
             self.wifi_mac_changer = MACChanger(self.config.wifi_interface)
             self.wifi_geo_mapper = GeoMapper()
-            self.wifi_mac_changer.save_original_mac()
+            await self.wifi_mac_changer.save_original_mac()
 
             self._handshake_attack = HandshakeAttack(
                 interface=self.config.wifi_interface,
@@ -201,7 +201,7 @@ class UrbanHackPlugin:
             gpsd_host=self.config.gpsd_host, gpsd_port=self.config.gpsd_port
         )
         self.mac_changer = MACChanger(self.config.wifi_interface)
-        self.mac_changer.save_original_mac()
+        await self.mac_changer.save_original_mac()
 
         logger.info("Urban Hack Sentinel plugin initialized")
 
@@ -257,7 +257,7 @@ class UrbanHackPlugin:
         await self.geo_mapper.stop()
 
         # Restore original MAC
-        self.mac_changer.restore_original_mac()
+        await self.mac_changer.restore_original_mac()
 
         logger.info("Urban Hack Sentinel stopped")
 
@@ -369,7 +369,7 @@ class UrbanHackPlugin:
         while self._running:
             await asyncio.sleep(interval)
             if self._running and self.mac_changer:
-                new_mac = self.mac_changer.randomize_mac("random")
+                new_mac = await self.mac_changer.randomize_mac("random")
                 if new_mac:
                     logger.info("MAC randomized", new_mac=new_mac)
 

@@ -6,7 +6,6 @@ import asyncio
 import json
 import re
 import shutil
-import subprocess
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -680,75 +679,78 @@ class MACChanger:
         self.current_mac: str | None = None
         self.original_mac: str | None = None
 
-    def get_current_mac(self) -> str | None:
+    async def _run(self, cmd: list[str], timeout: int = 10) -> tuple[int, str]:
+        """Run a command off the event loop; returns (returncode, stdout).
+
+        B012: MAC ops run inside the async _mac_randomization_loop, so a
+        blocking subprocess.run would freeze the loop.
+        """
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        return (proc.returncode or 0), out.decode(errors="replace")
+
+    async def get_current_mac(self) -> str | None:
         """Get current MAC address of interface."""
         try:
-            result = subprocess.run(
-                ["ip", "link", "show", self.interface], capture_output=True, text=True, timeout=5
-            )
-            for line in result.stdout.split("\n"):
+            _, stdout = await self._run(["ip", "link", "show", self.interface], timeout=5)
+            for line in stdout.split("\n"):
                 if "link/ether" in line:
                     return line.strip().split()[1]
         except Exception as e:
             logger.error("Failed to get MAC", error=str(e))
         return None
 
-    def save_original_mac(self) -> None:
+    async def save_original_mac(self) -> None:
         """Save the original MAC for later restoration."""
-        self.original_mac = self.get_current_mac()
+        self.original_mac = await self.get_current_mac()
         logger.info("Original MAC saved", mac=self.original_mac)
 
-    def restore_original_mac(self) -> bool:
+    async def restore_original_mac(self) -> bool:
         """Restore the original MAC address."""
         if self.original_mac:
-            return self.set_mac(self.original_mac)
+            return await self.set_mac(self.original_mac)
         return False
 
-    def set_mac(self, mac: str) -> bool:
+    async def set_mac(self, mac: str) -> bool:
         """Set a specific MAC address."""
         try:
-            # Bring interface down
-            subprocess.run(["ip", "link", "set", self.interface, "down"], check=True, timeout=10)
-
-            # Set MAC
-            subprocess.run(["macchanger", "-m", mac, self.interface], check=True, timeout=10)
-
-            # Bring interface up
-            subprocess.run(["ip", "link", "set", self.interface, "up"], check=True, timeout=10)
-
+            for cmd in (
+                ["ip", "link", "set", self.interface, "down"],
+                ["macchanger", "-m", mac, self.interface],
+                ["ip", "link", "set", self.interface, "up"],
+            ):
+                rc, _ = await self._run(cmd)
+                if rc != 0:
+                    logger.error("MAC command failed", cmd=cmd, rc=rc)
+                    return False
             self.current_mac = mac
             logger.info("MAC changed", interface=self.interface, mac=mac)
             return True
-        except subprocess.CalledProcessError as e:
-            logger.error("Failed to change MAC", error=str(e))
-            return False
         except Exception as e:
             logger.error("MAC change error", error=str(e))
             return False
 
-    def randomize_mac(self, profile: str = "random") -> str | None:
+    async def randomize_mac(self, profile: str = "random") -> str | None:
         """Generate and set a random MAC with optional vendor profile."""
-        if profile == "random" or profile not in self.OUI_PROFILES:
-            # Fully random MAC
-            import random
+        import random
 
+        if profile == "random" or profile not in self.OUI_PROFILES:
             mac = "02:" + ":".join(f"{random.randint(0x00, 0xFF):02x}" for _ in range(5))
         else:
-            # Use vendor OUI + random suffix
-            import random
-
             oui_list = self.OUI_PROFILES[profile]
             oui = random.choice(oui_list)
             suffix = ":".join(f"{random.randint(0x00, 0xFF):02x}" for _ in range(3))
             mac = f"{oui}:{suffix}"
 
-        if self.set_mac(mac):
+        if await self.set_mac(mac):
             return mac
         return None
 
-    def get_current_vendor(self) -> str | None:
+    async def get_current_vendor(self) -> str | None:
         """Identify vendor from current MAC."""
-        mac = self.get_current_mac()
+        mac = await self.get_current_mac()
         if not mac:
             return None
 

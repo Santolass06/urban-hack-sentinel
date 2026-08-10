@@ -205,6 +205,13 @@ class PluginManager:
     """
     Manages plugin discovery, loading, and lifecycle.
 
+    This is the **third-party extension path**: the core modules (WiFi/BLE/
+    orchestrator) are wired directly in the API lifespan for control and
+    startup performance, whereas *additional* modules can be dropped in via the
+    ``UrbanPlugin`` interface + entry points and managed here. See
+    ``docs/API.md`` and the ``modules/plugins/example_*`` plugins; the flow is
+    covered by ``tests/test_plugin_manager.py``.
+
     Features:
     - Entry point discovery via importlib.metadata
     - Dependency resolution with topological sort

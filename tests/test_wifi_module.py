@@ -566,21 +566,19 @@ class TestMACChanger:
 
     @pytest.mark.asyncio
     async def test_get_current_mac(self, changer):
-        """Test getting current MAC."""
+        """Test getting current MAC (now async — B012)."""
         with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_proc = AsyncMock()
             mock_proc.returncode = 0
             mock_proc.communicate.return_value = (
-                b"wlan0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500\n        ether aa:bb:cc:dd:ee:ff  txqueuelen 1000\n",
+                b"2: wlan0: <BROADCAST,MULTICAST,UP> mtu 1500\n"
+                b"    link/ether aa:bb:cc:dd:ee:ff brd ff:ff:ff:ff:ff:ff\n",
                 b"",
             )
             mock_exec.return_value = mock_proc
 
-            # get_current_mac is synchronous
-            mac = changer.get_current_mac()
-            # Our mock doesn't actually run the subprocess, so this will be None
-            # We just verify the method exists and runs
-            assert mac is None or isinstance(mac, str)
+            mac = await changer.get_current_mac()
+            assert mac == "aa:bb:cc:dd:ee:ff"
 
     @pytest.mark.asyncio
     async def test_change_mac_random(self, changer):
@@ -591,9 +589,8 @@ class TestMACChanger:
             mock_proc.communicate.return_value = (b"", b"")
             mock_exec.return_value = mock_proc
 
-            # randomize_mac takes profile parameter
-            new_mac = changer.randomize_mac(profile="random")
-            assert new_mac is None or (isinstance(new_mac, str) and ":" in new_mac)
+            new_mac = await changer.randomize_mac(profile="random")
+            assert isinstance(new_mac, str) and new_mac.startswith("02:")
 
     @pytest.mark.asyncio
     async def test_change_mac_oui_profile(self, changer):
@@ -604,8 +601,8 @@ class TestMACChanger:
             mock_proc.communicate.return_value = (b"", b"")
             mock_exec.return_value = mock_proc
 
-            new_mac = changer.randomize_mac(profile="apple")
-            assert new_mac is None or (isinstance(new_mac, str) and ":" in new_mac)
+            new_mac = await changer.randomize_mac(profile="apple")
+            assert isinstance(new_mac, str) and ":" in new_mac
 
     @pytest.mark.asyncio
     async def test_restore_original_mac(self, changer):
@@ -617,9 +614,8 @@ class TestMACChanger:
             mock_exec.return_value = mock_proc
 
             changer.original_mac = "aa:bb:cc:dd:ee:ff"
-            # restore_original_mac is synchronous
-            result = changer.restore_original_mac()
-            assert result is True or result is False
+            result = await changer.restore_original_mac()
+            assert result is True
 
 
 # ============================================================
