@@ -43,6 +43,9 @@ class EventMessage:
         self.payload = payload
 
 
+class SystemStatus(Static):
+    """Header widget showing architecture + version + connected WiFi."""
+
     def render(self) -> str:
         import platform
         import subprocess
