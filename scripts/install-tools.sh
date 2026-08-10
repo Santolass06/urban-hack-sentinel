@@ -14,16 +14,38 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "==> apt packages (Wi-Fi / network / IoT tooling)"
 apt-get update
-apt-get install -y \
-    iw wireless-tools \
-    aircrack-ng reaver pixiewps \
-    hcxtools hcxdumptool \
-    nmap tshark \
-    hostapd mdk4 \
-    gpsd gpsd-clients \
-    avahi-utils \
-    bettercap \
-    exploitdb
+
+# Only install packages that actually exist on this release, so one missing
+# name (e.g. the removed wireless-tools) never aborts the whole batch.
+CANDIDATES=(
+    iw
+    aircrack-ng reaver pixiewps
+    hcxtools hcxdumptool
+    nmap tshark
+    hostapd mdk4
+    gpsd gpsd-clients
+    avahi-utils
+    bettercap
+)
+AVAILABLE=()
+MISSING=()
+for pkg in "${CANDIDATES[@]}"; do
+    # apt-cache policy reports "Candidate: (none)" for transitional/removed
+    # packages (e.g. wireless-tools) that `apt-cache show` still lists.
+    # LC_ALL=C forces English field names regardless of the system locale.
+    cand="$(LC_ALL=C apt-cache policy "$pkg" 2>/dev/null | awk '/Candidate:/{print $2}')"
+    if [[ -n "$cand" && "$cand" != "(none)" ]]; then
+        AVAILABLE+=("$pkg")
+    else
+        MISSING+=("$pkg")
+    fi
+done
+if [[ ${#AVAILABLE[@]} -gt 0 ]]; then
+    apt-get install -y "${AVAILABLE[@]}" || echo "    some apt packages failed; continuing"
+fi
+if [[ ${#MISSING[@]} -gt 0 ]]; then
+    echo "    not in apt on this release (skipped): ${MISSING[*]}"
+fi
 
 echo "==> nuclei (not in apt — try snap, then GitHub release)"
 if ! command -v nuclei >/dev/null 2>&1; then
@@ -44,8 +66,17 @@ if ! command -v nuclei >/dev/null 2>&1; then
     fi
 fi
 
-echo "==> searchsploit (exploitdb) — provided by the exploitdb package above"
-command -v searchsploit >/dev/null 2>&1 && searchsploit -u >/dev/null 2>&1 || true
+echo "==> searchsploit / exploitdb (not in apt — via snap or git)"
+if ! command -v searchsploit >/dev/null 2>&1; then
+    if command -v snap >/dev/null 2>&1 && snap install searchsploit 2>/dev/null; then
+        echo "    searchsploit installed via snap"
+    else
+        git clone --depth 1 https://gitlab.com/exploit-database/exploitdb.git /opt/exploitdb 2>/dev/null \
+            && ln -sf /opt/exploitdb/searchsploit /usr/local/bin/searchsploit \
+            && echo "    exploitdb cloned to /opt/exploitdb" \
+            || echo "    WARNING: install searchsploit manually"
+    fi
+fi
 
 echo "==> python-uinput into the project venv (local HID injection)"
 if [[ -x "$ROOT/.venv/bin/pip" ]]; then
@@ -66,4 +97,4 @@ done
 
 echo ""
 echo "Done. WiFi scanning/attacks still require running the app as root"
-echo "(sudo ./scripts/run-tui.sh) so iw/monitor-mode/raw sockets work."
+echo "(./scripts/run-tui.sh) so iw/monitor-mode/raw sockets work."
