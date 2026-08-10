@@ -25,28 +25,37 @@ router = APIRouter(dependencies=[require_auth()])
 
 @router.get("/interfaces")
 async def list_wifi_interfaces() -> Dict[str, Any]:
+    import os
     import shutil
 
+    ifaces: list[str] = []
     iw = shutil.which("iw")
-    if not iw:
-        return {"interfaces": [], "error": "iw tool not found"}
+    if iw:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                iw, "dev",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await proc.communicate()
+            text = stdout.decode(errors="replace")
+            for line in text.splitlines():
+                line = line.strip()
+                if line.startswith("Interface "):
+                    ifaces.append(line.split()[1])
+        except Exception as exc:
+            logger.warning("iw dev failed: %s", exc)
 
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            iw, "dev",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, _ = await proc.communicate()
-        text = stdout.decode(errors="replace")
-        ifaces: list[str] = []
-        for line in text.splitlines():
-            line = line.strip()
-            if line.startswith("Interface "):
-                ifaces.append(line.split()[1])
-        return {"interfaces": ifaces}
-    except Exception as exc:
-        return {"interfaces": [], "error": str(exc)}
+    if not ifaces and os.path.exists("/sys/class/net"):
+        try:
+            for entry in os.listdir("/sys/class/net"):
+                if entry.startswith(("wlan", "wlo", "wlp", "wlx")) or os.path.exists(f"/sys/class/net/{entry}/wireless"):
+                    if entry not in ifaces:
+                        ifaces.append(entry)
+        except Exception as exc:
+            logger.warning("sysfs net scan failed: %s", exc)
+
+    return {"interfaces": ifaces}
 
 
 @router.post("/scan")

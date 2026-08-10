@@ -227,10 +227,12 @@ class TUIApp(App):
                     select = self.query_one("#select-wifi-iface", Select)
                     options = [(iface, iface) for iface in ifaces]
                     select.set_options(options)
+                    selected = ifaces[0]
                     for iface in ifaces:
                         if iface.startswith("wlx") or "alfa" in iface.lower():
-                            select.value = iface
+                            selected = iface
                             break
+                    select.value = selected
                 except Exception:
                     pass
         elif message.event_type in ("ble.scan.completed", "ble.scan_complete"):
@@ -547,9 +549,24 @@ class TUIApp(App):
 
     async def _ble_scan(self) -> None:
         try:
+            logs = self.query_one("#app-log", RichLog)
+            logs.write("[yellow]Checking Bluetooth adapter status…[/yellow]")
+
+            # Ensure Bluetooth power is ON via bluetoothctl / hciconfig
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "bluetoothctl", "power", "on",
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await proc.wait()
+            except Exception:
+                pass
+
             from urban_hs.modules.ble import FastPairScanner
 
-            scanner = FastPairScanner()
+            logs.write("[yellow]Scanning for BLE & Fast Pair devices…[/yellow]")
+            scanner = FastPairScanner(scan_all=True)
             await scanner.start()
             await asyncio.sleep(10)
             await scanner.stop()
@@ -567,6 +584,7 @@ class TUIApp(App):
                 },
             ))
         except Exception as exc:
+            logs.write(f"[red]BLE scan error: {exc}[/red]")
             self.post_message(EventMessage("ble.scan.error", {"error": str(exc)}))
 
     async def _network_scan(self) -> None:
