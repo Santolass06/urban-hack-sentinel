@@ -24,7 +24,18 @@ All endpoints return JSON unless stated otherwise.
 
 ## Core concepts
 
-Modules are discovery-driven. Each module implements the `UrbanPlugin` interface and is registered in `urban_hs.modules`. The API exposes two main surfaces:
+The project loads modules through **two complementary paths**:
+
+- **Core modules** (WiFi, BLE, orchestrator) are wired **directly** in the API
+  `lifespan` (`ui/api/main.py`) and the TUI bootstrap — chosen for control and
+  startup performance. These are what the inventory/execution endpoints expose.
+- **Third-party / optional modules** implement the `UrbanPlugin` interface and
+  are discovered + managed by `core.plugins.PluginManager` via entry points
+  (see `modules/plugins/example_*`). This is the extension point for adding new
+  capabilities without touching the lifespan; it is exercised by
+  `tests/test_plugin_manager.py`.
+
+The API exposes two main surfaces:
 
 1. **Inventory** — list available modules/attacks.
 2. **Execution** — run a module and consume its lifecycle events.
