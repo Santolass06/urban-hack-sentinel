@@ -69,6 +69,30 @@ Para testares a **Textual TUI** nos teus dispositivos e controladores wireless:
 ```bash
 # Iniciar a TUI interativa em ecrã inteiro
 ./.venv/bin/urban-hs-tui
+
+# ⚠️ A varredura e ataques Wi-Fi precisam de root (iw scan / monitor mode /
+#    raw sockets). Usa o wrapper que relança com sudo automaticamente:
+./scripts/run-tui.sh
+```
+
+### 🔧 Pré-requisitos (ferramentas externas)
+
+Os módulos de ataque chamam ferramentas externas. Instala-as todas de uma vez:
+
+```bash
+sudo ./scripts/install-tools.sh   # nmap, aircrack-ng, reaver, pixiewps, hcxtools,
+                                  # nuclei, gpsd, bettercap, avahi, python-uinput…
+```
+
+Sem elas, os botões degradam graciosamente (mostram "tool not found"), não crasham.
+
+### 🔌 Metasploit (opcional)
+
+O botão *Metasploit RPC* precisa de um `msfrpcd` a correr e da password via env var:
+
+```bash
+msfrpcd -P a_tua_password -S -a 127.0.0.1
+export URBAN_HS_MSF_PASSWORD=a_tua_password   # (opcional: URBAN_HS_MSF_HOST/PORT/USER)
 ```
 
 ### 🎮 Atalhos da TUI:

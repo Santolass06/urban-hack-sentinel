@@ -66,6 +66,7 @@ dependencies = [
 
 [project.optional-dependencies]
 redis = ["redis>=5.0.0"]
+hid = ["python-uinput>=1.0.0"]  # local HID keystroke injection (needs /dev/uinput + root)
 dev = [
     "pytest>=8.1.0",
     "pytest-asyncio>=0.23.0",

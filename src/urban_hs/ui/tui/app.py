@@ -860,12 +860,29 @@ class TUIApp(App):
             results.update(f"SearchSploit failed: {exc}")
 
     async def _exploit_msf(self) -> None:
+        import os
+
         results = self.query_one("#exploit-results", Static)
+        password = os.environ.get("URBAN_HS_MSF_PASSWORD", "")
+        if not password:
+            results.update(
+                "Metasploit needs a password. Start msfrpcd and export it, e.g.:\n"
+                "  msfrpcd -P yourpass -S -a 127.0.0.1\n"
+                "  export URBAN_HS_MSF_PASSWORD=yourpass"
+            )
+            return
         results.update("[yellow]Connecting to Metasploit RPC...[/yellow]")
         try:
-            from urban_hs.modules.metasploit import MetasploitRPC
+            from urban_hs.modules.metasploit import MetasploitRPC, MsfConfig
 
-            connected = await MetasploitRPC().connect()
+            config = MsfConfig(
+                host=os.environ.get("URBAN_HS_MSF_HOST", "127.0.0.1"),
+                port=int(os.environ.get("URBAN_HS_MSF_PORT", "55553")),
+                username=os.environ.get("URBAN_HS_MSF_USER", "msf"),
+                password=password,
+                ssl_verify=False,
+            )
+            connected = await MetasploitRPC(config).connect()
             results.update(
                 "Metasploit RPC connected."
                 if connected
