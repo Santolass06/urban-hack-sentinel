@@ -122,6 +122,10 @@ class TUIApp(App):
                             Button("WPS PIN", id="btn-wifi-wps-pin"),
                             Button("Handshake", id="btn-wifi-handshake"),
                             Button("PMKID", id="btn-wifi-pmkid"),
+                            Button("WPA3 Downgrade", id="btn-wifi-wpa3-downgrade"),
+                            Button("802.11r FT", id="btn-wifi-ft"),
+                            Button("Kr00k", id="btn-wifi-krook"),
+                            Button("GPS Wardrive", id="btn-wifi-gps"),
                         ),
                         Label("Discovered Networks:"),
                         DataTable(id="wifi-table"),
@@ -132,6 +136,7 @@ class TUIApp(App):
                         Horizontal(
                             Button("Scan Fast Pair", id="btn-ble-scan"),
                             Button("WhisperPair", id="btn-ble-whisperpair"),
+                            Button("Bluetooth HID", id="btn-ble-hid"),
                         ),
                         Label("BLE Devices:"),
                         DataTable(id="ble-table"),
@@ -139,7 +144,13 @@ class TUIApp(App):
                     )
                 with TabPane("Network", id="tab-network"):
                     yield Vertical(
-                        Button("Host Discovery", id="btn-net-nmap"),
+                        Horizontal(
+                            Button("Host Discovery (Nmap)", id="btn-net-nmap"),
+                            Button("Nuclei Vuln Scan", id="btn-net-nuclei"),
+                            Button("Camera Discovery", id="btn-net-camera"),
+                            Button("ESP32 Probe", id="btn-net-esp32"),
+                            Button("MQTT Brute", id="btn-net-mqtt"),
+                        ),
                         Label("Results:"),
                         Static("(none yet)", id="net-results"),
                         classes="panel",
@@ -264,14 +275,37 @@ class TUIApp(App):
             self._confirm("Capture WPA handshake?", self._wifi_handshake)
         elif bid == "btn-wifi-pmkid":
             self._confirm("Capture PMKID?", self._wifi_pmkid)
+        elif bid == "btn-wifi-wpa3-downgrade":
+            self._confirm("Run WPA3 Transition Downgrade attack?", self._wifi_wpa3_downgrade)
+        elif bid == "btn-wifi-ft":
+            self._confirm("Run 802.11r Fast Transition attack?", self._wifi_ft)
+        elif bid == "btn-wifi-krook":
+            self._confirm("Run Kr00k (CVE-2019-15126) attack?", self._wifi_krook)
+        elif bid == "btn-wifi-gps":
+            logs.write("[yellow]Starting continuous GPS Wardriving mode…[/yellow]")
+            asyncio.create_task(self._wifi_gps_wardrive())
         elif bid == "btn-ble-scan":
             logs.write("[yellow]Triggering BLE scan…[/yellow]")
             asyncio.create_task(self._ble_scan())
         elif bid == "btn-ble-whisperpair":
             self._confirm("Run WhisperPair pairing attack?", self._ble_whisperpair)
+        elif bid == "btn-ble-hid":
+            self._confirm("Run Bluetooth HID Injection attack?", self._ble_hid)
         elif bid == "btn-net-nmap":
             logs.write("[yellow]Starting network scan…[/yellow]")
             asyncio.create_task(self._network_scan())
+        elif bid == "btn-net-nuclei":
+            logs.write("[yellow]Starting Nuclei vulnerability scan…[/yellow]")
+            asyncio.create_task(self._net_nuclei())
+        elif bid == "btn-net-camera":
+            logs.write("[yellow]Starting IP Camera discovery…[/yellow]")
+            asyncio.create_task(self._net_camera())
+        elif bid == "btn-net-esp32":
+            logs.write("[yellow]Probing ESP32 vulnerabilities…[/yellow]")
+            asyncio.create_task(self._net_esp32())
+        elif bid == "btn-net-mqtt":
+            logs.write("[yellow]Starting MQTT broker enumeration & brute force…[/yellow]")
+            asyncio.create_task(self._net_mqtt())
         else:
             logs.write(f"[yellow]Button:[/yellow] {bid}")
 
@@ -316,8 +350,36 @@ class TUIApp(App):
     async def _wifi_pmkid(self) -> None:
         self._publish_wifi_attack("pmkid")
 
+    async def _wifi_wpa3_downgrade(self) -> None:
+        self._publish_wifi_attack("wpa3_downgrade")
+
+    async def _wifi_ft(self) -> None:
+        self._publish_wifi_attack("fast_transition_ft")
+
+    async def _wifi_krook(self) -> None:
+        self._publish_wifi_attack("krook")
+
+    async def _wifi_gps_wardrive(self) -> None:
+        iface = self._get_selected_wifi_interface()
+        self._publish_attack("wifi_gps_wardrive", {"interface": iface, "wardrive": True})
+
     async def _ble_whisperpair(self) -> None:
         self._publish_attack("ble_whisperpair", {})
+
+    async def _ble_hid(self) -> None:
+        self._publish_attack("ble_hid_injection", {})
+
+    async def _net_nuclei(self) -> None:
+        self._publish_attack("network_nuclei_scan", {"target": "192.168.1.0/24"})
+
+    async def _net_camera(self) -> None:
+        self._publish_attack("network_camera_discovery", {})
+
+    async def _net_esp32(self) -> None:
+        self._publish_attack("network_esp32_probe", {})
+
+    async def _net_mqtt(self) -> None:
+        self._publish_attack("network_mqtt_brute", {})
 
     def _publish_wifi_attack(self, attack_type: str, extra_params: Optional[dict[str, Any]] = None) -> None:
         import uuid

@@ -17,7 +17,16 @@ def test_tui_app_has_attack_actions() -> None:
     assert hasattr(app, "_wifi_wps_pin")
     assert hasattr(app, "_wifi_handshake")
     assert hasattr(app, "_wifi_pmkid")
+    assert hasattr(app, "_wifi_wpa3_downgrade")
+    assert hasattr(app, "_wifi_ft")
+    assert hasattr(app, "_wifi_krook")
+    assert hasattr(app, "_wifi_gps_wardrive")
     assert hasattr(app, "_ble_whisperpair")
+    assert hasattr(app, "_ble_hid")
+    assert hasattr(app, "_net_nuclei")
+    assert hasattr(app, "_net_camera")
+    assert hasattr(app, "_net_esp32")
+    assert hasattr(app, "_net_mqtt")
     assert hasattr(app, "_publish_attack")
 
 
