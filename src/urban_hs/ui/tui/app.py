@@ -199,6 +199,7 @@ class TUIApp(App):
                             Select([], id="select-wifi-iface", prompt="Scanning interfaces..."),
                             Button("Scan", id="btn-wifi-scan", variant="primary"),
                             Button("Interfaces", id="btn-wifi-interfaces"),
+                            Button("Compat", id="btn-wifi-compat"),
                             Button("GPS Wardrive", id="btn-wifi-gps"),
                             Button("⚡ Attack All", id="btn-attack-all", variant="error"),
                             classes="btn-row",
@@ -448,6 +449,9 @@ class TUIApp(App):
         elif bid == "btn-wifi-interfaces":
             logs.write("[yellow]Listing WiFi interfaces…[/yellow]")
             asyncio.create_task(self._wifi_interfaces())
+        elif bid == "btn-wifi-compat":
+            logs.write("[yellow]Checking hardware/tool compatibility…[/yellow]")
+            asyncio.create_task(self._check_compat())
         elif bid == "btn-wifi-deauth":
             self._confirm("Run deauth on selected network?", self._wifi_deauth)
         elif bid == "btn-wifi-wps-pixie":
@@ -653,6 +657,28 @@ class TUIApp(App):
             )
         except Exception as exc:
             results.update(f"Attack All failed: {exc}")
+
+    async def _check_compat(self) -> None:
+        results = self.query_one("#wifi-results", Static)
+        results.update("[yellow]Checking hardware / tool compatibility...[/yellow]")
+        try:
+            from urban_hs.core.hardware_compatibility import HardwareCompatibilityChecker
+
+            checker = HardwareCompatibilityChecker(interface=self._get_selected_wifi_interface())
+            # The probes are synchronous (iw / bluetoothctl); run off the loop.
+            wifi_rep = await asyncio.to_thread(checker.wifi_requirements)
+            ble_rep = await asyncio.to_thread(checker.ble_requirements)
+
+            lines: list[str] = []
+            for rep in (wifi_rep, ble_rep):
+                lines.append(f"[b]{rep.module}[/b]: {'OK' if rep.supported else 'missing deps'}")
+                for item in rep.results:
+                    mark = "[green]✓[/green]" if item.supported else "[red]✗[/red]"
+                    fix = "" if item.supported else f"  → {item.remediation or item.reason}"
+                    lines.append(f"  {mark} {item.capability.value}{fix}")
+            results.update("\n".join(lines))
+        except Exception as exc:
+            results.update(f"Compat check failed: {exc}")
 
     async def _ssid_confusion(self) -> None:
         results = self.query_one("#wifi-results", Static)
