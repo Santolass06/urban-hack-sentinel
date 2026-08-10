@@ -892,50 +892,53 @@ class GeoMapper:
                 pass
 
     async def _read_gpsd(self) -> None:
-        """Read GPS data from gpsd."""
+        """Read GPS data from gpsd.
+
+        Uses asyncio streams with a per-read timeout so a running gpsd that has
+        no fix/device (common on laptops) can never block the event loop — the
+        previous blocking ``socket.recv`` hung forever in that case.
+        """
         import json
-        import socket
 
+        writer = None
         try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect((self.gpsd_host, self.gpsd_port))
-            sock.send(b'?WATCH={"enable":true,"json":true}\n')
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(self.gpsd_host, self.gpsd_port), timeout=2.0
+            )
+            writer.write(b'?WATCH={"enable":true,"json":true}\n')
+            await writer.drain()
 
-            buffer = b""
             while self._running:
-                data = sock.recv(4096)
-                if not data:
+                try:
+                    line = await asyncio.wait_for(reader.readline(), timeout=1.0)
+                except TimeoutError:
+                    continue  # no data yet (no fix) — re-check _running and wait
+                if not line:
                     break
-
-                buffer += data
-                lines = buffer.split(b"\n")
-                buffer = lines[-1]
-
-                for line in lines[:-1]:
-                    try:
-                        data = json.loads(line.decode())
-                        if data.get("class") == "TPV":
-                            self._gps_data = {
-                                "lat": data.get("lat"),
-                                "lon": data.get("lon"),
-                                "alt": data.get("alt"),
-                                "speed": data.get("speed"),
-                                "track": data.get("track"),
-                                "time": data.get("time"),
-                                "mode": data.get("mode"),
-                                "epx": data.get("epx"),
-                                "epy": data.get("epy"),
-                            }
-                    except json.JSONDecodeError:
-                        pass
-
+                try:
+                    data = json.loads(line.decode())
+                except json.JSONDecodeError:
+                    continue
+                if data.get("class") == "TPV":
+                    self._gps_data = {
+                        "lat": data.get("lat"),
+                        "lon": data.get("lon"),
+                        "alt": data.get("alt"),
+                        "speed": data.get("speed"),
+                        "track": data.get("track"),
+                        "time": data.get("time"),
+                        "mode": data.get("mode"),
+                        "epx": data.get("epx"),
+                        "epy": data.get("epy"),
+                    }
         except Exception as e:
             logger.error("GPS read error", error=str(e))
         finally:
-            try:
-                sock.close()
-            except Exception:
-                pass
+            if writer is not None:
+                try:
+                    writer.close()
+                except Exception:
+                    pass
 
     def get_position(self) -> dict[str, float] | None:
         """Get current GPS position."""

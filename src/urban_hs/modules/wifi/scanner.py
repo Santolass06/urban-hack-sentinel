@@ -464,17 +464,23 @@ class ScanManager:
             logger.error("Unknown scan strategy", strategy=self.strategy)
             return []
 
-        # Handle mode switch for strategies that need it
-        await self._ensure_mode()
-
+        # Only switch to monitor mode for strategies that require it. DIRECT
+        # uses `iw scan` in the interface's current (managed) mode, so it does
+        # not tear down a live connection — forcing monitor there would drop
+        # the machine's internet.
         if self.strategy == ScanStrategy.MODE_SWITCH:
-            # Switch to managed, scan, switch back
+            # Assumes a monitor-mode interface: temporarily go managed to scan.
+            await self._ensure_mode()
             await self._set_mode("managed")
             try:
                 networks = await backend.scan(self.interface, duration=duration)
             finally:
                 await self._set_mode("monitor")
-        else:
+        elif self.strategy == ScanStrategy.PASSIVE_ONLY:
+            # airodump-ng needs monitor mode.
+            await self._ensure_mode()
+            networks = await backend.scan(self.interface, duration=duration)
+        else:  # DIRECT — scan in the current mode, non-disruptive.
             networks = await backend.scan(self.interface, duration=duration)
 
         # Update cache

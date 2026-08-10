@@ -307,9 +307,15 @@ class TUIApp(App):
             except Exception:
                 pass
         await self._bootstrap_event_bus()
+        # Only enumerate interfaces on startup (read-only). Do NOT auto-scan:
+        # a Wi-Fi scan can switch the interface into monitor mode and, before
+        # the user picks an adapter, it would hit the default (connected)
+        # interface and drop the machine's internet. The user clicks Scan.
         asyncio.create_task(self._wifi_interfaces())
-        asyncio.create_task(self._wifi_scan())
-        asyncio.create_task(self._ble_scan())
+        self.query_one("#app-log", RichLog).write(
+            "[dim]Ready. Pick an interface and click Scan "
+            "(avoid your connected interface — scanning can enter monitor mode).[/dim]"
+        )
 
     async def _bootstrap_event_bus(self) -> None:
         """Start the event bus and wire the UI + attack plugins to it.
@@ -990,24 +996,17 @@ class TUIApp(App):
 
     async def _wifi_scan(self) -> None:
         try:
-            import shutil
-
             from urban_hs.modules.wifi import ScanStrategy, WiFiScanner
 
             iface = self._get_selected_wifi_interface()
             logs = self.query_one("#app-log", RichLog)
-            # PASSIVE_ONLY needs airodump-ng (monitor mode); without it fall back
-            # to the `iw` scan backend (DIRECT), which works on a normal managed
-            # interface. Otherwise the scan silently returns nothing.
-            if shutil.which("airodump-ng"):
-                strategy, duration = ScanStrategy.PASSIVE_ONLY, 30
-            else:
-                strategy, duration = ScanStrategy.DIRECT, 10
-                logs.write("[dim]airodump-ng not found — using `iw` scan[/dim]")
-            logs.write(f"[yellow]Scanning on interface: {iface} ({strategy.value})…[/yellow]")
-
-            scanner = WiFiScanner(interface=iface, strategy=strategy)
-            nets = await scanner.scan(duration=duration)
+            # Always use the DIRECT (`iw`) backend for discovery: it scans in
+            # the interface's current managed mode, so it does NOT switch to
+            # monitor mode and drop the connection. (Monitor-mode / airodump is
+            # only needed for the capture attacks, which use their own path.)
+            logs.write(f"[yellow]Scanning on interface: {iface} (iw)…[/yellow]")
+            scanner = WiFiScanner(interface=iface, strategy=ScanStrategy.DIRECT)
+            nets = await scanner.scan(duration=10)
             self._wifi_networks = [n.to_dict() for n in nets]
             self._refresh_wifi_table()
             self.post_message(
