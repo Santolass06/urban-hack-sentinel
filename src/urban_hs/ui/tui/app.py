@@ -126,7 +126,7 @@ class TUIApp(App):
                     yield Vertical(
                         Horizontal(
                             Label("Interface:", classes="select-label"),
-                            Select([("wlo1", "wlo1"), ("wlx00c0cab7625f", "wlx00c0cab7625f")], id="select-wifi-iface", value="wlx00c0cab7625f"),
+                            Select([], id="select-wifi-iface", prompt="Scanning interfaces..."),
                             Button("Scan", id="btn-wifi-scan"),
                             Button("Interfaces", id="btn-wifi-interfaces"),
                             Button("Deauth", id="btn-wifi-deauth"),
@@ -349,7 +349,7 @@ class TUIApp(App):
                 return select.value
         except Exception:
             pass
-        return "wlx00c0cab7625f"
+        return "wlo1"
 
     async def _wifi_deauth(self) -> None:
         self._publish_wifi_attack("deauth", {"count": 10})
