@@ -20,6 +20,7 @@ from textual.widgets import (
     DataTable,
     Footer,
     Header,
+    Input,
     Label,
     RichLog,
     Select,
@@ -144,7 +145,10 @@ class TUIApp(App):
                         classes="panel",
                     )
                 with TabPane("Terminal", id="tab-terminal"):
-                    yield RichLog(id="terminal-log", auto_scroll=True, markup=True)
+                    yield Vertical(
+                        RichLog(id="terminal-log", auto_scroll=True, markup=True),
+                        Input(placeholder="Digita um comando bash/CLI (ex: urban-hs info, iw dev, ping 1.1.1.1)...", id="cmd-input"),
+                    )
                 with TabPane("Logs", id="tab-logs"):
                     yield RichLog(id="app-log", auto_scroll=True, markup=True)
         yield Footer()
@@ -443,6 +447,30 @@ class TUIApp(App):
             ))
         except Exception as exc:
             self.post_message(EventMessage("network.scan.error", {"error": str(exc)}))
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "cmd-input":
+            cmd = event.value.strip()
+            event.input.value = ""
+            if cmd:
+                asyncio.create_task(self._execute_terminal_cmd(cmd))
+
+    async def _execute_terminal_cmd(self, cmd: str) -> None:
+        log = self.query_one("#terminal-log", RichLog)
+        log.write(f"[bold green]$ {cmd}[/bold green]")
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await proc.communicate()
+            if stdout:
+                log.write(stdout.decode(errors="replace").strip())
+            if stderr:
+                log.write(f"[red]{stderr.decode(errors='replace').strip()}[/red]")
+        except Exception as exc:
+            log.write(f"[bold red]Execution error:[/bold red] {exc}")
 
     def action_toggle_dark(self) -> None:
         pass
