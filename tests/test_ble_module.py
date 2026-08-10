@@ -21,13 +21,12 @@ from urban_hs.modules.ble import (
     _load_device_quirks,
     get_device_quirks,
 )
-from urban_hs.modules.ble.exploit_chain import (
-    WhisperPairFullExploit,
-)
+from urban_hs.modules.ble.exploit_chain import WhisperPairFullExploit
 
 
 class MockAdvertisementData:
     """Mock BLE advertisement data for testing."""
+
     def __init__(self, service_data=None, rssi=-50):
         self.service_data = service_data or {}
         self.rssi = rssi
@@ -35,6 +34,7 @@ class MockAdvertisementData:
 
 class MockBLEDevice:
     """Mock BLE device for testing."""
+
     def __init__(self, address="AA:BB:CC:DD:EE:FF", name="Test Device", rssi=-50):
         self.address = address
         self.name = name
@@ -43,6 +43,7 @@ class MockBLEDevice:
 
 class MockBleakClient:
     """Mock BleakClient for testing GATT operations."""
+
     def __init__(self, *args, **kwargs):
         self.address = kwargs.get("address", "AA:BB:CC:DD:EE:FF")
         self._connected = True
@@ -76,13 +77,14 @@ class MockBleakClient:
 # FAST PAIR SCANNER TESTS
 # ============================================================
 
+
 @patch("bleak.BleakScanner")
 @pytest.mark.asyncio
 async def test_fastpair_scanner_initialization(mock_bleak_scanner):
     """Test FastPairScanner initializes correctly."""
     scanner = FastPairScanner(adapter="hci0")
     assert scanner.adapter == "hci0"
-    assert hasattr(scanner, '_devices')
+    assert hasattr(scanner, "_devices")
     assert scanner._devices == {}
 
 
@@ -93,7 +95,27 @@ async def test_parse_fast_pair_advertisement_pairing_mode(mock_bleak_scanner):
     scanner = FastPairScanner(adapter="hci0")
 
     ad_data = {
-        FAST_PAIR_SERVICE_UUID.lower(): bytes([0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f])
+        FAST_PAIR_SERVICE_UUID.lower(): bytes(
+            [
+                0x00,
+                0x00,
+                0x01,
+                0x02,
+                0x03,
+                0x04,
+                0x05,
+                0x06,
+                0x07,
+                0x08,
+                0x09,
+                0x0A,
+                0x0B,
+                0x0C,
+                0x0D,
+                0x0E,
+                0x0F,
+            ]
+        )
     }
 
     device = MockBLEDevice(address="AA:BB:CC:DD:EE:FF", name="Test Device")
@@ -118,9 +140,7 @@ async def test_parse_fast_pair_advertisement_account_key_filter(mock_bleak_scann
     """Test parsing Fast Pair advertisement with account key filter."""
     scanner = FastPairScanner(adapter="hci0")
 
-    ad_data = {
-        FAST_PAIR_SERVICE_UUID.lower(): bytes([0x01] + [0x00] * 15)
-    }
+    ad_data = {FAST_PAIR_SERVICE_UUID.lower(): bytes([0x01] + [0x00] * 15)}
 
     device = MockBLEDevice(address="AA:BB:CC:DD:EE:FF")
     adv_data = MockAdvertisementData(service_data=ad_data, rssi=-60)
@@ -141,9 +161,7 @@ async def test_parse_fast_pair_advertisement_extended(mock_bleak_scanner):
     """Test parsing extended Fast Pair advertisement."""
     scanner = FastPairScanner(adapter="hci0")
 
-    ad_data = {
-        FAST_PAIR_SERVICE_UUID.lower(): bytes([0x02] + [0x00] * 15)
-    }
+    ad_data = {FAST_PAIR_SERVICE_UUID.lower(): bytes([0x02] + [0x00] * 15)}
 
     device = MockBLEDevice(address="AA:BB:CC:DD:EE:FF")
     adv_data = MockAdvertisementData(service_data=ad_data, rssi=-55)
@@ -162,6 +180,7 @@ async def test_parse_fast_pair_advertisement_extended(mock_bleak_scanner):
 # ============================================================
 # DEVICE QUIRKS TESTS
 # ============================================================
+
 
 def test_load_device_quirks_default():
     """Test loading default device quirks."""
@@ -198,6 +217,7 @@ def test_get_device_quirks_none():
 # WHISPER PAIR EXPLOIT TESTS
 # ============================================================
 
+
 @pytest.fixture
 def exploit():
     """Create a WhisperPairExploit instance for testing."""
@@ -222,8 +242,7 @@ async def test_whisperpair_exploit_execute_strategy_success(exploit):
     """Test KBP strategy execution with mocked success."""
     # The exploit imports BleakClient from bleak, so we patch it there
     result = await exploit._execute_kbp_strategy(
-        "AA:BB:CC:DD:EE:FF",
-        WhisperPairExploit.Strategy.RAW_KBP,
+        "AA:BB:CC:DD:EE:FF", WhisperPairExploit.Strategy.RAW_KBP
     )
 
     # Result depends on mocked BleakClient behavior
@@ -245,6 +264,7 @@ async def test_whisperpair_exploit_execute_all_strategies(exploit):
 # ============================================================
 # CONFIGURATION TESTS
 # ============================================================
+
 
 def test_device_quirks_json_structure():
     """Test that device_quirks.json has correct structure."""

@@ -12,6 +12,7 @@ Sprint 8A hardening supports environment modes:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import uuid
@@ -23,11 +24,7 @@ from pydantic import BaseModel, Field
 
 from urban_hs.core.config import get_config
 from urban_hs.core.event_bus import Event, EventPriority, get_event_bus
-from urban_hs.core.session_scope import (
-    SessionScope,
-    get_active_scope,
-    set_active_scope,
-)
+from urban_hs.core.session_scope import SessionScope, get_active_scope, set_active_scope
 from urban_hs.modules import list_modules
 from urban_hs.ui.api.auth import require_auth
 from urban_hs.ui.api.rate_limit import limiter
@@ -41,6 +38,7 @@ router = APIRouter(dependencies=[require_auth()])
 # dispatched asynchronously onto the event bus, where the plugin handlers
 # registered in the API lifespan consume "<module>.attack_request".
 EXPLOIT_ATTACK_NAME = "exploit"
+
 
 # The session scope is a process-wide singleton owned by
 # ``core.session_scope`` so that this REST path and the event-bus attack
@@ -84,9 +82,7 @@ async def list_attacks() -> AttackInventory:
     for name, class_path in raw.items():
         attacks.append(
             AttackSummary(
-                name=name,
-                plugin_type=_infer_plugin_type(name, class_path),
-                description=class_path,
+                name=name, plugin_type=_infer_plugin_type(name, class_path), description=class_path
             )
         )
     return AttackInventory(attacks=attacks, total=len(attacks))
@@ -132,12 +128,7 @@ async def execute_attack(
     if payload.dry_run:
         await _audit_log(attack_name, payload.params, job_id, "dry_run")
         await _publish(
-            "attack.completed",
-            {
-                "job_id": job_id,
-                "success": True,
-                "result": {"dry_run": True},
-            },
+            "attack.completed", {"job_id": job_id, "success": True, "result": {"dry_run": True}}
         )
         return ExecuteResponse(job_id=job_id, attack=attack_name)
 
@@ -153,12 +144,7 @@ async def execute_attack(
         raise HTTPException(status_code=403, detail=str(exc))
 
     await _publish(
-        "attack.started",
-        {
-            "attack": attack_name,
-            "params": payload.params,
-            "job_id": job_id,
-        },
+        "attack.started", {"attack": attack_name, "params": payload.params, "job_id": job_id}
     )
 
     if attack_name == EXPLOIT_ATTACK_NAME:
@@ -179,6 +165,35 @@ async def execute_attack(
     await _audit_log(attack_name, payload.params, job_id, "dispatched")
 
     return ExecuteResponse(job_id=job_id, attack=attack_name)
+
+
+class AttackAllRequest(BaseModel):
+    active: bool = False
+    ble_exploit: bool = False
+
+
+@router.post("/attacks/attack-all")
+@limiter.limit("2/minute")
+async def attack_all(request: Request, payload: AttackAllRequest) -> dict[str, Any]:
+    """Fan out every discovered WiFi AP + BLE device to all enabled attacks.
+
+    Non-blocking: the fan-out runs as a background task (it can take a long
+    time) and this returns a job id immediately.
+    """
+    _raise_if_airgap()
+    plugin = getattr(request.app.state, "urban_hack_plugin", None)
+    if plugin is None:
+        raise HTTPException(status_code=503, detail="Orchestrator plugin not available")
+
+    if payload.active:
+        plugin.config.wifi_enable_active_attacks = True
+    if payload.ble_exploit:
+        plugin.config.attack_all_ble_exploit = True
+
+    job_id = str(uuid.uuid4())
+    await _audit_log("attack_all", payload.model_dump(), job_id, "dispatched")
+    asyncio.create_task(plugin.attack_all())
+    return {"job_id": job_id, "status": "dispatched"}
 
 
 async def _execute_exploit(
@@ -226,20 +241,10 @@ async def _execute_exploit(
         options=params.get("options"),
     )
 
-    await _audit_log(
-        attack_name,
-        params,
-        job_id,
-        result.status.value,
-        error=result.error or None,
-    )
+    await _audit_log(attack_name, params, job_id, result.status.value, error=result.error or None)
     await _publish(
         "attack.completed",
-        {
-            "job_id": job_id,
-            "success": result.success,
-            "result": result.to_dict(),
-        },
+        {"job_id": job_id, "success": result.success, "result": result.to_dict()},
     )
     return ExecuteResponse(job_id=job_id, attack=attack_name)
 
@@ -274,8 +279,7 @@ async def _audit_log(
         )
     except Exception as exc:
         logger.warning(
-            "Failed to persist attack audit log",
-            extra={"attack": attack_name, "error": str(exc)},
+            "Failed to persist attack audit log", extra={"attack": attack_name, "error": str(exc)}
         )
 
 

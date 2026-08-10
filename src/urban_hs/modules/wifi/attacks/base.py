@@ -28,6 +28,7 @@ class AttackStatus(Enum):
 @dataclass
 class AttackResult:
     """Result of an attack execution."""
+
     attack_type: str
     target_bssid: str
     target_essid: str | None
@@ -70,15 +71,11 @@ class AttackResult:
 class BaseAttack(ABC):
     """Abstract base class for WiFi attacks."""
 
-    def __init__(
-        self,
-        interface: str,
-        output_dir: str | None = None,
-        attack_timeout: int = 60,
-    ):
+    def __init__(self, interface: str, output_dir: str | None = None, attack_timeout: int = 60):
         self.interface = interface
         if output_dir is None:
             from urban_hs.core.config import get_config
+
             output_dir = get_config().storage.resolve_wifi_attacks_dir()
         self.output_dir = Path(output_dir)
         try:
@@ -112,48 +109,46 @@ class BaseAttack(ABC):
                 pass
 
     async def _start_airodump(
-        self,
-        bssid: str,
-        channel: int,
-        output_prefix: str,
+        self, bssid: str, channel: int, output_prefix: str
     ) -> asyncio.subprocess.Process:
         """Start airodump-ng capture."""
         cmd = [
             "airodump-ng",
-            "--bssid", bssid,
-            "--channel", str(channel),
-            "--write", output_prefix,
-            "--output-format", "pcap",
+            "--bssid",
+            bssid,
+            "--channel",
+            str(channel),
+            "--write",
+            output_prefix,
+            "--output-format",
+            "pcap",
             self.interface,
         ]
 
         proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         return proc
 
     async def _run_hcxdumptool(
-        self,
-        bssid: str,
-        channel: int,
-        output_file: Path,
-        timeout: int,
+        self, bssid: str, channel: int, output_file: Path, timeout: int
     ) -> asyncio.subprocess.Process:
         """Run hcxdumptool for PMKID capture."""
         cmd = [
             "hcxdumptool",
-            "-i", self.interface,
-            "--filterlist_ap", bssid,
-            "--filtermode", "2",
-            "-c", str(channel),
-            "-o", str(output_file),
+            "-i",
+            self.interface,
+            "--filterlist_ap",
+            bssid,
+            "--filtermode",
+            "2",
+            "-c",
+            str(channel),
+            "-o",
+            str(output_file),
         ]
 
         proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         return proc

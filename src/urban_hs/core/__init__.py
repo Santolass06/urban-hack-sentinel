@@ -79,12 +79,7 @@ from urban_hs.core.process_mgr import (
     init_process_manager,
     shutdown_process_manager,
 )
-from urban_hs.core.scheduler import (
-    JobStatus,
-    ScheduledJob,
-    Scheduler,
-    TriggerType,
-)
+from urban_hs.core.scheduler import JobStatus, ScheduledJob, Scheduler, TriggerType
 from urban_hs.core.security import (
     MODULE_CAPABILITIES,
     SECCOMP_PROFILES,
@@ -109,7 +104,6 @@ __all__ = [
     "get_config",
     "init_config",
     "shutdown_config",
-
     # Event Bus
     "Event",
     "EventBus",
@@ -119,7 +113,6 @@ __all__ = [
     "get_event_bus",
     "init_event_bus",
     "shutdown_event_bus",
-
     # Logger
     "get_logger",
     "get_module_logger",
@@ -128,13 +121,11 @@ __all__ = [
     "set_correlation_id",
     "get_correlation_id",
     "trace",
-
     # Storage
     "Storage",
     "get_storage",
     "init_storage",
     "shutdown_storage",
-
     # Process Manager
     "ProcessManager",
     "ProcessLimits",
@@ -145,7 +136,6 @@ __all__ = [
     "get_process_manager",
     "init_process_manager",
     "shutdown_process_manager",
-
     # Health
     "HealthStatus",
     "HealthCheckResult",
@@ -153,13 +143,11 @@ __all__ = [
     "HealthChecker",
     "HealthCheckMiddleware",
     "create_health_checker",
-
     # Scheduler
     "TriggerType",
     "JobStatus",
     "ScheduledJob",
     "Scheduler",
-
     # Concurrency
     "ResourceType",
     "ResourcePriority",
@@ -168,7 +156,6 @@ __all__ = [
     "ResourcePool",
     "ResourceManager",
     "get_resource_manager",
-
     # Memory
     "MemorySnapshot",
     "AllocationRecord",
@@ -184,7 +171,6 @@ __all__ = [
     "alimit",
     "afilter",
     "amap",
-
     # Security
     "Capability",
     "CapabilitySet",
@@ -200,7 +186,6 @@ __all__ = [
     "SupplyChainConfig",
     "SupplyChainVerifier",
     "harden_process",
-
     # Plugins
     "PluginStatus",
     "PluginType",
@@ -224,7 +209,7 @@ async def init_core(
 ) -> dict[str, Any]:
     """
     Initialize all core services.
-    
+
     Returns dict with initialized services.
     """
     import os
@@ -256,20 +241,14 @@ async def init_core(
 
     # Initialize services
     bus = await init_event_bus()
-    storage = await init_storage(
-        sqlite_path=sqlite_path,
-        redis_url=redis_url,
-    )
+    storage = await init_storage(sqlite_path=sqlite_path, redis_url=redis_url)
     pm = await init_process_manager()
 
-    logger.info("Core services initialized", services=["event_bus", "config", "storage", "process_manager"])
+    logger.info(
+        "Core services initialized", services=["event_bus", "config", "storage", "process_manager"]
+    )
 
-    return {
-        "event_bus": bus,
-        "config": config,
-        "storage": storage,
-        "process_manager": pm,
-    }
+    return {"event_bus": bus, "config": config, "storage": storage, "process_manager": pm}
 
 
 async def shutdown_core() -> None:

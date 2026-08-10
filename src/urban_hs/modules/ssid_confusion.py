@@ -1,8 +1,8 @@
 """
 SSID Confusion Detection - CVE-2023-52424
 
-SSID Confusion vulnerability allows clients to connect to a different network 
-than intended because the SSID is not included in the PMK derivation for 
+SSID Confusion vulnerability allows clients to connect to a different network
+than intended because the SSID is not included in the PMK derivation for
 networks using multi-band transitioning (802.11r/K/V).
 
 The attack works because:
@@ -39,16 +39,18 @@ logger = structlog.get_logger(__name__)
 
 class SSIDConfusionType(Enum):
     """Types of SSID confusion scenarios."""
-    SAME_BSSID_DIFF_SSID = "same_bssid_diff_ssid"      # Same BSSID, different SSIDs
-    FT_ROGUE_AP = "ft_rogue_ap"                           # 802.11r Fast Transition rogue AP
-    BAND_TRANSITION = "band_transition"                   # 2.4/5GHz transition confusion
-    NEIGHBOR_REPORT_ATTACK = "neighbor_report_attack"    # 802.11k neighbor report manipulation
-    MULTI_AP_SAME_PSK = "multi_ap_same_psk"              # Multiple APs with same PSK
+
+    SAME_BSSID_DIFF_SSID = "same_bssid_diff_ssid"  # Same BSSID, different SSIDs
+    FT_ROGUE_AP = "ft_rogue_ap"  # 802.11r Fast Transition rogue AP
+    BAND_TRANSITION = "band_transition"  # 2.4/5GHz transition confusion
+    NEIGHBOR_REPORT_ATTACK = "neighbor_report_attack"  # 802.11k neighbor report manipulation
+    MULTI_AP_SAME_PSK = "multi_ap_same_psk"  # Multiple APs with same PSK
 
 
 @dataclass
 class SSIDConfusionTarget:
     """Target network for SSID confusion analysis."""
+
     bssid: str
     ssid: str
     channel: int
@@ -64,6 +66,7 @@ class SSIDConfusionTarget:
 @dataclass
 class SSIDConfusionResult:
     """Result of SSID confusion analysis."""
+
     confusion_type: SSIDConfusionType
     vulnerable: bool
     targets_involved: list[SSIDConfusionTarget] = field(default_factory=list)
@@ -89,19 +92,18 @@ class SSIDConfusionDetector:
     - Rogue AP can spoof neighbor reports to redirect clients
     """
 
-    def __init__(
-        self,
-        interface: str = "wlan0",
-        scan_timeout: int = 30,
-    ):
+    def __init__(self, interface: str = "wlan0", scan_timeout: int = 30):
         self.interface = interface
         self.scan_timeout = scan_timeout
         self.nmap = NmapScanner()
 
-    async def scan_networks(self, target_network: str = "192.168.1.0/24") -> list[SSIDConfusionTarget]:
+    async def scan_networks(
+        self, target_network: str = "192.168.1.0/24"
+    ) -> list[SSIDConfusionTarget]:
         """Scan for WiFi networks and extract SSID confusion indicators."""
         # Use airodump-ng for detailed WiFi info
         from urban_hs.modules.wifi import WiFiScanner
+
         scanner = WiFiScanner(interface=self.interface)
 
         networks = await scanner.manager.scan(duration=self.scan_timeout)
@@ -133,24 +135,18 @@ class SSIDConfusionDetector:
     def _is_ft_enabled(self, network) -> bool:
         """Check if network has 802.11r Fast Transition enabled."""
         # Check flags for FT indicators
-        flags = getattr(network, 'flags', [])
-        flag_str = ','.join(flags).upper() if flags else ''
+        flags = getattr(network, "flags", [])
+        flag_str = ",".join(flags).upper() if flags else ""
 
-        ft_indicators = [
-            'FT-PSK',
-            'FT-EAP',
-            '802.11R',
-            'FAST TRANSITION',
-            'FT',
-        ]
+        ft_indicators = ["FT-PSK", "FT-EAP", "802.11R", "FAST TRANSITION", "FT"]
 
         for indicator in ft_indicators:
             if indicator in flag_str:
                 return True
 
         # Also check encryption field
-        enc = getattr(network, 'encryption', '').upper()
-        if 'FT' in enc or '802.11R' in enc:
+        enc = getattr(network, "encryption", "").upper()
+        if "FT" in enc or "802.11R" in enc:
             return True
 
         return False
@@ -173,19 +169,21 @@ class SSIDConfusionDetector:
                     ft_count = sum(1 for t in group if t.ft_enabled)
                     risk = "high" if ft_count > 0 else "medium"
 
-                    results.append(SSIDConfusionResult(
-                        confusion_type=SSIDConfusionType.SAME_BSSID_DIFF_SSID,
-                        vulnerable=True,
-                        targets_involved=group,
-                        description=f"BSSID {bssid} broadcasts {len(ssids)} different SSIDs: {', '.join(ssids)}. FT enabled: {ft_count}/{len(group)}",
-                        risk_level=risk,
-                        evidence={
-                            "bssid": bssid,
-                            "ssids": list(ssids),
-                            "ft_enabled_count": ft_count,
-                            "total_networks": len(group),
-                        }
-                    ))
+                    results.append(
+                        SSIDConfusionResult(
+                            confusion_type=SSIDConfusionType.SAME_BSSID_DIFF_SSID,
+                            vulnerable=True,
+                            targets_involved=group,
+                            description=f"BSSID {bssid} broadcasts {len(ssids)} different SSIDs: {', '.join(ssids)}. FT enabled: {ft_count}/{len(group)}",
+                            risk_level=risk,
+                            evidence={
+                                "bssid": bssid,
+                                "ssids": list(ssids),
+                                "ft_enabled_count": ft_count,
+                                "total_networks": len(group),
+                            },
+                        )
+                    )
 
         # 2. FT-enabled networks analysis
         ft_networks = [t for t in targets if t.ft_enabled]
@@ -201,18 +199,20 @@ class SSIDConfusionDetector:
                     ssids = {t.ssid for t in group}
                     if len(ssids) > 1:
                         # Multiple SSIDs in same mobility domain = potential confusion
-                        results.append(SSIDConfusionResult(
-                            confusion_type=SSIDConfusionType.FT_ROGUE_AP,
-                            vulnerable=True,
-                            targets_involved=group,
-                            description=f"Mobility domain {md} has {len(group)} FT-enabled APs with {len(ssids)} different SSIDs",
-                            risk_level="critical",
-                            evidence={
-                                "mobility_domain": md,
-                                "ssids": list(ssids),
-                                "ft_networks": len(group),
-                            }
-                        ))
+                        results.append(
+                            SSIDConfusionResult(
+                                confusion_type=SSIDConfusionType.FT_ROGUE_AP,
+                                vulnerable=True,
+                                targets_involved=group,
+                                description=f"Mobility domain {md} has {len(group)} FT-enabled APs with {len(ssids)} different SSIDs",
+                                risk_level="critical",
+                                evidence={
+                                    "mobility_domain": md,
+                                    "ssids": list(ssids),
+                                    "ft_networks": len(group),
+                                },
+                            )
+                        )
 
         # 3. Band transition analysis (2.4GHz vs 5GHz same SSID/PSK)
         ssid_groups: dict[str, list[SSIDConfusionTarget]] = {}
@@ -232,19 +232,21 @@ class SSIDConfusionDetector:
                     # Same SSID on multiple bands
                     ft_count = sum(1 for t in group if t.ft_enabled)
                     if ft_count > 0:
-                        results.append(SSIDConfusionResult(
-                            confusion_type=SSIDConfusionType.BAND_TRANSITION,
-                            vulnerable=True,
-                            targets_involved=group,
-                            description=f"SSID '{ssid}' on multiple bands ({', '.join(bands)}) with FT enabled on {ft_count}/{len(group)} APs",
-                            risk_level="high",
-                            evidence={
-                                "ssid": ssid,
-                                "bands": list(bands),
-                                "ft_enabled_count": ft_count,
-                                "total_aps": len(group),
-                            }
-                        ))
+                        results.append(
+                            SSIDConfusionResult(
+                                confusion_type=SSIDConfusionType.BAND_TRANSITION,
+                                vulnerable=True,
+                                targets_involved=group,
+                                description=f"SSID '{ssid}' on multiple bands ({', '.join(bands)}) with FT enabled on {ft_count}/{len(group)} APs",
+                                risk_level="high",
+                                evidence={
+                                    "ssid": ssid,
+                                    "bands": list(bands),
+                                    "ft_enabled_count": ft_count,
+                                    "total_aps": len(group),
+                                },
+                            )
+                        )
 
         # 4. Same PSK inference (same security type on multiple APs of same vendor)
         if results:
@@ -274,17 +276,20 @@ class SSIDConfusionDetector:
         medium = sum(1 for r in results if r.risk_level == "medium")
         low = sum(1 for r in results if r.risk_level == "low")
 
-        overall = "critical" if critical > 0 else "high" if high > 0 else "medium" if medium > 0 else "low"
+        overall = (
+            "critical"
+            if critical > 0
+            else "high"
+            if high > 0
+            else "medium"
+            if medium > 0
+            else "low"
+        )
 
         return {
             "total_vulnerabilities": len(results),
             "risk_level": overall,
-            "breakdown": {
-                "critical": critical,
-                "high": high,
-                "medium": medium,
-                "low": low,
-            },
+            "breakdown": {"critical": critical, "high": high, "medium": medium, "low": low},
             "confusion_types": [r.confusion_type.value for r in results],
             "affected_networks": sum(len(r.targets_involved) for r in results),
             "summary": f"Found {len(results)} SSID confusion vulnerabilities. Overall risk: {overall}",
@@ -370,10 +375,7 @@ class SSIDConfusionDetector:
             # Check if hostapd started successfully
             if proc.returncode is not None:
                 stdout, stderr = await proc.communicate()
-                return {
-                    "success": False,
-                    "error": f"hostapd failed to start: {stderr.decode()}",
-                }
+                return {"success": False, "error": f"hostapd failed to start: {stderr.decode()}"}
 
             if callback:
                 callback(f"Rogue AP '{rogue_ssid}' started on channel {target.channel}")
@@ -393,10 +395,7 @@ class SSIDConfusionDetector:
 
         except Exception as e:
             logger.error("Evil Twin attack failed", error=str(e))
-            return {
-                "success": False,
-                "error": str(e),
-            }
+            return {"success": False, "error": str(e)}
 
     async def stop_evil_twin_attack(self, attack_handle: dict[str, Any]) -> bool:
         """Stop a running Evil Twin attack."""
@@ -491,9 +490,7 @@ logger_stdout_level=2
         return config
 
     async def run_full_assessment(
-        self,
-        target_area: str = "192.168.1.0/24",
-        callback: Callable[[str], None] | None = None,
+        self, target_area: str = "192.168.1.0/24", callback: Callable[[str], None] | None = None
     ) -> dict[str, Any]:
         """Run complete SSID confusion assessment."""
         if callback:
@@ -550,6 +547,7 @@ logger_stdout_level=2
 # Convenience Functions
 # ============================================================
 
+
 async def scan_ssid_confusion(
     target_area: str = "192.168.1.0/24",
     interface: str = "wlan0",
@@ -562,8 +560,7 @@ async def scan_ssid_confusion(
 
 
 async def quick_ssid_confusion_check(
-    interface: str = "wlan0",
-    scan_timeout: int = 15,
+    interface: str = "wlan0", scan_timeout: int = 15
 ) -> list[SSIDConfusionResult]:
     """Quick SSID confusion check."""
     detector = SSIDConfusionDetector(interface=interface, scan_timeout=scan_timeout)

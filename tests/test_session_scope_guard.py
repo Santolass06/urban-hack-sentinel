@@ -28,12 +28,14 @@ from urban_hs.modules.wifi.plugin import WiFiEventHandler
 
 try:
     from urban_hs.modules.urban_hack import UrbanHackEventHandler
+
     _URBAN_OK = True
 except Exception:  # pragma: no cover - optional D-Bus dependency missing
     _URBAN_OK = False
 
 try:
     from urban_hs.modules.ble.plugin import BLEEventHandler
+
     _BLE_OK = True
 except Exception:  # pragma: no cover - optional D-Bus dependency missing
     _BLE_OK = False
@@ -83,6 +85,7 @@ def _wifi_plugin_mock() -> MagicMock:
 # WiFi attack handler — wifi/plugin.py:_handle_attack_request
 # ----------------------------------------------------------------------
 
+
 @pytest.mark.asyncio()
 async def test_wifi_attack_blocked_by_closed_scope():
     plugin = _wifi_plugin_mock()
@@ -100,11 +103,9 @@ async def test_wifi_attack_blocked_by_closed_scope():
 @pytest.mark.asyncio()
 async def test_wifi_attack_allowed_by_open_scope():
     """Positive control: with an open scope the same event MUST execute."""
-    set_active_scope(SessionScope(
-        allow_active=True,
-        allowed_targets={TARGET_BSSID},
-        allowed_categories={"wifi"},
-    ))
+    set_active_scope(
+        SessionScope(allow_active=True, allowed_targets={TARGET_BSSID}, allowed_categories={"wifi"})
+    )
     plugin = _wifi_plugin_mock()
     handler = WiFiEventHandler(plugin)
     bus_mock = MagicMock()
@@ -120,6 +121,7 @@ async def test_wifi_attack_allowed_by_open_scope():
 # ----------------------------------------------------------------------
 # WiFi attack handler — urban_hack.py:_handle_wifi_attack
 # ----------------------------------------------------------------------
+
 
 @pytest.mark.skipif(not _URBAN_OK, reason="urban_hack requires optional D-Bus dependency")
 @pytest.mark.asyncio()
@@ -140,11 +142,9 @@ async def test_urban_wifi_attack_blocked_by_closed_scope():
 @pytest.mark.asyncio()
 async def test_urban_wifi_attack_allowed_by_open_scope():
     """Positive control for the urban_hack handler."""
-    set_active_scope(SessionScope(
-        allow_active=True,
-        allowed_targets={TARGET_BSSID},
-        allowed_categories={"wifi"},
-    ))
+    set_active_scope(
+        SessionScope(allow_active=True, allowed_targets={TARGET_BSSID}, allowed_categories={"wifi"})
+    )
     plugin = _wifi_plugin_mock()
     handler = UrbanHackEventHandler(plugin)
     bus_mock = MagicMock()
@@ -159,6 +159,7 @@ async def test_urban_wifi_attack_allowed_by_open_scope():
 # ----------------------------------------------------------------------
 # BLE exploit handler — urban_hack.py:_handle_ble_exploit
 # ----------------------------------------------------------------------
+
 
 @pytest.mark.skipif(not _URBAN_OK, reason="urban_hack requires optional D-Bus dependency")
 @pytest.mark.asyncio()
@@ -181,11 +182,9 @@ async def test_urban_ble_exploit_blocked_by_closed_scope():
 @pytest.mark.asyncio()
 async def test_urban_ble_exploit_allowed_by_open_scope():
     """Positive control: open scope lets the exploit body run (not denied)."""
-    set_active_scope(SessionScope(
-        allow_active=True,
-        allowed_targets={TARGET_ADDR},
-        allowed_categories={"ble"},
-    ))
+    set_active_scope(
+        SessionScope(allow_active=True, allowed_targets={TARGET_ADDR}, allowed_categories={"ble"})
+    )
     plugin = MagicMock()
     plugin.config.ble_whisperpair_exploit_enabled = True
     handler = UrbanHackEventHandler(plugin)
@@ -206,6 +205,7 @@ async def test_urban_ble_exploit_allowed_by_open_scope():
 # BLE exploit handler — ble/plugin.py:_handle_exploit_request
 # (the actually-subscribed handler for ble.exploit_request)
 # ----------------------------------------------------------------------
+
 
 @pytest.mark.skipif(not _BLE_OK, reason="ble.plugin requires optional D-Bus dependency")
 @pytest.mark.asyncio()
@@ -228,11 +228,9 @@ async def test_ble_plugin_exploit_blocked_by_closed_scope():
 @pytest.mark.asyncio()
 async def test_ble_plugin_exploit_allowed_by_open_scope():
     """Positive control for the BLE plugin exploit handler (not denied)."""
-    set_active_scope(SessionScope(
-        allow_active=True,
-        allowed_targets={TARGET_ADDR},
-        allowed_categories={"ble"},
-    ))
+    set_active_scope(
+        SessionScope(allow_active=True, allowed_targets={TARGET_ADDR}, allowed_categories={"ble"})
+    )
     plugin = MagicMock()
     plugin.config.whisperpair_exploit_enabled = True
     handler = BLEEventHandler(plugin)

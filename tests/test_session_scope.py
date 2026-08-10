@@ -10,6 +10,7 @@ from urban_hs.core.session_scope import SessionScope
 # Construction defaults
 # ------------------------------------------------------------------
 
+
 class TestSessionScopeDefaults:
     def test_empty_scope_blocks_active(self) -> None:
         scope = SessionScope()
@@ -28,6 +29,7 @@ class TestSessionScopeDefaults:
 # Guard rails — empty scope
 # ------------------------------------------------------------------
 
+
 class TestEmptyScopeBlocksActive:
     def test_no_targets_blocks(self) -> None:
         scope = SessionScope(allow_active=True, allowed_categories={"wifi"})
@@ -39,9 +41,7 @@ class TestEmptyScopeBlocksActive:
 
     def test_allow_active_false_blocks_regardless(self) -> None:
         scope = SessionScope(
-            allow_active=False,
-            allowed_targets={"192.168.1.1"},
-            allowed_categories={"wifi"},
+            allow_active=False, allowed_targets={"192.168.1.1"}, allowed_categories={"wifi"}
         )
         assert scope.is_target_allowed("192.168.1.1") is False
         assert scope.is_category_allowed("wifi") is False
@@ -51,6 +51,7 @@ class TestEmptyScopeBlocksActive:
 # ------------------------------------------------------------------
 # Allowlist — positive cases
 # ------------------------------------------------------------------
+
 
 class TestAllowlistPositive:
     def test_target_in_allowlist(self) -> None:
@@ -64,18 +65,14 @@ class TestAllowlistPositive:
 
     def test_category_in_allowlist(self) -> None:
         scope = SessionScope(
-            allow_active=True,
-            allowed_targets={"10.0.0.1"},
-            allowed_categories={"wifi", "ble"},
+            allow_active=True, allowed_targets={"10.0.0.1"}, allowed_categories={"wifi", "ble"}
         )
         assert scope.is_category_allowed("wifi") is True
         assert scope.is_category_allowed("ble") is True
 
     def test_can_execute_allowed(self) -> None:
         scope = SessionScope(
-            allow_active=True,
-            allowed_targets={"10.0.0.1"},
-            allowed_categories={"wifi"},
+            allow_active=True, allowed_targets={"10.0.0.1"}, allowed_categories={"wifi"}
         )
         assert scope.can_execute("10.0.0.1", "wifi") is True
 
@@ -84,21 +81,18 @@ class TestAllowlistPositive:
 # Allowlist — negative cases
 # ------------------------------------------------------------------
 
+
 class TestAllowlistNegative:
     def test_target_not_in_allowlist(self) -> None:
         scope = SessionScope(
-            allow_active=True,
-            allowed_targets={"192.168.1.1"},
-            allowed_categories={"wifi"},
+            allow_active=True, allowed_targets={"192.168.1.1"}, allowed_categories={"wifi"}
         )
         assert scope.is_target_allowed("10.0.0.99") is False
         assert scope.can_execute("10.0.0.99", "wifi") is False
 
     def test_category_not_in_allowlist(self) -> None:
         scope = SessionScope(
-            allow_active=True,
-            allowed_targets={"192.168.1.1"},
-            allowed_categories={"wifi"},
+            allow_active=True, allowed_targets={"192.168.1.1"}, allowed_categories={"wifi"}
         )
         assert scope.is_category_allowed("ble") is False
         assert scope.can_execute("192.168.1.1", "ble") is False
@@ -106,9 +100,7 @@ class TestAllowlistNegative:
     def test_wrong_category_with_valid_target(self) -> None:
         """Target is allowed but category is not — must block."""
         scope = SessionScope(
-            allow_active=True,
-            allowed_targets={"10.0.0.1"},
-            allowed_categories={"network"},
+            allow_active=True, allowed_targets={"10.0.0.1"}, allowed_categories={"network"}
         )
         assert scope.can_execute("10.0.0.1", "wifi") is False
 
@@ -116,6 +108,7 @@ class TestAllowlistNegative:
 # ------------------------------------------------------------------
 # validate() — raises PermissionError
 # ------------------------------------------------------------------
+
 
 class TestValidateRaises:
     def test_validate_blocks_when_inactive(self) -> None:
@@ -135,27 +128,21 @@ class TestValidateRaises:
 
     def test_validate_blocks_unknown_target(self) -> None:
         scope = SessionScope(
-            allow_active=True,
-            allowed_targets={"10.0.0.1"},
-            allowed_categories={"wifi"},
+            allow_active=True, allowed_targets={"10.0.0.1"}, allowed_categories={"wifi"}
         )
         with pytest.raises(PermissionError, match="not in the session allowlist"):
             scope.validate("10.0.0.99", "wifi")
 
     def test_validate_blocks_unknown_category(self) -> None:
         scope = SessionScope(
-            allow_active=True,
-            allowed_targets={"10.0.0.1"},
-            allowed_categories={"wifi"},
+            allow_active=True, allowed_targets={"10.0.0.1"}, allowed_categories={"wifi"}
         )
         with pytest.raises(PermissionError, match="not in the session allowlist"):
             scope.validate("10.0.0.1", "ble")
 
     def test_validate_passes_for_valid(self) -> None:
         scope = SessionScope(
-            allow_active=True,
-            allowed_targets={"10.0.0.1"},
-            allowed_categories={"wifi"},
+            allow_active=True, allowed_targets={"10.0.0.1"}, allowed_categories={"wifi"}
         )
         scope.validate("10.0.0.1", "wifi")
 
@@ -164,12 +151,11 @@ class TestValidateRaises:
 # Edge cases
 # ------------------------------------------------------------------
 
+
 class TestEdgeCases:
     def test_ssid_as_target(self) -> None:
         scope = SessionScope(
-            allow_active=True,
-            allowed_targets={"MyWiFiNetwork"},
-            allowed_categories={"wifi"},
+            allow_active=True, allowed_targets={"MyWiFiNetwork"}, allowed_categories={"wifi"}
         )
         assert scope.is_target_allowed("MyWiFiNetwork") is True
         assert scope.can_execute("MyWiFiNetwork", "wifi") is True

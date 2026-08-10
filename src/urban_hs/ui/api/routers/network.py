@@ -54,40 +54,46 @@ async def start_network_scan(
     async def _run() -> None:
         simulated = False
         try:
-            await bus.publish(Event(
-                type="network.scan.started",
-                payload={"job_id": job_id, "target": target, "scan_type": scan_type},
-                source="api",
-            ))
+            await bus.publish(
+                Event(
+                    type="network.scan.started",
+                    payload={"job_id": job_id, "target": target, "scan_type": scan_type},
+                    source="api",
+                )
+            )
             hosts = await module.nmap.scan(
-                [target],
-                scan_type=_build_scan_type(scan_type),
-                timeout=timeout,
+                [target], scan_type=_build_scan_type(scan_type), timeout=timeout
             )
             result = [vars(h) for h in hosts]
-            await bus.publish(Event(
-                type="network.scan.completed",
-                payload={
-                    "job_id": job_id,
+            await bus.publish(
+                Event(
+                    type="network.scan.completed",
+                    payload={
+                        "job_id": job_id,
+                        "count": len(result),
+                        "hosts": result,
+                        "simulated": simulated,
+                    },
+                    source="api",
+                )
+            )
+            payload.update(
+                {
+                    "status": "completed",
                     "count": len(result),
                     "hosts": result,
                     "simulated": simulated,
-                },
-                source="api",
-            ))
-            payload.update({
-                "status": "completed",
-                "count": len(result),
-                "hosts": result,
-                "simulated": simulated,
-            })
+                }
+            )
         except Exception as exc:
             logger.warning("Network scan failed: %s", exc)
-            await bus.publish(Event(
-                type="network.scan.error",
-                payload={"job_id": job_id, "error": str(exc)},
-                source="api",
-            ))
+            await bus.publish(
+                Event(
+                    type="network.scan.error",
+                    payload={"job_id": job_id, "error": str(exc)},
+                    source="api",
+                )
+            )
             payload.update({"status": "error", "error": str(exc)})
 
     asyncio.create_task(_run())

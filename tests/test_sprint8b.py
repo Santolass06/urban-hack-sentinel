@@ -14,11 +14,7 @@ from pathlib import Path
 import pytest
 
 from urban_hs.core.forensics import EvidenceBundle, RetentionPolicy
-from urban_hs.core.mac_anonymiser import (
-    pseudonymise_mac,
-    pseudonymise_macs,
-    redact_text,
-)
+from urban_hs.core.mac_anonymiser import pseudonymise_mac, pseudonymise_macs, redact_text
 
 
 class TestMacAnonymiser:
@@ -35,23 +31,14 @@ class TestMacAnonymiser:
         assert pseudonymise_mac("") == ""
 
     def test_pseudonymise_macs_redacts_dict_fields(self):
-        sample = {
-            "mac": "aa:bb:cc:dd:ee:ff",
-            "bssid": "11:22:33:44:55:66",
-            "name": "known-ssid",
-        }
+        sample = {"mac": "aa:bb:cc:dd:ee:ff", "bssid": "11:22:33:44:55:66", "name": "known-ssid"}
         redacted = pseudonymise_macs(sample)
         assert redacted["mac"] != sample["mac"]
         assert redacted["bssid"] != sample["bssid"]
         assert redacted["name"] == sample["name"]
 
     def test_pseudonymise_macs_handles_nested_structures(self):
-        sample = {
-            "devices": [
-                {"mac": "aa:bb:cc:dd:ee:ff"},
-                {"mac": "11:22:33:44:55:66"},
-            ]
-        }
+        sample = {"devices": [{"mac": "aa:bb:cc:dd:ee:ff"}, {"mac": "11:22:33:44:55:66"}]}
         redacted = pseudonymise_macs(sample)
         assert redacted["devices"][0]["mac"] != "aa:bb:cc:dd:ee:ff"
         assert redacted["devices"][0]["mac"] != redacted["devices"][1]["mac"]

@@ -23,9 +23,7 @@ from urban_hs.modules.wifi.plugin import WiFiModuleConfig, WiFiPlugin
 def plugin():
     plugin = WiFiPlugin(
         config=WiFiModuleConfig(
-            interface="wlan0",
-            enable_active_attacks=True,
-            mac_randomize_interval=0,
+            interface="wlan0", enable_active_attacks=True, mac_randomize_interval=0
         )
     )
     plugin.scanner = MagicMock()
@@ -95,6 +93,7 @@ async def test_scan_request_event(plugin):
     plugin.scanner.manager.scan = AsyncMock(return_value=[])
 
     from urban_hs.modules.wifi.plugin import WiFiEventHandler
+
     handler = WiFiEventHandler(plugin)
     await handler.handle(event)
 
@@ -112,13 +111,14 @@ async def test_attack_execution(plugin):
     bus_mock.publish = AsyncMock()
 
     # Open the shared session scope so the guard rail permits execution.
-    set_active_scope(SessionScope(
-        allow_active=True,
-        allowed_targets={"AA:BB:CC:DD:EE:FF"},
-        allowed_categories={"wifi"},
-    ))
+    set_active_scope(
+        SessionScope(
+            allow_active=True, allowed_targets={"AA:BB:CC:DD:EE:FF"}, allowed_categories={"wifi"}
+        )
+    )
 
     from urban_hs.modules.wifi.plugin import WiFiEventHandler
+
     handler = WiFiEventHandler(plugin)
 
     try:

@@ -21,12 +21,7 @@ from urban_hs.modules.wifi.fragattacks import (
 
 @pytest.fixture()
 def wrapper():
-    return FragAttacksWrapper(
-        config=FragAttackConfig(
-            interface="wlan0",
-            attack_timeout=5,
-        )
-    )
+    return FragAttacksWrapper(config=FragAttackConfig(interface="wlan0", attack_timeout=5))
 
 
 def test_default_config():
@@ -39,28 +34,31 @@ def test_default_config():
 def test_missing_tool_returns_not_vulnerable(wrapper):
     wrapper.fragattacks_path = None
     import asyncio
-    results = asyncio.run(wrapper.run_tests(
-        target_bssid="AA:BB:CC:DD:EE:FF",
-        channel=1,
-    ))
+
+    results = asyncio.run(wrapper.run_tests(target_bssid="AA:BB:CC:DD:EE:FF", channel=1))
     assert all(r.vulnerable is False for r in results)
 
 
 def test_parse_vulnerable_output(wrapper):
-    assert wrapper._parse_result("Device is vulnerable to fragmentation", FragAttackType.FRAGMENTATION) is True
+    assert (
+        wrapper._parse_result("Device is vulnerable to fragmentation", FragAttackType.FRAGMENTATION)
+        is True
+    )
 
 
 def test_parse_not_vulnerable_output(wrapper):
-    assert wrapper._parse_result("Test completed, no issues found.", FragAttackType.MIXED_KEY) is False
+    assert (
+        wrapper._parse_result("Test completed, no issues found.", FragAttackType.MIXED_KEY) is False
+    )
 
 
 def test_build_command_returns_none_for_unknown_type(wrapper):
-    assert wrapper._build_command(
-        attack_type=FragAttackType.ALL,
-        target="AA:BB:CC:DD:EE:FF",
-        channel=1,
-        client_mac=None,
-    ) is None
+    assert (
+        wrapper._build_command(
+            attack_type=FragAttackType.ALL, target="AA:BB:CC:DD:EE:FF", channel=1, client_mac=None
+        )
+        is None
+    )
 
 
 def test_result_dataclass_defaults():

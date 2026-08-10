@@ -25,11 +25,7 @@ router = APIRouter(dependencies=[require_auth()])
 @limiter.limit("10/minute")
 async def start_ble_scan(request: Request, duration: int = 10) -> dict[str, Any]:
     job_id = str(uuid.uuid4())
-    payload: dict[str, Any] = {
-        "job_id": job_id,
-        "duration": duration,
-        "status": "queued",
-    }
+    payload: dict[str, Any] = {"job_id": job_id, "duration": duration, "status": "queued"}
 
     async def _run() -> None:
         try:
@@ -38,11 +34,13 @@ async def start_ble_scan(request: Request, duration: int = 10) -> dict[str, Any]
             from urban_hs.modules.ble import FastPairScanner
 
             bus = get_event_bus()
-            await bus.publish(Event(
-                type="ble.scan.started",
-                payload={"job_id": job_id, "duration": duration},
-                source="api",
-            ))
+            await bus.publish(
+                Event(
+                    type="ble.scan.started",
+                    payload={"job_id": job_id, "duration": duration},
+                    source="api",
+                )
+            )
 
             scanner = FastPairScanner()
             simulated = False
@@ -51,37 +49,41 @@ async def start_ble_scan(request: Request, duration: int = 10) -> dict[str, Any]
                 await asyncio.sleep(duration)
             except Exception as exc:
                 logger.warning("BLE scan failed, no fallback: %s", exc)
-                await bus.publish(Event(
-                    type="ble.scan.error",
-                    payload={"job_id": job_id, "error": str(exc)},
-                    source="api",
-                ))
+                await bus.publish(
+                    Event(
+                        type="ble.scan.error",
+                        payload={"job_id": job_id, "error": str(exc)},
+                        source="api",
+                    )
+                )
                 payload.update({"status": "error", "error": str(exc)})
                 return
             finally:
                 await scanner.stop()
 
             devices = scanner.get_devices()
-            serialised = [
-                d.to_dict() if hasattr(d, "to_dict") else vars(d) for d in devices
-            ]
+            serialised = [d.to_dict() if hasattr(d, "to_dict") else vars(d) for d in devices]
 
-            await bus.publish(Event(
-                type="ble.scan.completed",
-                payload={
-                    "job_id": job_id,
+            await bus.publish(
+                Event(
+                    type="ble.scan.completed",
+                    payload={
+                        "job_id": job_id,
+                        "count": len(serialised),
+                        "devices": serialised,
+                        "simulated": simulated,
+                    },
+                    source="api",
+                )
+            )
+            payload.update(
+                {
+                    "status": "completed",
                     "count": len(serialised),
                     "devices": serialised,
                     "simulated": simulated,
-                },
-                source="api",
-            ))
-            payload.update({
-                "status": "completed",
-                "count": len(serialised),
-                "devices": serialised,
-                "simulated": simulated,
-            })
+                }
+            )
         except Exception as exc:
             payload.update({"status": "error", "error": str(exc)})
 

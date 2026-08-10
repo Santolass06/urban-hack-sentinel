@@ -30,6 +30,7 @@ try:
         Histogram,
         generate_latest,
     )
+
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
@@ -39,6 +40,7 @@ logger = structlog.get_logger(__name__)
 
 class HealthStatus(Enum):
     """Health status levels."""
+
     HEALTHY = "healthy"
     DEGRADED = "degraded"
     UNHEALTHY = "unhealthy"
@@ -48,6 +50,7 @@ class HealthStatus(Enum):
 @dataclass
 class HealthCheckResult:
     """Result of a single health check."""
+
     name: str
     status: HealthStatus
     message: str = ""
@@ -59,6 +62,7 @@ class HealthCheckResult:
 @dataclass
 class SystemMetrics:
     """System-level metrics."""
+
     cpu_percent: float = 0.0
     memory_percent: float = 0.0
     memory_available_mb: float = 0.0
@@ -73,7 +77,7 @@ class SystemMetrics:
 class HealthChecker:
     """
     Health check orchestrator for Urban Hack Sentinel.
-    
+
     Runs configurable health checks and provides:
     - Liveness (/healthz) - Is the process alive?
     - Readiness (/readyz) - Are dependencies available?
@@ -103,6 +107,7 @@ class HealthChecker:
 
         # Check critical paths
         from urban_hs.core.config import get_config
+
         config = get_config()
         for path_name, path_str in [
             ("chroot", "/opt/urban-hs/chroot/alpine"),
@@ -118,6 +123,7 @@ class HealthChecker:
 
     def _make_path_check(self, path_str: str) -> Callable[[], Awaitable[HealthCheckResult]]:
         """Create a path existence check."""
+
         async def check() -> HealthCheckResult:
             start = time.time()
             path = Path(path_str)
@@ -128,14 +134,14 @@ class HealthChecker:
                         status=HealthStatus.HEALTHY,
                         message=f"Path exists: {path_str}",
                         latency_ms=(time.time() - start) * 1000,
-                        metadata={"path": path_str, "is_dir": path.is_dir()}
+                        metadata={"path": path_str, "is_dir": path.is_dir()},
                     )
                 return HealthCheckResult(
                     name=f"path_{path_str}",
                     status=HealthStatus.UNHEALTHY,
                     message=f"Path missing: {path_str}",
                     latency_ms=(time.time() - start) * 1000,
-                    metadata={"path": path_str}
+                    metadata={"path": path_str},
                 )
             except Exception as e:
                 return HealthCheckResult(
@@ -143,8 +149,9 @@ class HealthChecker:
                     status=HealthStatus.UNHEALTHY,
                     message=f"Error checking path: {e}",
                     latency_ms=(time.time() - start) * 1000,
-                    metadata={"path": path_str, "error": str(e)}
+                    metadata={"path": path_str, "error": str(e)},
                 )
+
         return check
 
     def register_check(self, name: str, check_func: Callable[[], Awaitable[HealthCheckResult]]):
@@ -162,7 +169,7 @@ class HealthChecker:
             name="process_alive",
             status=HealthStatus.HEALTHY,
             message="Process is alive",
-            metadata={"pid": os.getpid(), "uptime_seconds": time.time() - self.start_time}
+            metadata={"pid": os.getpid(), "uptime_seconds": time.time() - self.start_time},
         )
 
     async def _check_disk_space(self) -> HealthCheckResult:
@@ -188,14 +195,14 @@ class HealthChecker:
                 status=status,
                 message=message,
                 latency_ms=(time.time() - start) * 1000,
-                metadata={"free_gb": round(free_gb, 2), "usage_percent": round(percent, 1)}
+                metadata={"free_gb": round(free_gb, 2), "usage_percent": round(percent, 1)},
             )
         except Exception as e:
             return HealthCheckResult(
                 name="disk_space",
                 status=HealthStatus.UNHEALTHY,
                 message=f"Error checking disk: {e}",
-                latency_ms=(time.time() - start) * 1000
+                latency_ms=(time.time() - start) * 1000,
             )
 
     async def _check_memory_usage(self) -> HealthCheckResult:
@@ -221,14 +228,17 @@ class HealthChecker:
                 status=status,
                 message=message,
                 latency_ms=(time.time() - start) * 1000,
-                metadata={"available_mb": round(available_mb, 1), "usage_percent": round(percent, 1)}
+                metadata={
+                    "available_mb": round(available_mb, 1),
+                    "usage_percent": round(percent, 1),
+                },
             )
         except Exception as e:
             return HealthCheckResult(
                 name="memory_usage",
                 status=HealthStatus.UNHEALTHY,
                 message=f"Error checking memory: {e}",
-                latency_ms=(time.time() - start) * 1000
+                latency_ms=(time.time() - start) * 1000,
             )
 
     async def _check_cpu_usage(self) -> HealthCheckResult:
@@ -236,7 +246,7 @@ class HealthChecker:
         start = time.time()
         try:
             cpu_percent = psutil.cpu_percent(interval=0.1)
-            load_avg = psutil.getloadavg() if hasattr(psutil, 'getloadavg') else [0, 0, 0]
+            load_avg = psutil.getloadavg() if hasattr(psutil, "getloadavg") else [0, 0, 0]
 
             if cpu_percent > 95:
                 status = HealthStatus.UNHEALTHY
@@ -253,14 +263,17 @@ class HealthChecker:
                 status=status,
                 message=message,
                 latency_ms=(time.time() - start) * 1000,
-                metadata={"cpu_percent": round(cpu_percent, 1), "load_average": [round(x, 2) for x in load_avg]}
+                metadata={
+                    "cpu_percent": round(cpu_percent, 1),
+                    "load_average": [round(x, 2) for x in load_avg],
+                },
             )
         except Exception as e:
             return HealthCheckResult(
                 name="cpu_usage",
                 status=HealthStatus.UNHEALTHY,
                 message=f"Error checking CPU: {e}",
-                latency_ms=(time.time() - start) * 1000
+                latency_ms=(time.time() - start) * 1000,
             )
 
     async def _check_systemd_services(self) -> HealthCheckResult:
@@ -268,7 +281,7 @@ class HealthChecker:
         start = time.time()
         critical_services = [
             "bluetooth",  # For BLE
-            "gpsd",       # For GPS
+            "gpsd",  # For GPS
         ]
 
         results = {}
@@ -277,7 +290,9 @@ class HealthChecker:
         for service in critical_services:
             try:
                 proc = await asyncio.create_subprocess_exec(
-                    "systemctl", "is-active", service,
+                    "systemctl",
+                    "is-active",
+                    service,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
@@ -295,10 +310,12 @@ class HealthChecker:
             status=HealthStatus.HEALTHY if all_ok else HealthStatus.DEGRADED,
             message="All critical services active" if all_ok else "Some services inactive",
             latency_ms=(time.time() - start) * 1000,
-            metadata={"services": results}
+            metadata={"services": results},
         )
 
-    async def run_checks(self, check_names: list[str] | None = None) -> dict[str, HealthCheckResult]:
+    async def run_checks(
+        self, check_names: list[str] | None = None
+    ) -> dict[str, HealthCheckResult]:
         """Run specified health checks or all if none specified."""
         names = check_names or list(self.checks.keys())
         results = {}
@@ -312,18 +329,18 @@ class HealthChecker:
                         name=name,
                         status=HealthStatus.UNHEALTHY,
                         message=f"Check failed with exception: {e}",
-                        metadata={"error": str(e)}
+                        metadata={"error": str(e)},
                     )
             else:
                 results[name] = HealthCheckResult(
-                    name=name,
-                    status=HealthStatus.UNKNOWN,
-                    message="Check not registered"
+                    name=name, status=HealthStatus.UNKNOWN, message="Check not registered"
                 )
 
         return results
 
-    async def get_overall_status(self, results: dict[str, HealthCheckResult] | None = None) -> HealthStatus:
+    async def get_overall_status(
+        self, results: dict[str, HealthCheckResult] | None = None
+    ) -> HealthStatus:
         """Determine overall health status from check results."""
         if results is None:
             results = await self.run_checks()
@@ -350,7 +367,7 @@ class HealthChecker:
             net_conns = len(psutil.net_connections())
             proc_count = len(psutil.pids())
             uptime = time.time() - self.start_time
-            load_avg = psutil.getloadavg() if hasattr(psutil, 'getloadavg') else [0, 0, 0]
+            load_avg = psutil.getloadavg() if hasattr(psutil, "getloadavg") else [0, 0, 0]
 
             return SystemMetrics(
                 cpu_percent=cpu,
@@ -361,7 +378,7 @@ class HealthChecker:
                 network_connections=net_conns,
                 process_count=proc_count,
                 uptime_seconds=uptime,
-                load_average=[round(x, 2) for x in load_avg]
+                load_average=[round(x, 2) for x in load_avg],
             )
         except Exception as e:
             logger.error("Failed to collect system metrics", error=str(e))
@@ -370,24 +387,57 @@ class HealthChecker:
     def _setup_prometheus_metrics(self):
         """Setup Prometheus metrics."""
         # System metrics
-        self.prom_cpu = Gauge('uhs_cpu_percent', 'CPU usage percent', registry=self.registry)
-        self.prom_memory = Gauge('uhs_memory_percent', 'Memory usage percent', registry=self.registry)
-        self.prom_memory_available = Gauge('uhs_memory_available_mb', 'Available memory in MB', registry=self.registry)
-        self.prom_disk = Gauge('uhs_disk_percent', 'Disk usage percent', registry=self.registry)
-        self.prom_disk_free = Gauge('uhs_disk_free_gb', 'Free disk space in GB', registry=self.registry)
-        self.prom_uptime = Gauge('uhs_uptime_seconds', 'Process uptime in seconds', registry=self.registry)
-        self.prom_load = Gauge('uhs_load_average', 'Load average', ['period'], registry=self.registry)
+        self.prom_cpu = Gauge("uhs_cpu_percent", "CPU usage percent", registry=self.registry)
+        self.prom_memory = Gauge(
+            "uhs_memory_percent", "Memory usage percent", registry=self.registry
+        )
+        self.prom_memory_available = Gauge(
+            "uhs_memory_available_mb", "Available memory in MB", registry=self.registry
+        )
+        self.prom_disk = Gauge("uhs_disk_percent", "Disk usage percent", registry=self.registry)
+        self.prom_disk_free = Gauge(
+            "uhs_disk_free_gb", "Free disk space in GB", registry=self.registry
+        )
+        self.prom_uptime = Gauge(
+            "uhs_uptime_seconds", "Process uptime in seconds", registry=self.registry
+        )
+        self.prom_load = Gauge(
+            "uhs_load_average", "Load average", ["period"], registry=self.registry
+        )
 
         # Health check metrics
-        self.prom_health = Gauge('uhs_health_status', 'Health check status (1=healthy, 0.5=degraded, 0=unhealthy)', ['check'], registry=self.registry)
-        self.prom_health_latency = Histogram('uhs_health_check_latency_ms', 'Health check latency', ['check'], registry=self.registry)
+        self.prom_health = Gauge(
+            "uhs_health_status",
+            "Health check status (1=healthy, 0.5=degraded, 0=unhealthy)",
+            ["check"],
+            registry=self.registry,
+        )
+        self.prom_health_latency = Histogram(
+            "uhs_health_check_latency_ms", "Health check latency", ["check"], registry=self.registry
+        )
 
         # Application metrics
-        self.prom_scans_total = Counter('uhs_scans_total', 'Total scans performed', ['type'], registry=self.registry)
-        self.prom_attacks_total = Counter('uhs_attacks_total', 'Total attacks attempted', ['type', 'result'], registry=self.registry)
-        self.prom_vulns_found = Counter('uhs_vulns_found_total', 'Total vulnerabilities found', ['severity'], registry=self.registry)
-        self.prom_credentials = Counter('uhs_credentials_total', 'Total credentials captured', ['type'], registry=self.registry)
-        self.prom_active_connections = Gauge('uhs_active_connections', 'Active network connections', registry=self.registry)
+        self.prom_scans_total = Counter(
+            "uhs_scans_total", "Total scans performed", ["type"], registry=self.registry
+        )
+        self.prom_attacks_total = Counter(
+            "uhs_attacks_total",
+            "Total attacks attempted",
+            ["type", "result"],
+            registry=self.registry,
+        )
+        self.prom_vulns_found = Counter(
+            "uhs_vulns_found_total",
+            "Total vulnerabilities found",
+            ["severity"],
+            registry=self.registry,
+        )
+        self.prom_credentials = Counter(
+            "uhs_credentials_total", "Total credentials captured", ["type"], registry=self.registry
+        )
+        self.prom_active_connections = Gauge(
+            "uhs_active_connections", "Active network connections", registry=self.registry
+        )
 
     def update_prometheus_metrics(self):
         """Update Prometheus metrics from current system state."""
@@ -405,7 +455,7 @@ class HealthChecker:
             self.prom_uptime.set(metrics.uptime_seconds)
             self.prom_active_connections.set(metrics.network_connections)
 
-            for i, period in enumerate(['1m', '5m', '15m']):
+            for i, period in enumerate(["1m", "5m", "15m"]):
                 if i < len(metrics.load_average):
                     self.prom_load.labels(period=period).set(metrics.load_average[i])
 
@@ -477,43 +527,59 @@ class HealthCheckMiddleware:
     async def _handle_liveness(self, scope, receive, send):
         """Liveness probe - process is alive."""
         result = await self.health._check_process_alive()
-        await self._send_json(send, 200 if result.status == HealthStatus.HEALTHY else 503, {
-            "status": result.status.value,
-            "message": result.message,
-            "timestamp": result.timestamp.isoformat(),
-        })
+        await self._send_json(
+            send,
+            200 if result.status == HealthStatus.HEALTHY else 503,
+            {
+                "status": result.status.value,
+                "message": result.message,
+                "timestamp": result.timestamp.isoformat(),
+            },
+        )
 
     async def _handle_readiness(self, scope, receive, send):
         """Readiness probe - dependencies available."""
-        results = await self.health.run_checks([
-            "disk_space", "memory_usage", "cpu_usage",
-            "path_chroot", "path_evidence_dir", "path_reports_dir",
-            "path_credentials_dir", "path_artifacts_dir"
-        ])
+        results = await self.health.run_checks(
+            [
+                "disk_space",
+                "memory_usage",
+                "cpu_usage",
+                "path_chroot",
+                "path_evidence_dir",
+                "path_reports_dir",
+                "path_credentials_dir",
+                "path_artifacts_dir",
+            ]
+        )
         overall = await self.health.get_overall_status(results)
 
-        await self._send_json(send, 200 if overall == HealthStatus.HEALTHY else 503, {
-            "status": overall.value,
-            "checks": {k: {"status": v.status.value, "message": v.message} for k, v in results.items()},
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        await self._send_json(
+            send,
+            200 if overall == HealthStatus.HEALTHY else 503,
+            {
+                "status": overall.value,
+                "checks": {
+                    k: {"status": v.status.value, "message": v.message} for k, v in results.items()
+                },
+                "timestamp": datetime.utcnow().isoformat(),
+            },
+        )
 
     async def _handle_metrics(self, scope, receive, send):
         """Prometheus metrics endpoint."""
         metrics_data = self.health.get_prometheus_metrics()
 
-        await send({
-            "type": "http.response.start",
-            "status": 200,
-            "headers": [
-                (b"content-type", CONTENT_TYPE_LATEST.encode()),
-                (b"content-length", str(len(metrics_data)).encode()),
-            ],
-        })
-        await send({
-            "type": "http.response.body",
-            "body": metrics_data,
-        })
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [
+                    (b"content-type", CONTENT_TYPE_LATEST.encode()),
+                    (b"content-length", str(len(metrics_data)).encode()),
+                ],
+            }
+        )
+        await send({"type": "http.response.body", "body": metrics_data})
 
     async def _handle_detailed(self, scope, receive, send):
         """Detailed health status with all checks."""
@@ -536,19 +602,19 @@ class HealthCheckMiddleware:
     async def _send_json(self, send, status: int, data: dict[str, Any]):
         """Send JSON response."""
         import json
+
         body = json.dumps(data).encode()
-        await send({
-            "type": "http.response.start",
-            "status": status,
-            "headers": [
-                (b"content-type", b"application/json"),
-                (b"content-length", str(len(body)).encode()),
-            ],
-        })
-        await send({
-            "type": "http.response.body",
-            "body": body,
-        })
+        await send(
+            {
+                "type": "http.response.start",
+                "status": status,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(body)).encode()),
+                ],
+            }
+        )
+        await send({"type": "http.response.body", "body": body})
 
 
 # Convenience function to create health checker with default config

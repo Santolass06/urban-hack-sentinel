@@ -26,6 +26,7 @@ import structlog
 
 try:
     import memray
+
     MEMRAY_AVAILABLE = True
 except ImportError:
     MEMRAY_AVAILABLE = False
@@ -33,6 +34,7 @@ except ImportError:
 
 try:
     import objgraph
+
     OBJGRAPH_AVAILABLE = True
 except ImportError:
     OBJGRAPH_AVAILABLE = False
@@ -40,6 +42,7 @@ except ImportError:
 
 try:
     import psutil
+
     PSUTIL_AVAILABLE = True
 except ImportError:
     PSUTIL_AVAILABLE = False
@@ -53,6 +56,7 @@ T = TypeVar("T")
 @dataclass
 class MemorySnapshot:
     """Memory usage snapshot."""
+
     timestamp: datetime
     rss_mb: float
     vms_mb: float
@@ -65,6 +69,7 @@ class MemorySnapshot:
 @dataclass
 class AllocationRecord:
     """Memory allocation record."""
+
     size: int
     count: int
     traceback: list[str]
@@ -75,6 +80,7 @@ class AllocationRecord:
 @dataclass
 class LeakReport:
     """Memory leak detection report."""
+
     timestamp: datetime
     leaks: list[AllocationRecord]
     total_leaked_bytes: int
@@ -171,10 +177,7 @@ class PCAPStreamingParser(StreamingParser[dict[str, Any]]):
                 if count >= self.max_packets_per_chunk:
                     break
                 pkt = Dot11(pkt_data)
-                results.append({
-                    "type": pkt.name,
-                    "len": len(pkt_data),
-                })
+                results.append({"type": pkt.name, "len": len(pkt_data)})
                 count += 1
                 self._packet_count += 1
             # Keep unprocessed data
@@ -189,10 +192,7 @@ class PCAPStreamingParser(StreamingParser[dict[str, Any]]):
         return []
 
     def get_stats(self) -> dict[str, Any]:
-        return {
-            "total_packets": self._packet_count,
-            "buffer_size": len(self._packet_buffer),
-        }
+        return {"total_packets": self._packet_count, "buffer_size": len(self._packet_buffer)}
 
 
 class MemoryProfiler:
@@ -201,10 +201,7 @@ class MemoryProfiler:
     """
 
     def __init__(
-        self,
-        tracing: bool = True,
-        objgraph_tracking: bool = False,
-        leak_threshold_mb: float = 10.0,
+        self, tracing: bool = True, objgraph_tracking: bool = False, leak_threshold_mb: float = 10.0
     ):
         self.tracing = tracing
         self.objgraph_tracking = objgraph_tracking and OBJGRAPH_AVAILABLE
@@ -296,7 +293,9 @@ class MemoryProfiler:
         )
 
         self._snapshots.append(snapshot)
-        logger.debug(f"Memory snapshot ({label})", rss=f"{snapshot.rss_mb:.1f}MB", objects=obj_count)
+        logger.debug(
+            f"Memory snapshot ({label})", rss=f"{snapshot.rss_mb:.1f}MB", objects=obj_count
+        )
 
         return snapshot
 
@@ -319,13 +318,15 @@ class MemoryProfiler:
                     current_count = objgraph.count(type_name.split(".")[-1])
                     if current_count > baseline_count * 2:  # 100% growth
                         growth = current_count - baseline_count
-                        leaks.append(AllocationRecord(
-                            size=0,  # Unknown exact size
-                            count=growth,
-                            traceback=[],
-                            module=type_name,
-                            line=0,
-                        ))
+                        leaks.append(
+                            AllocationRecord(
+                                size=0,  # Unknown exact size
+                                count=growth,
+                                traceback=[],
+                                module=type_name,
+                                line=0,
+                            )
+                        )
 
         # Group by module
         top_modules = defaultdict(int)
@@ -362,9 +363,7 @@ class MemoryProfiler:
 
 @asynccontextmanager
 async def memory_profile(
-    tracing: bool = True,
-    objgraph_tracking: bool = False,
-    leak_threshold_mb: float = 10.0,
+    tracing: bool = True, objgraph_tracking: bool = False, leak_threshold_mb: float = 10.0
 ) -> AsyncIterator[MemoryProfiler]:
     """Context manager for memory profiling."""
     profiler = MemoryProfiler(tracing, objgraph_tracking, leak_threshold_mb)
@@ -377,6 +376,7 @@ async def memory_profile(
 
 def stream_parse_jsonl(file_path: str, chunk_size: int = 65536):
     """Stream parse JSONL file with minimal memory - returns async generator."""
+
     async def _async_gen():
         parser = JSONLStreamingParser()
 
@@ -399,6 +399,7 @@ def stream_parse_jsonl(file_path: str, chunk_size: int = 65536):
 
 def stream_parse_pcap(file_path: str, max_packets: int = 10000):
     """Stream parse PCAP file with Scapy - returns async generator."""
+
     async def _async_gen():
         parser = PCAPStreamingParser(max_packets)
 
@@ -434,13 +435,9 @@ def detect_gc_leaks(threshold_count: int = 10000) -> LeakReport:
     leaks = []
     for typename, count in counts.items():
         if count > threshold_count:
-            leaks.append(AllocationRecord(
-                size=0,
-                count=count,
-                traceback=[],
-                module=typename,
-                line=0,
-            ))
+            leaks.append(
+                AllocationRecord(size=0, count=count, traceback=[], module=typename, line=0)
+            )
 
     top_modules = defaultdict(int)
     for leak in leaks:
@@ -455,6 +452,7 @@ def detect_gc_leaks(threshold_count: int = 10000) -> LeakReport:
 
 
 # Memory-efficient async iterators
+
 
 async def abatch(iterable: AsyncIterator[T], size: int) -> AsyncIterator[list[T]]:
     """Batch async iterator into chunks of size N."""
@@ -504,17 +502,14 @@ __all__ = [
     "MemoryProfiler",
     "memory_profile",
     "detect_gc_leaks",
-
     # Streaming parsers
     "StreamingParser",
     "JSONLStreamingParser",
     "PCAPStreamingParser",
     "stream_parse_jsonl",
     "stream_parse_pcap",
-
     # GC utilities
     "detect_gc_leaks",
-
     # Async iterator utils
     "abatch",
     "alimit",

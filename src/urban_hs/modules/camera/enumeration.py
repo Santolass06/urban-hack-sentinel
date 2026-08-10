@@ -28,6 +28,7 @@ import structlog
 # Optional imports with graceful fallback
 try:
     import aiohttp
+
     AIOHTTP_AVAILABLE = True
 except ImportError:
     aiohttp = None
@@ -35,6 +36,7 @@ except ImportError:
 
 try:
     import onvif
+
     ONVIF_AVAILABLE = True
 except ImportError:
     onvif = None
@@ -45,6 +47,7 @@ logger = structlog.get_logger(__name__)
 
 class AuthType(Enum):
     """Authentication types."""
+
     NONE = "none"
     BASIC = "basic"
     DIGEST = "digest"
@@ -55,6 +58,7 @@ class AuthType(Enum):
 
 class CameraProtocol(Enum):
     """Camera protocols."""
+
     HTTP = "http"
     HTTPS = "https"
     RTSP = "rtsp"
@@ -64,6 +68,7 @@ class CameraProtocol(Enum):
 @dataclass
 class CameraCredential:
     """Camera credential information."""
+
     username: str
     password: str
     auth_type: AuthType = AuthType.BASIC
@@ -76,6 +81,7 @@ class CameraCredential:
 @dataclass
 class CameraConfig:
     """Camera configuration dump."""
+
     manufacturer: str | None = None
     model: str | None = None
     firmware_version: str | None = None
@@ -95,6 +101,7 @@ class CameraConfig:
 @dataclass
 class CameraFirmware:
     """Camera firmware information."""
+
     version: str
     build_date: str | None = None
     manufacturer: str | None = None
@@ -105,6 +112,7 @@ class CameraFirmware:
 @dataclass
 class EnumerationResult:
     """Result of camera enumeration."""
+
     ip: str
     port: int
     protocol: CameraProtocol
@@ -157,7 +165,12 @@ DEFAULT_CAMERA_CREDS = [
 
 # Manufacturer-specific default credentials
 MANUFACTURER_CREDS = {
-    "hikvision": [("admin", "12345"), ("admin", "123456"), ("admin", "12345678"), ("admin", "admin123")],
+    "hikvision": [
+        ("admin", "12345"),
+        ("admin", "123456"),
+        ("admin", "12345678"),
+        ("admin", "admin123"),
+    ],
     "dahua": [("admin", "admin"), ("admin", "123456"), ("admin", "12345678"), ("admin", "888888")],
     "axis": [("root", "pass"), ("root", "root"), ("root", ""), ("admin", "admin")],
     "foscam": [("admin", ""), ("admin", "admin"), ("admin", "123456")],
@@ -193,7 +206,7 @@ MANUFACTURER_CREDS = {
 class CameraEnumerator:
     """
     Deep camera enumeration and credential testing.
-    
+
     Features:
     - Authentication testing (Basic/Digest/NTLM)
     - Default credential testing with manufacturer-specific lists
@@ -204,10 +217,7 @@ class CameraEnumerator:
     """
 
     def __init__(
-        self,
-        timeout: int = 10,
-        max_concurrent: int = 10,
-        user_agent: str = "UrbanHackSentinel/1.0",
+        self, timeout: int = 10, max_concurrent: int = 10, user_agent: str = "UrbanHackSentinel/1.0"
     ):
         self.timeout = timeout
         self.max_concurrent = max_concurrent
@@ -228,9 +238,7 @@ class CameraEnumerator:
             timeout = aiohttp.ClientTimeout(total=self.timeout)
             connector = aiohttp.TCPConnector(limit=10, ssl=False)
             self._sessions[key] = aiohttp.ClientSession(
-                timeout=timeout,
-                connector=connector,
-                headers={"User-Agent": self.user_agent}
+                timeout=timeout, connector=connector, headers={"User-Agent": self.user_agent}
             )
 
         return self._sessions[key]
@@ -285,18 +293,16 @@ class CameraEnumerator:
         return verified_creds
 
     async def _try_basic_auth(
-        self,
-        session: aiohttp.ClientSession,
-        url: str,
-        username: str,
-        password: str,
+        self, session: aiohttp.ClientSession, url: str, username: str, password: str
     ) -> CameraCredential | None:
         """Test Basic Authentication."""
         auth = base64.b64encode(f"{username}:{password}".encode()).decode()
         headers = {"Authorization": f"Basic {auth}"}
 
         try:
-            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+            async with session.get(
+                url, headers=headers, timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
                 if resp.status == 200:
                     return CameraCredential(
                         username=username,
@@ -317,11 +323,7 @@ class CameraEnumerator:
         return None
 
     async def _try_digest_auth(
-        self,
-        session: aiohttp.ClientSession,
-        url: str,
-        username: str,
-        password: str,
+        self, session: aiohttp.ClientSession, url: str, username: str, password: str
     ) -> CameraCredential | None:
         """Test Digest Authentication (tries GET first to get challenge)."""
         try:
@@ -349,11 +351,7 @@ class CameraEnumerator:
 
     @staticmethod
     def _build_digest_header(
-        username: str,
-        password: str,
-        method: str,
-        uri: str,
-        params: dict[str, str],
+        username: str, password: str, method: str, uri: str, params: dict[str, str]
     ) -> str:
         """Compute an RFC 2617/7616 Digest ``Authorization`` header value."""
         realm = params.get("realm", "")
@@ -373,12 +371,7 @@ class CameraEnumerator:
             ha1 = H(f"{ha1}:{nonce}:{cnonce}")
         ha2 = H(f"{method}:{uri}")
 
-        parts = [
-            f'username="{username}"',
-            f'realm="{realm}"',
-            f'nonce="{nonce}"',
-            f'uri="{uri}"',
-        ]
+        parts = [f'username="{username}"', f'realm="{realm}"', f'nonce="{nonce}"', f'uri="{uri}"']
         if qop:
             selected_qop = qop.split(",")[0].strip()
             nc = "00000001"
@@ -412,9 +405,7 @@ class CameraEnumerator:
         header = self._build_digest_header(username, password, method, uri, params)
         try:
             async with session.get(
-                url,
-                headers={"Authorization": header},
-                timeout=aiohttp.ClientTimeout(total=5),
+                url, headers={"Authorization": header}, timeout=aiohttp.ClientTimeout(total=5)
             ) as resp:
                 if resp.status in (200, 301, 302):
                     return CameraCredential(
@@ -478,10 +469,7 @@ class CameraEnumerator:
             return None
 
     async def _get_onvif_config(
-        self,
-        ip: str,
-        port: int,
-        credentials: CameraCredential | None = None,
+        self, ip: str, port: int, credentials: CameraCredential | None = None
     ) -> CameraConfig | None:
         """Get config via ONVIF (device info + media profiles / RTSP URIs)."""
         if not ONVIF_AVAILABLE:
@@ -534,14 +522,9 @@ class CameraEnumerator:
             return None
 
     async def _get_http_config(
-        self,
-        ip: str,
-        port: int,
-        credentials: CameraCredential | None = None,
+        self, ip: str, port: int, credentials: CameraCredential | None = None
     ) -> CameraConfig | None:
         """Get config via HTTP API."""
-        base_url = f"http://{ip}:{port}"
-        session = await self._get_session(base_url)
         config = CameraConfig(ip_address=ip)
 
         # Common config endpoints
@@ -560,14 +543,19 @@ class CameraEnumerator:
 
         headers = {}
         if credentials and credentials.auth_type == AuthType.BASIC:
-            auth = base64.b64encode(f"{credentials.username}:{credentials.password}".encode()).decode()
+            auth = base64.b64encode(
+                f"{credentials.username}:{credentials.password}".encode()
+            ).decode()
             headers["Authorization"] = f"Basic {auth}"
 
-        async with aiohttp.ClientSession(headers={"User-Agent": self.user_agent}) as session:
+        headers["User-Agent"] = self.user_agent
+        async with aiohttp.ClientSession(headers=headers) as session:
             for endpoint in config_endpoints:
                 try:
                     url = f"http://{ip}:{port}{endpoint}"
-                    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
+                    async with aiohttp.ClientSession(
+                        timeout=aiohttp.ClientTimeout(total=5)
+                    ) as session:
                         async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
                             if resp.status == 200:
                                 content_type = resp.headers.get("Content-Type", "")
@@ -594,6 +582,7 @@ class CameraEnumerator:
         """Parse XML config into CameraConfig."""
         try:
             import xml.etree.ElementTree as ET
+
             root = ET.fromstring(xml_text)
             config.raw_config["xml"] = xml_text
         except Exception:
@@ -602,9 +591,9 @@ class CameraEnumerator:
     def _parse_config_text(self, text: str, config: CameraConfig):
         """Parse text config into CameraConfig."""
         # Try to extract key=value pairs
-        for line in text.split('\n'):
-            if '=' in line and not line.strip().startswith('#'):
-                key, _, value = line.partition('=')
+        for line in text.split("\n"):
+            if "=" in line and not line.strip().startswith("#"):
+                key, _, value = line.partition("=")
                 config.raw_config[key.strip()] = value.strip()
 
     # ============================================================
@@ -612,10 +601,7 @@ class CameraEnumerator:
     # ============================================================
 
     async def get_firmware_version(
-        self,
-        ip: str,
-        port: int,
-        protocol: CameraProtocol = CameraProtocol.HTTP,
+        self, ip: str, port: int, protocol: CameraProtocol = CameraProtocol.HTTP
     ) -> CameraFirmware | None:
         """Extract firmware version."""
         firmware = await self._extract_firmware_http(ip, port)
@@ -641,9 +627,15 @@ class CameraEnumerator:
         async with aiohttp.ClientSession(headers={"User-Agent": self.user_agent}) as session:
             for endpoint in endpoints:
                 try:
-                    async with session.get(f"http://{ip}:{port}{endpoint}", timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    async with session.get(
+                        f"http://{ip}:{port}{endpoint}", timeout=aiohttp.ClientTimeout(total=5)
+                    ) as resp:
                         if resp.status == 200:
-                            data = await resp.json() if "json" in resp.headers.get("Content-Type", "") else await resp.text()
+                            data = (
+                                await resp.json()
+                                if "json" in resp.headers.get("Content-Type", "")
+                                else await resp.text()
+                            )
                             firmware = self._parse_firmware_data(data)
                             if firmware and firmware.version:
                                 return firmware
@@ -672,7 +664,7 @@ class CameraEnumerator:
             patterns = [
                 r'version["\s:=]+([\d\.\-a-zA-Z]+)',
                 r'firmware["\s:=]+([\d\.\-a-zA-Z]+)',
-                r'version=([\d\.\-a-zA-Z]+)',
+                r"version=([\d\.\-a-zA-Z]+)",
             ]
             for pattern in patterns:
                 match = re.search(pattern, data, re.IGNORECASE)
@@ -685,9 +677,7 @@ class CameraEnumerator:
     # ============================================================
 
     async def discover_rtsp_streams(
-        self,
-        ip: str,
-        ports: list[int] = [554, 8554, 1935, 8000],
+        self, ip: str, ports: list[int] = [554, 8554, 1935, 8000]
     ) -> list[dict[str, Any]]:
         """Discover RTSP streams."""
         streams = []
@@ -706,17 +696,14 @@ class CameraEnumerator:
         """Send RTSP DESCRIBE request."""
         try:
             # Use RTSP DESCRIBE
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(ip, port),
-                timeout=5
-            )
+            reader, writer = await asyncio.wait_for(asyncio.open_connection(ip, port), timeout=5)
 
             request = f"DESCRIBE rtsp://{ip}:{port}/ RTSP/1.0\r\nCSeq: 1\r\nUser-Agent: {self.user_agent}\r\n\r\n"
             writer.write(request.encode())
             await writer.drain()
 
             response = await asyncio.wait_for(reader.read(4096), timeout=5)
-            response_text = response.decode(errors='ignore')
+            response_text = response.decode(errors="ignore")
 
             writer.close()
             await writer.wait_closed()
@@ -731,21 +718,21 @@ class CameraEnumerator:
     def _parse_sdp(self, sdp: str) -> dict[str, Any]:
         """Parse SDP response."""
         info = {"raw_sdp": sdp}
-        for line in sdp.split('\n'):
+        for line in sdp.split("\n"):
             line = line.strip()
-            if line.startswith('m='):
+            if line.startswith("m="):
                 # Media line
                 parts = line.split()
                 if len(parts) >= 4:
                     info["media_type"] = parts[1]
                     info["port"] = parts[2]
                     info["protocol"] = parts[3]
-                    info["format"] = ' '.join(parts[4:])
-            elif line.startswith('a=control:'):
+                    info["format"] = " ".join(parts[4:])
+            elif line.startswith("a=control:"):
                 info["control_url"] = line[10:]
-            elif line.startswith('a=rtpmap:'):
+            elif line.startswith("a=rtpmap:"):
                 info["rtpmap"] = line[9:]
-            elif line.startswith('a=fmtp:'):
+            elif line.startswith("a=fmtp:"):
                 info["fmtp"] = line[7:]
         return info
 
@@ -754,10 +741,7 @@ class CameraEnumerator:
     # ============================================================
 
     async def get_onvif_info(
-        self,
-        ip: str,
-        port: int,
-        credentials: CameraCredential | None = None,
+        self, ip: str, port: int, credentials: CameraCredential | None = None
     ) -> dict[str, Any] | None:
         """Get ONVIF device information."""
         if not ONVIF_AVAILABLE:
@@ -815,11 +799,8 @@ class CameraEnumerator:
 # Convenience Functions
 # ============================================================
 
-async def enumerate_camera(
-    ip: str,
-    port: int = 80,
-    timeout: int = 10,
-) -> EnumerationResult:
+
+async def enumerate_camera(ip: str, port: int = 80, timeout: int = 10) -> EnumerationResult:
     """Convenience function to enumerate a single camera."""
     enumerator = CameraEnumerator(timeout=timeout)
     try:

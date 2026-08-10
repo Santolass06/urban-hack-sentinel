@@ -36,8 +36,7 @@ class WebSocketConnectionManager:
             return
         payload = json.dumps(message)
         await asyncio.gather(
-            *(self._send(ws, payload) for ws in list(self._active)),
-            return_exceptions=True,
+            *(self._send(ws, payload) for ws in list(self._active)), return_exceptions=True
         )
 
     async def _send(self, websocket: WebSocket, payload: str) -> None:
@@ -78,9 +77,7 @@ def _extract_ws_token(websocket: WebSocket, token: str | None) -> str | None:
 
 
 @router.websocket("/events")
-async def websocket_events(
-    websocket: WebSocket, token: str | None = Query(default=None)
-) -> None:
+async def websocket_events(websocket: WebSocket, token: str | None = Query(default=None)) -> None:
     bearer = _extract_ws_token(websocket, token)
     if not bearer:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)

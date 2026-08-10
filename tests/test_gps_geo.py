@@ -42,7 +42,9 @@ def test_nmea_parser_gprmc():
 def test_geomapper_add_snapshot_and_exports(tmp_path: Path):
     bus = EventBus()
     mapper = GeoMapper(event_bus=bus)
-    snap = mapper.add_snapshot(bssid="aa:bb:cc:dd:ee:ff", essid="TestNet", channel=6, signal_dbm=-67)
+    snap = mapper.add_snapshot(
+        bssid="aa:bb:cc:dd:ee:ff", essid="TestNet", channel=6, signal_dbm=-67
+    )
     assert snap["bssid"] == "aa:bb:cc:dd:ee:ff"
     assert snap["essid"] == "TestNet"
 
@@ -62,14 +64,7 @@ def test_geomapper_add_snapshot_and_exports(tmp_path: Path):
 def test_geomapper_export_when_fixed(tmp_path: Path):
     bus = EventBus()
     mapper = GeoMapper(gpsd_host="localhost", gpsd_port=2947, event_bus=bus)
-    mapper._gps_data = {
-        "lat": 41.15,
-        "lon": -8.62,
-        "alt": 12.0,
-        "mode": 2,
-        "epx": 1.0,
-        "epy": 1.0,
-    }
+    mapper._gps_data = {"lat": 41.15, "lon": -8.62, "alt": 12.0, "mode": 2, "epx": 1.0, "epy": 1.0}
     assert mapper.is_fixed() is True
     mapper.add_snapshot(bssid="aa:bb:cc:dd:ee:ff", essid="TestNet")
 

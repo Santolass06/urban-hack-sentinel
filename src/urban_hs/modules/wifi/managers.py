@@ -23,6 +23,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class HandshakeInfo:
     """Information about a captured handshake."""
+
     id: str
     bssid: str
     essid: str | None
@@ -62,7 +63,7 @@ class HandshakeInfo:
 class HandshakeManager:
     """
     Manages captured handshakes and PMKIDs.
-    
+
     Features:
     - Deduplication (by BSSID+ESSID)
     - Hashcat integration for cracking
@@ -78,6 +79,7 @@ class HandshakeManager:
     ):
         if handshake_dir is None or hash_dir is None or cracked_dir is None:
             from urban_hs.core.config import get_config
+
             cfg = get_config()
             if handshake_dir is None:
                 handshake_dir = str(Path(cfg.storage.resolve_wifi_attacks_dir()) / "handshakes")
@@ -127,12 +129,16 @@ class HandshakeManager:
             # hashcat 22000 (WPA-PBKDF2-PMKID+EAPOL) line format:
             #   WPA*<type>*<pmkid|mic>*<mac_ap>*<mac_sta>*<essid_hex>*...
             # type 01 = PMKID, type 02 = EAPOL/4-way handshake.
-            parts = line.split('*')
+            parts = line.split("*")
             if len(parts) < 6 or parts[0].upper() != "WPA":
                 return None
 
             mac_ap = parts[3].lower()
-            bssid = ":".join(mac_ap[i:i + 2] for i in range(0, 12, 2)) if len(mac_ap) >= 12 else mac_ap
+            bssid = (
+                ":".join(mac_ap[i : i + 2] for i in range(0, 12, 2))
+                if len(mac_ap) >= 12
+                else mac_ap
+            )
 
             try:
                 essid = bytes.fromhex(parts[5]).decode("utf-8", errors="replace") or None
@@ -195,9 +201,7 @@ class HandshakeManager:
         return self._handshakes.get(key)
 
     def list_handshakes(
-        self,
-        status: str | None = None,
-        hashcat_mode: int | None = None,
+        self, status: str | None = None, hashcat_mode: int | None = None
     ) -> list[HandshakeInfo]:
         """List handshakes with optional filters."""
         results = list(self._handshakes.values())
@@ -237,18 +241,13 @@ class HandshakeManager:
         for h in self._handshakes.values():
             by_mode[h.hashcat_mode] = by_mode.get(h.hashcat_mode, 0) + 1
 
-        return {
-            "total": total,
-            "cracked": cracked,
-            "uncracked": uncracked,
-            "by_mode": by_mode,
-        }
+        return {"total": total, "cracked": cracked, "uncracked": uncracked, "by_mode": by_mode}
 
     # Export functions
     def export_hashcat(self, output_file: Path, status: str | None = None) -> int:
         """Export hashes in hashcat format."""
         count = 0
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             for h in self._handshakes.values():
                 if status and h.crack_status != status:
                     continue
@@ -261,9 +260,13 @@ class HandshakeManager:
     def export_wigle_csv(self, output_file: Path) -> int:
         """Export to WiGLE CSV format."""
         count = 0
-        with open(output_file, 'w') as f:
-            f.write("WigleWifi-1.6,appRelease=2.55,model=UrbanHS,release=3.0.0,device=Pi5,display=UrbanHS,board=RaspberryPi,brand=UrbanHS\n")
-            f.write("MAC,SSID,AuthMode,FirstSeen,Channel,RSSI,CurrentLatitude,CurrentLongitude,AltitudeMeters,AccuracyMeters,Type\n")
+        with open(output_file, "w") as f:
+            f.write(
+                "WigleWifi-1.6,appRelease=2.55,model=UrbanHS,release=3.0.0,device=Pi5,display=UrbanHS,board=RaspberryPi,brand=UrbanHS\n"
+            )
+            f.write(
+                "MAC,SSID,AuthMode,FirstSeen,Channel,RSSI,CurrentLatitude,CurrentLongitude,AltitudeMeters,AccuracyMeters,Type\n"
+            )
 
             for h in self._handshakes.values():
                 if h.gps_lat is not None and h.gps_lon is not None:
@@ -319,9 +322,7 @@ class HandshakeManager:
         now = datetime.utcnow().strftime("%a %b %d %H:%M:%S %Y")
         with open(output_file, "w") as f:
             f.write('<?xml version="1.0" encoding="ISO-8859-1"?>\n')
-            f.write(
-                f'<detection-run kismet-version="urban-hs-3.0.0" start-time="{now}">\n'
-            )
+            f.write(f'<detection-run kismet-version="urban-hs-3.0.0" start-time="{now}">\n')
             f.writelines(blocks)
             f.write("</detection-run>\n")
         return count
@@ -330,7 +331,7 @@ class HandshakeManager:
 class MACChanger:
     """
     MAC Address Changer with OUI profiles.
-    
+
     Features:
     - Random MAC with vendor OUI
     - Predefined profiles (Apple, Samsung, Intel, etc.)
@@ -340,79 +341,336 @@ class MACChanger:
     # Common vendor OUIs
     OUI_PROFILES = {
         "apple": [
-            "00:1A:2B", "00:1B:63", "00:1C:B3", "00:1D:4F", "00:1E:52",
-            "00:1F:3C", "00:21:E9", "00:22:41", "00:23:6C", "00:24:36",
-            "00:25:00", "00:26:08", "00:26:B0", "00:27:BC", "00:17:F2",
-            "00:1C:B3", "00:1D:4F", "00:1E:52", "00:1F:3C", "00:21:E9",
-            "28:CF:E9", "28:E0:2C", "28:F0:76", "3C:07:54", "3C:15:C2",
-            "40:A6:D9", "40:E4:6D", "44:8A:5B", "44:D8:84", "48:60:BC",
-            "4C:8D:79", "50:ED:3C", "54:9D:80", "58:55:CA", "5C:95:AE",
-            "60:03:08", "64:9E:F3", "68:5B:35", "68:96:7B", "6C:40:08",
-            "6C:70:9F", "6C:FF:BE", "70:73:CB", "74:81:14", "74:E1:B6",
-            "78:31:C1", "78:4F:43", "78:CA:39", "7C:11:BE", "7C:6D:62",
-            "80:92:9F", "84:38:35", "84:8A:8D", "88:53:95", "88:63:DF",
-            "8C:58:77", "8C:85:90", "90:27:E4", "94:35:0A", "98:01:A7",
-            "9C:04:EB", "A0:99:9B", "A4:5E:60", "A4:83:E7", "A8:20:66",
-            "A8:66:7F", "AC:3B:77", "AC:87:A3", "B0:34:95", "B0:65:BD",
-            "B4:18:D1", "B8:09:8A", "B8:8D:12", "BC:52:B7", "C0:1C:30",
-            "C0:3F:0E", "C4:2C:03", "C8:69:CD", "CC:25:EF", "CC:3D:82",
-            "D0:23:DB", "D4:0B:1A", "D4:9A:20", "D8:30:62", "D8:97:BA",
-            "DC:2B:61", "E0:5F:FE", "E4:8B:7F", "E8:1D:1D", "E8:6E:D4",
-            "EC:35:86", "F0:18:98", "F4:0F:24", "F8:1E:DF", "FC:25:3F",
+            "00:1A:2B",
+            "00:1B:63",
+            "00:1C:B3",
+            "00:1D:4F",
+            "00:1E:52",
+            "00:1F:3C",
+            "00:21:E9",
+            "00:22:41",
+            "00:23:6C",
+            "00:24:36",
+            "00:25:00",
+            "00:26:08",
+            "00:26:B0",
+            "00:27:BC",
+            "00:17:F2",
+            "00:1C:B3",
+            "00:1D:4F",
+            "00:1E:52",
+            "00:1F:3C",
+            "00:21:E9",
+            "28:CF:E9",
+            "28:E0:2C",
+            "28:F0:76",
+            "3C:07:54",
+            "3C:15:C2",
+            "40:A6:D9",
+            "40:E4:6D",
+            "44:8A:5B",
+            "44:D8:84",
+            "48:60:BC",
+            "4C:8D:79",
+            "50:ED:3C",
+            "54:9D:80",
+            "58:55:CA",
+            "5C:95:AE",
+            "60:03:08",
+            "64:9E:F3",
+            "68:5B:35",
+            "68:96:7B",
+            "6C:40:08",
+            "6C:70:9F",
+            "6C:FF:BE",
+            "70:73:CB",
+            "74:81:14",
+            "74:E1:B6",
+            "78:31:C1",
+            "78:4F:43",
+            "78:CA:39",
+            "7C:11:BE",
+            "7C:6D:62",
+            "80:92:9F",
+            "84:38:35",
+            "84:8A:8D",
+            "88:53:95",
+            "88:63:DF",
+            "8C:58:77",
+            "8C:85:90",
+            "90:27:E4",
+            "94:35:0A",
+            "98:01:A7",
+            "9C:04:EB",
+            "A0:99:9B",
+            "A4:5E:60",
+            "A4:83:E7",
+            "A8:20:66",
+            "A8:66:7F",
+            "AC:3B:77",
+            "AC:87:A3",
+            "B0:34:95",
+            "B0:65:BD",
+            "B4:18:D1",
+            "B8:09:8A",
+            "B8:8D:12",
+            "BC:52:B7",
+            "C0:1C:30",
+            "C0:3F:0E",
+            "C4:2C:03",
+            "C8:69:CD",
+            "CC:25:EF",
+            "CC:3D:82",
+            "D0:23:DB",
+            "D4:0B:1A",
+            "D4:9A:20",
+            "D8:30:62",
+            "D8:97:BA",
+            "DC:2B:61",
+            "E0:5F:FE",
+            "E4:8B:7F",
+            "E8:1D:1D",
+            "E8:6E:D4",
+            "EC:35:86",
+            "F0:18:98",
+            "F4:0F:24",
+            "F8:1E:DF",
+            "FC:25:3F",
         ],
         "samsung": [
-            "00:12:47", "00:14:51", "00:15:99", "00:15:AF", "00:16:32",
-            "00:17:E2", "00:19:7D", "00:1A:4D", "00:1B:98", "00:1C:26",
-            "00:1D:25", "00:1E:58", "00:21:0E", "00:21:3A", "00:22:43",
-            "00:23:69", "00:24:54", "00:25:60", "00:26:5B", "00:27:10",
-            "00:21:87", "00:22:5F", "00:23:51", "00:24:08", "00:25:4B",
-            "28:ED:6A", "2C:4D:54", "30:10:B3", "34:BD:FA", "38:83:45",
-            "3C:78:4C", "40:A5:EF", "44:8A:5B", "48:FF:8A", "50:85:69",
-            "54:F2:01", "5C:F3:70", "60:38:0E", "64:00:6A", "68:17:29",
-            "70:7E:43", "74:6F:F9", "78:F8:82", "7C:49:4E", "80:E6:50",
-            "84:EB:18", "88:79:7E", "8C:34:FD", "90:72:40", "94:7B:E7",
-            "98:FE:94", "9C:2F:9B", "A0:18:28", "A4:38:CC", "A8:0E:3D",
-            "AC:27:1E", "B0:98:90", "B4:DF:82", "B8:F1:86", "BC:5F:F4",
-            "C0:74:AD", "C4:D9:87", "C8:34:FD", "CC:5D:4E", "D0:81:7A",
+            "00:12:47",
+            "00:14:51",
+            "00:15:99",
+            "00:15:AF",
+            "00:16:32",
+            "00:17:E2",
+            "00:19:7D",
+            "00:1A:4D",
+            "00:1B:98",
+            "00:1C:26",
+            "00:1D:25",
+            "00:1E:58",
+            "00:21:0E",
+            "00:21:3A",
+            "00:22:43",
+            "00:23:69",
+            "00:24:54",
+            "00:25:60",
+            "00:26:5B",
+            "00:27:10",
+            "00:21:87",
+            "00:22:5F",
+            "00:23:51",
+            "00:24:08",
+            "00:25:4B",
+            "28:ED:6A",
+            "2C:4D:54",
+            "30:10:B3",
+            "34:BD:FA",
+            "38:83:45",
+            "3C:78:4C",
+            "40:A5:EF",
+            "44:8A:5B",
+            "48:FF:8A",
+            "50:85:69",
+            "54:F2:01",
+            "5C:F3:70",
+            "60:38:0E",
+            "64:00:6A",
+            "68:17:29",
+            "70:7E:43",
+            "74:6F:F9",
+            "78:F8:82",
+            "7C:49:4E",
+            "80:E6:50",
+            "84:EB:18",
+            "88:79:7E",
+            "8C:34:FD",
+            "90:72:40",
+            "94:7B:E7",
+            "98:FE:94",
+            "9C:2F:9B",
+            "A0:18:28",
+            "A4:38:CC",
+            "A8:0E:3D",
+            "AC:27:1E",
+            "B0:98:90",
+            "B4:DF:82",
+            "B8:F1:86",
+            "BC:5F:F4",
+            "C0:74:AD",
+            "C4:D9:87",
+            "C8:34:FD",
+            "CC:5D:4E",
+            "D0:81:7A",
         ],
         "intel": [
-            "00:13:02", "00:15:00", "00:16:6F", "00:19:D1", "00:1B:77",
-            "00:1C:23", "00:21:5C", "00:22:FA", "00:23:14", "00:24:D6",
-            "00:26:C6", "00:27:10", "00:1D:E0", "00:1E:64", "00:1F:3A",
-            "00:21:6A", "00:22:FA", "00:23:AE", "00:24:D7", "00:26:B6",
-            "00:27:10", "3C:A9:F4", "40:16:3A", "44:85:00", "48:4D:7E",
-            "4C:34:88", "50:7B:9D", "54:AB:3A", "58:00:E3", "5C:E9:1E",
-            "60:57:18", "64:00:6A", "68:05:CA", "70:85:C2", "74:E5:43",
-            "80:19:34", "84:A6:C8", "88:53:2E", "8C:70:5A", "90:48:9A",
-            "94:65:9C", "98:5F:D4", "9C:B6:D0", "A0:8C:FD", "A4:4E:31",
-            "A8:15:4D", "AC:BC:32", "B0:6E:BF", "B4:E6:2D", "B8:08:CF",
-            "BC:F6:85", "C0:38:96", "C4:46:19", "C8:9C:DC", "CC:2D:E0",
-            "D0:57:7C", "D4:81:D7", "D8:63:75", "DC:41:59", "E0:3F:49",
-            "E4:F8:9C", "E8:2A:EA", "EC:0E:C4", "F0:1F:AF", "F4:2A:1C",
-            "F8:1A:67", "FC:AA:14",
+            "00:13:02",
+            "00:15:00",
+            "00:16:6F",
+            "00:19:D1",
+            "00:1B:77",
+            "00:1C:23",
+            "00:21:5C",
+            "00:22:FA",
+            "00:23:14",
+            "00:24:D6",
+            "00:26:C6",
+            "00:27:10",
+            "00:1D:E0",
+            "00:1E:64",
+            "00:1F:3A",
+            "00:21:6A",
+            "00:22:FA",
+            "00:23:AE",
+            "00:24:D7",
+            "00:26:B6",
+            "00:27:10",
+            "3C:A9:F4",
+            "40:16:3A",
+            "44:85:00",
+            "48:4D:7E",
+            "4C:34:88",
+            "50:7B:9D",
+            "54:AB:3A",
+            "58:00:E3",
+            "5C:E9:1E",
+            "60:57:18",
+            "64:00:6A",
+            "68:05:CA",
+            "70:85:C2",
+            "74:E5:43",
+            "80:19:34",
+            "84:A6:C8",
+            "88:53:2E",
+            "8C:70:5A",
+            "90:48:9A",
+            "94:65:9C",
+            "98:5F:D4",
+            "9C:B6:D0",
+            "A0:8C:FD",
+            "A4:4E:31",
+            "A8:15:4D",
+            "AC:BC:32",
+            "B0:6E:BF",
+            "B4:E6:2D",
+            "B8:08:CF",
+            "BC:F6:85",
+            "C0:38:96",
+            "C4:46:19",
+            "C8:9C:DC",
+            "CC:2D:E0",
+            "D0:57:7C",
+            "D4:81:D7",
+            "D8:63:75",
+            "DC:41:59",
+            "E0:3F:49",
+            "E4:F8:9C",
+            "E8:2A:EA",
+            "EC:0E:C4",
+            "F0:1F:AF",
+            "F4:2A:1C",
+            "F8:1A:67",
+            "FC:AA:14",
         ],
         "realtek": [
-            "00:E0:4C", "00:E0:58", "00:E0:4C", "00:1A:4D", "00:1B:98",
-            "00:1C:26", "00:1D:25", "00:1E:58", "00:1F:3A", "00:20:7B",
-            "00:21:3A", "00:22:43", "00:23:69", "00:24:54", "00:25:60",
-            "00:26:5B", "00:27:10", "28:ED:6A", "2C:4D:54", "30:10:B3",
-            "34:BD:FA", "38:83:45", "3C:78:4C", "40:A5:EF", "44:8A:5B",
-            "48:FF:8A", "50:85:69", "54:F2:01", "5C:F3:70", "60:38:0E",
-            "64:00:6A", "68:17:29", "70:7E:43", "74:6F:F9", "78:F8:82",
-            "7C:49:4E", "80:E6:50", "84:EB:18", "88:79:7E", "8C:34:FD",
-            "90:72:40", "94:7B:E7", "98:FE:94", "9C:2F:9B", "A0:18:28",
-            "A4:38:CC", "A8:0E:3D", "AC:27:1E", "B0:98:90", "B4:DF:82",
-            "B8:F1:86", "BC:5F:F4", "C0:74:AD", "C4:D9:87", "C8:34:FD",
+            "00:E0:4C",
+            "00:E0:58",
+            "00:E0:4C",
+            "00:1A:4D",
+            "00:1B:98",
+            "00:1C:26",
+            "00:1D:25",
+            "00:1E:58",
+            "00:1F:3A",
+            "00:20:7B",
+            "00:21:3A",
+            "00:22:43",
+            "00:23:69",
+            "00:24:54",
+            "00:25:60",
+            "00:26:5B",
+            "00:27:10",
+            "28:ED:6A",
+            "2C:4D:54",
+            "30:10:B3",
+            "34:BD:FA",
+            "38:83:45",
+            "3C:78:4C",
+            "40:A5:EF",
+            "44:8A:5B",
+            "48:FF:8A",
+            "50:85:69",
+            "54:F2:01",
+            "5C:F3:70",
+            "60:38:0E",
+            "64:00:6A",
+            "68:17:29",
+            "70:7E:43",
+            "74:6F:F9",
+            "78:F8:82",
+            "7C:49:4E",
+            "80:E6:50",
+            "84:EB:18",
+            "88:79:7E",
+            "8C:34:FD",
+            "90:72:40",
+            "94:7B:E7",
+            "98:FE:94",
+            "9C:2F:9B",
+            "A0:18:28",
+            "A4:38:CC",
+            "A8:0E:3D",
+            "AC:27:1E",
+            "B0:98:90",
+            "B4:DF:82",
+            "B8:F1:86",
+            "BC:5F:F4",
+            "C0:74:AD",
+            "C4:D9:87",
+            "C8:34:FD",
         ],
         "atheros": [
-            "00:03:7F", "00:11:F5", "00:13:E8", "00:15:6D", "00:16:E6",
-            "00:18:39", "00:19:E0", "00:1B:63", "00:1C:B3", "00:1D:4F",
-            "00:1E:52", "00:1F:3C", "00:21:E9", "00:22:41", "00:23:6C",
-            "00:24:36", "00:25:00", "00:26:08", "00:26:B0", "00:27:BC",
-            "28:CF:E9", "28:E0:2C", "28:F0:76", "3C:07:54", "3C:15:C2",
-            "40:A6:D9", "40:E4:6D", "44:8A:5B", "44:D8:84", "48:60:BC",
-            "4C:8D:79", "50:ED:3C", "54:9D:80", "58:55:CA", "5C:95:AE",
-            "60:03:08", "64:9E:F3", "68:5B:35", "68:96:7B", "6C:40:08",
+            "00:03:7F",
+            "00:11:F5",
+            "00:13:E8",
+            "00:15:6D",
+            "00:16:E6",
+            "00:18:39",
+            "00:19:E0",
+            "00:1B:63",
+            "00:1C:B3",
+            "00:1D:4F",
+            "00:1E:52",
+            "00:1F:3C",
+            "00:21:E9",
+            "00:22:41",
+            "00:23:6C",
+            "00:24:36",
+            "00:25:00",
+            "00:26:08",
+            "00:26:B0",
+            "00:27:BC",
+            "28:CF:E9",
+            "28:E0:2C",
+            "28:F0:76",
+            "3C:07:54",
+            "3C:15:C2",
+            "40:A6:D9",
+            "40:E4:6D",
+            "44:8A:5B",
+            "44:D8:84",
+            "48:60:BC",
+            "4C:8D:79",
+            "50:ED:3C",
+            "54:9D:80",
+            "58:55:CA",
+            "5C:95:AE",
+            "60:03:08",
+            "64:9E:F3",
+            "68:5B:35",
+            "68:96:7B",
+            "6C:40:08",
         ],
         "random": None,  # Fully random
     }
@@ -426,10 +684,9 @@ class MACChanger:
         """Get current MAC address of interface."""
         try:
             result = subprocess.run(
-                ["ip", "link", "show", self.interface],
-                capture_output=True, text=True, timeout=5
+                ["ip", "link", "show", self.interface], capture_output=True, text=True, timeout=5
             )
-            for line in result.stdout.split('\n'):
+            for line in result.stdout.split("\n"):
                 if "link/ether" in line:
                     return line.strip().split()[1]
         except Exception as e:
@@ -474,10 +731,12 @@ class MACChanger:
         if profile == "random" or profile not in self.OUI_PROFILES:
             # Fully random MAC
             import random
+
             mac = "02:" + ":".join(f"{random.randint(0x00, 0xFF):02x}" for _ in range(5))
         else:
             # Use vendor OUI + random suffix
             import random
+
             oui_list = self.OUI_PROFILES[profile]
             oui = random.choice(oui_list)
             suffix = ":".join(f"{random.randint(0x00, 0xFF):02x}" for _ in range(3))
@@ -502,7 +761,6 @@ class MACChanger:
     def list_profiles(self) -> dict[str, int]:
         """List available profiles with OUI counts."""
         return {k: len(v) if v else 0 for k, v in self.OUI_PROFILES.items()}
-
 
 
 class NMEAParser:
@@ -531,7 +789,7 @@ class NMEAParser:
 
     @staticmethod
     def _checksum(sentence: str) -> str:
-        data = sentence[1:sentence.index("*")]
+        data = sentence[1 : sentence.index("*")]
         checksum = 0
         for char in data:
             checksum ^= ord(char)
@@ -650,7 +908,7 @@ class GeoMapper:
                     break
 
                 buffer += data
-                lines = buffer.split(b'\n')
+                lines = buffer.split(b"\n")
                 buffer = lines[-1]
 
                 for line in lines[:-1]:
@@ -686,10 +944,7 @@ class GeoMapper:
                 "lat": self._gps_data["lat"],
                 "lon": self._gps_data["lon"],
                 "alt": self._gps_data.get("alt"),
-                "accuracy": max(
-                    self._gps_data.get("epx", 0),
-                    self._gps_data.get("epy", 0)
-                ),
+                "accuracy": max(self._gps_data.get("epx", 0), self._gps_data.get("epy", 0)),
             }
         return None
 
@@ -705,10 +960,13 @@ class GeoMapper:
             return
         try:
             import asyncio
+
             loop = asyncio.get_event_loop()
             if not loop.is_running():
                 return
-            loop.create_task(self.event_bus.publish(Event(type=event_type, payload=payload, source="gps")))
+            loop.create_task(
+                self.event_bus.publish(Event(type=event_type, payload=payload, source="gps"))
+            )
         except RuntimeError:
             pass
 
@@ -743,26 +1001,30 @@ class GeoMapper:
                     continue
                 name = snap.get("essid") or snap.get("bssid") or "unknown"
                 bssid = snap.get("bssid", "")
-                f.write('<Placemark>\n')
-                f.write(f'<name>{self._escape(name)}</name>\n')
-                f.write('<description><![CDATA[')
-                f.write(f'BSSID: {self._escape(bssid)}<br/>')
-                f.write(f'Time: {self._escape(snap.get("timestamp", ""))}<br/>')
-                f.write(']]></description>\n')
-                f.write('<Point><coordinates>')
-                f.write(f'{lon},{lat},{gps.get("alt", 0)}')
-                f.write('</coordinates></Point>\n')
-                f.write('</Placemark>\n')
+                f.write("<Placemark>\n")
+                f.write(f"<name>{self._escape(name)}</name>\n")
+                f.write("<description><![CDATA[")
+                f.write(f"BSSID: {self._escape(bssid)}<br/>")
+                f.write(f"Time: {self._escape(snap.get('timestamp', ''))}<br/>")
+                f.write("]]></description>\n")
+                f.write("<Point><coordinates>")
+                f.write(f"{lon},{lat},{gps.get('alt', 0)}")
+                f.write("</coordinates></Point>\n")
+                f.write("</Placemark>\n")
                 count += 1
-            f.write('</Document>\n</kml>\n')
+            f.write("</Document>\n</kml>\n")
         self._publish("geo.exported", {"format": "kml", "file": str(output_file), "count": count})
         return count
 
     def export_wigle_csv(self, output_file: Path) -> int:
         count = 0
         with open(output_file, "w") as f:
-            f.write("WigleWifi-1.6,appRelease=2.55,model=UrbanHS,release=3.0.0,device=Pi5,display=UrbanHS,board=RaspberryPi,brand=UrbanHS\n")
-            f.write("MAC,SSID,AuthMode,FirstSeen,Channel,RSSI,CurrentLatitude,CurrentLongitude,AltitudeMeters,AccuracyMeters,Type\n")
+            f.write(
+                "WigleWifi-1.6,appRelease=2.55,model=UrbanHS,release=3.0.0,device=Pi5,display=UrbanHS,board=RaspberryPi,brand=UrbanHS\n"
+            )
+            f.write(
+                "MAC,SSID,AuthMode,FirstSeen,Channel,RSSI,CurrentLatitude,CurrentLongitude,AltitudeMeters,AccuracyMeters,Type\n"
+            )
             for snap in self._snapshots:
                 gps = snap.get("gps") or {}
                 if gps.get("lat") is None or gps.get("lon") is None:
@@ -778,14 +1040,18 @@ class GeoMapper:
                 )
                 f.write(line)
                 count += 1
-        self._publish("geo.exported", {"format": "wigle_csv", "file": str(output_file), "count": count})
+        self._publish(
+            "geo.exported", {"format": "wigle_csv", "file": str(output_file), "count": count}
+        )
         return count
 
     def export_kismet_netxml(self, output_file: Path) -> int:
         count = 0
         with open(output_file, "w") as f:
             f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
-            f.write('<detection-run xmlns="http://www.kismet-2000lite.org/xml/detection-run-1.1">\n')
+            f.write(
+                '<detection-run xmlns="http://www.kismet-2000lite.org/xml/detection-run-1.1">\n'
+            )
             for snap in self._snapshots:
                 gps = snap.get("gps") or {}
                 if gps.get("lat") is None or gps.get("lon") is None:
@@ -793,23 +1059,25 @@ class GeoMapper:
                 bssid = snap.get("bssid", "")
                 essid = snap.get("essid") or ""
                 f.write('<wireless-network type="infrastructure">\n')
-                f.write(f'<BSSID>{self._escape(bssid)}</BSSID>\n')
-                f.write(f'<SSID>{self._escape(essid)}</SSID>\n')
-                f.write(f'<first-time>{snap.get("timestamp", "")}</first-time>\n')
-                f.write(f'<last-time>{snap.get("timestamp", "")}</last-time>\n')
-                f.write(f'<channel>{snap.get("channel", "")}</channel>\n')
-                f.write(f'<signal>{snap.get("signal_dbm", "")}</signal>\n')
-                f.write('<gps-info>\n')
-                f.write(f'<min-lat>{gps.get("lat", "")}</min-lat>\n')
-                f.write(f'<min-lon>{gps.get("lon", "")}</min-lon>\n')
-                f.write(f'<min-alt>{gps.get("alt", "")}</min-alt>\n')
-                f.write(f'<max-lat>{gps.get("lat", "")}</max-lat>\n')
-                f.write(f'<max-lon>{gps.get("lon", "")}</max-lon>\n')
-                f.write('</gps-info>\n')
-                f.write('</wireless-network>\n')
+                f.write(f"<BSSID>{self._escape(bssid)}</BSSID>\n")
+                f.write(f"<SSID>{self._escape(essid)}</SSID>\n")
+                f.write(f"<first-time>{snap.get('timestamp', '')}</first-time>\n")
+                f.write(f"<last-time>{snap.get('timestamp', '')}</last-time>\n")
+                f.write(f"<channel>{snap.get('channel', '')}</channel>\n")
+                f.write(f"<signal>{snap.get('signal_dbm', '')}</signal>\n")
+                f.write("<gps-info>\n")
+                f.write(f"<min-lat>{gps.get('lat', '')}</min-lat>\n")
+                f.write(f"<min-lon>{gps.get('lon', '')}</min-lon>\n")
+                f.write(f"<min-alt>{gps.get('alt', '')}</min-alt>\n")
+                f.write(f"<max-lat>{gps.get('lat', '')}</max-lat>\n")
+                f.write(f"<max-lon>{gps.get('lon', '')}</max-lon>\n")
+                f.write("</gps-info>\n")
+                f.write("</wireless-network>\n")
                 count += 1
-            f.write('</detection-run>\n')
-        self._publish("geo.exported", {"format": "kismet_netxml", "file": str(output_file), "count": count})
+            f.write("</detection-run>\n")
+        self._publish(
+            "geo.exported", {"format": "kismet_netxml", "file": str(output_file), "count": count}
+        )
         return count
 
     def export_jsonl(self, output_file: Path) -> int:
@@ -891,16 +1159,10 @@ class WardriveMode:
                         signal_dbm=network.get("signal_dbm"),
                     )
                     if self.event_bus is not None:
-                        await self._safe_publish(
-                            "wardrive.snapshot",
-                            snapshot,
-                        )
+                        await self._safe_publish("wardrive.snapshot", snapshot)
                 if not self.gps_mapper.is_fixed():
                     if self.event_bus is not None:
-                        await self._safe_publish(
-                            "gps.lost",
-                            {"message": "No GPS fix"},
-                        )
+                        await self._safe_publish("gps.lost", {"message": "No GPS fix"})
             except asyncio.CancelledError:
                 break
             except Exception as exc:

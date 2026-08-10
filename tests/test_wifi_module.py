@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-sys.path.insert(0, 'src')
+sys.path.insert(0, "src")
 
 from urban_hs.modules.wifi import (
     AttackResult,
@@ -37,6 +37,7 @@ from urban_hs.modules.wifi.scanner import AirodumpScanBackend, IWScanBackend
 # FIXTURES
 # ============================================================
 
+
 @pytest.fixture
 def temp_dir():
     """Create temporary directory for tests."""
@@ -47,6 +48,7 @@ def temp_dir():
 # ============================================================
 # NETWORK INFO TESTS
 # ============================================================
+
 
 class TestNetworkInfo:
     """Test NetworkInfo dataclass."""
@@ -71,10 +73,7 @@ class TestNetworkInfo:
     def test_vulnerable_wps_property(self):
         """Test is_vulnerable_wps property."""
         net = NetworkInfo(
-            bssid="aa:bb:cc:dd:ee:ff",
-            ssid="TestNetwork",
-            wps_enabled=True,
-            wps_locked=False,
+            bssid="aa:bb:cc:dd:ee:ff", ssid="TestNetwork", wps_enabled=True, wps_locked=False
         )
         assert net.is_vulnerable_wps is True
 
@@ -86,10 +85,7 @@ class TestNetworkInfo:
 
     def test_is_wpa3_property(self):
         """Test is_wpa3 property."""
-        net = NetworkInfo(
-            bssid="aa:bb:cc:dd:ee:ff",
-            encryption="WPA3-SAE",
-        )
+        net = NetworkInfo(bssid="aa:bb:cc:dd:ee:ff", encryption="WPA3-SAE")
         assert net.is_wpa3 is True
 
         net.encryption = "WPA2-PSK"
@@ -97,12 +93,7 @@ class TestNetworkInfo:
 
     def test_to_dict(self):
         """Test serialization to dictionary."""
-        net = NetworkInfo(
-            bssid="aa:bb:cc:dd:ee:ff",
-            ssid="TestNetwork",
-            signal_dbm=-45,
-            channel=6,
-        )
+        net = NetworkInfo(bssid="aa:bb:cc:dd:ee:ff", ssid="TestNetwork", signal_dbm=-45, channel=6)
 
         d = net.to_dict()
 
@@ -115,6 +106,7 @@ class TestNetworkInfo:
 # ============================================================
 # SCAN STRATEGY TESTS
 # ============================================================
+
 
 class TestScanStrategy:
     """Test ScanStrategy enum."""
@@ -129,6 +121,7 @@ class TestScanStrategy:
 # IW SCAN BACKEND TESTS
 # ============================================================
 
+
 class TestIWScanBackend:
     """Test iw scan backend."""
 
@@ -137,12 +130,15 @@ class TestIWScanBackend:
         """Test scan parses iw JSON output correctly."""
         backend = IWScanBackend()
 
-        with patch('asyncio.create_subprocess_exec') as mock_exec:
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_proc = AsyncMock()
             mock_proc.returncode = 0
-            mock_proc.communicate.return_value = (b'''[
+            mock_proc.communicate.return_value = (
+                b"""[
                 {"bssid": "aa:bb:cc:dd:ee:ff", "ssid": "TestNetwork", "freq": 2437, "signal": -45, "flags": ["privacy", "WPA2-PSK", "WPS"], "channel": 6, "vendor": "Test Vendor"}
-            ]''', b"")
+            ]""",
+                b"",
+            )
             mock_exec.return_value = mock_proc
 
             networks = await backend.scan("wlan0", duration=5)
@@ -160,7 +156,7 @@ class TestIWScanBackend:
         """Test handling of empty scan results."""
         backend = IWScanBackend()
 
-        with patch('asyncio.create_subprocess_exec') as mock_exec:
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_proc = AsyncMock()
             mock_proc.returncode = 0
             mock_proc.communicate.return_value = (b"[]", b"")
@@ -174,7 +170,7 @@ class TestIWScanBackend:
         """Test scan error handling."""
         backend = IWScanBackend()
 
-        with patch('asyncio.create_subprocess_exec') as mock_exec:
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_proc = AsyncMock()
             mock_proc.returncode = 1
             mock_proc.communicate.return_value = (b"", b"Device or resource busy")
@@ -187,6 +183,7 @@ class TestIWScanBackend:
 # ============================================================
 # AIRODUMP SCAN BACKEND TESTS
 # ============================================================
+
 
 class TestAirodumpScanBackend:
     """Test airodump-ng scan backend."""
@@ -203,13 +200,13 @@ aa:bb:cc:dd:ee:ff,2024-01-01 12:00:00,2024-01-01 12:05:00,6,54,WPA2,CCMP,PSK,-45
         csv_file = temp_dir / "scan_00000000-01.csv"
         csv_file.write_text(csv_content)
 
-        with patch('asyncio.create_subprocess_exec') as mock_exec:
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_proc = AsyncMock()
             mock_proc.returncode = 0
             mock_exec.return_value = mock_proc
 
             # Mock the csv_prefix to match our test file
-            with patch('uuid.uuid4') as mock_uuid:
+            with patch("uuid.uuid4") as mock_uuid:
                 mock_uuid.return_value.hex = "00000000" * 4  # 32 chars
 
                 networks = await backend.scan("wlan0", duration=1)
@@ -224,6 +221,7 @@ aa:bb:cc:dd:ee:ff,2024-01-01 12:00:00,2024-01-01 12:05:00,6,54,WPA2,CCMP,PSK,-45
 # WIFI SCANNER TESTS
 # ============================================================
 
+
 class TestWiFiScanner:
     """Test WiFi scanner main class."""
 
@@ -237,20 +235,27 @@ class TestWiFiScanner:
     @pytest.mark.asyncio
     async def test_scanner_with_custom_strategy(self, tmp_path):
         """Test scanner with custom strategy."""
-        scanner = WiFiScanner(interface="wlan0", strategy=ScanStrategy.DIRECT, output_dir=str(tmp_path / "scans"))
+        scanner = WiFiScanner(
+            interface="wlan0", strategy=ScanStrategy.DIRECT, output_dir=str(tmp_path / "scans")
+        )
         assert scanner.manager.strategy == ScanStrategy.DIRECT
 
     @pytest.mark.asyncio
     async def test_scan_networks(self, tmp_path):
         """Test network scanning."""
-        scanner = WiFiScanner(interface="wlan0", strategy=ScanStrategy.DIRECT, output_dir=str(tmp_path / "scans"))
+        scanner = WiFiScanner(
+            interface="wlan0", strategy=ScanStrategy.DIRECT, output_dir=str(tmp_path / "scans")
+        )
 
-        with patch('asyncio.create_subprocess_exec') as mock_exec:
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_proc = AsyncMock()
             mock_proc.returncode = 0
-            mock_proc.communicate.return_value = (b'''[
+            mock_proc.communicate.return_value = (
+                b"""[
                 {"bssid": "aa:bb:cc:dd:ee:ff", "ssid": "TestNetwork", "freq": 2437, "signal": -45, "flags": ["privacy", "WPA2-PSK", "WPS"], "channel": 6, "vendor": "Test Vendor"}
-            ]''', b"")
+            ]""",
+                b"",
+            )
             mock_exec.return_value = mock_proc
 
             networks = await scanner.scan(duration=5)
@@ -261,12 +266,14 @@ class TestWiFiScanner:
     @pytest.mark.asyncio
     async def test_continuous_scan(self, tmp_path):
         """Test continuous scan iterator."""
-        scanner = WiFiScanner(interface="wlan0", strategy=ScanStrategy.DIRECT, output_dir=str(tmp_path / "scans"))
+        scanner = WiFiScanner(
+            interface="wlan0", strategy=ScanStrategy.DIRECT, output_dir=str(tmp_path / "scans")
+        )
 
-        with patch('asyncio.create_subprocess_exec') as mock_exec:
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_proc = AsyncMock()
             mock_proc.returncode = 0
-            mock_proc.communicate.return_value = (b'''[]''', b"")
+            mock_proc.communicate.return_value = (b"""[]""", b"")
             mock_exec.return_value = mock_proc
 
             count = 0
@@ -280,6 +287,7 @@ class TestWiFiScanner:
     def test_get_channels_2ghz(self):
         """Test 2.4GHz channel list."""
         from urban_hs.modules.wifi.scanner import CHANNELS_2GHZ
+
         assert len(CHANNELS_2GHZ) == 13
         assert CHANNELS_2GHZ[0] == 1
         assert CHANNELS_2GHZ[-1] == 13
@@ -287,6 +295,7 @@ class TestWiFiScanner:
     def test_get_channels_5ghz(self):
         """Test 5GHz channel list."""
         from urban_hs.modules.wifi.scanner import CHANNELS_5GHZ
+
         assert len(CHANNELS_5GHZ) == 20
         assert 36 in CHANNELS_5GHZ
         assert 144 in CHANNELS_5GHZ
@@ -295,6 +304,7 @@ class TestWiFiScanner:
 # ============================================================
 # HANDSHAKE ATTACK TESTS
 # ============================================================
+
 
 class TestHandshakeAttack:
     """Test HandshakeAttack class."""
@@ -324,7 +334,7 @@ class TestHandshakeAttack:
             interface="wlan1",
             output_dir=str(tmp_path / "custom_handshakes"),
             deauth_count=15,
-            attack_timeout=30
+            attack_timeout=30,
         )
         assert custom_attack.interface == "wlan1"
         assert custom_attack.deauth_count == 15
@@ -334,6 +344,7 @@ class TestHandshakeAttack:
 # ============================================================
 # PMKID ATTACK TESTS
 # ============================================================
+
 
 class TestPMKIDAttack:
     """Test PMKIDAttack class."""
@@ -351,16 +362,14 @@ class TestPMKIDAttack:
     @pytest.mark.asyncio
     async def test_execute_with_mock(self, attack):
         """Test attack execution with mocked subprocess."""
-        with patch('asyncio.create_subprocess_exec') as mock_exec:
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_proc = AsyncMock()
             mock_proc.returncode = 0
             mock_proc.communicate.return_value = (b"", b"")
             mock_exec.return_value = mock_proc
 
             result = await attack.execute(
-                target_bssid="aa:bb:cc:dd:ee:ff",
-                target_essid="TestNetwork",
-                channel=6
+                target_bssid="aa:bb:cc:dd:ee:ff", target_essid="TestNetwork", channel=6
             )
 
             assert result.attack_type == "pmkid"
@@ -370,6 +379,7 @@ class TestPMKIDAttack:
 # ============================================================
 # WPS ATTACK TESTS
 # ============================================================
+
 
 class TestWPSAttacks:
     """Test WPS attacks."""
@@ -389,16 +399,16 @@ class TestWPSAttacks:
     @pytest.mark.asyncio
     async def test_pixie_execute_mock(self, pixie_attack):
         """Test WPS Pixie Dust with mocked reaver."""
-        with patch('asyncio.create_subprocess_exec') as mock_exec:
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_proc = AsyncMock()
             mock_proc.returncode = 0
-            mock_proc.communicate.return_value = (b"WPS PIN: 12345670\nWPA PSK: testpassword\n", b"")
+            mock_proc.communicate.return_value = (
+                b"WPS PIN: 12345670\nWPA PSK: testpassword\n",
+                b"",
+            )
             mock_exec.return_value = mock_proc
 
-            result = await pixie_attack.execute(
-                target_bssid="aa:bb:cc:dd:ee:ff",
-                channel=6
-            )
+            result = await pixie_attack.execute(target_bssid="aa:bb:cc:dd:ee:ff", channel=6)
 
             assert result.attack_type == "wps_pixie"
             assert result.status in [AttackStatus.SUCCESS, AttackStatus.FAILED]
@@ -411,6 +421,7 @@ class TestWPSAttacks:
 # ============================================================
 # DEAUTH ATTACK TESTS
 # ============================================================
+
 
 class TestDeauthAttack:
     """Test DeauthAttack class."""
@@ -426,7 +437,7 @@ class TestDeauthAttack:
     @pytest.mark.asyncio
     async def test_targeted_deauth(self, attack):
         """Test targeted deauthentication."""
-        with patch('asyncio.create_subprocess_exec') as mock_exec:
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_proc = AsyncMock()
             mock_proc.returncode = 0
             mock_proc.communicate.return_value = (b"", b"")
@@ -437,7 +448,7 @@ class TestDeauthAttack:
                 target_essid="TestNetwork",
                 channel=6,
                 client_mac="11:22:33:44:55:66",
-                count=5
+                count=5,
             )
 
             assert result.attack_type == "deauth"
@@ -448,17 +459,14 @@ class TestDeauthAttack:
     @pytest.mark.asyncio
     async def test_broadcast_deauth(self, attack):
         """Test broadcast deauthentication."""
-        with patch('asyncio.create_subprocess_exec') as mock_exec:
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_proc = AsyncMock()
             mock_proc.returncode = 0
             mock_proc.communicate.return_value = (b"", b"")
             mock_exec.return_value = mock_proc
 
             result = await attack.execute(
-                target_bssid="aa:bb:cc:dd:ee:ff",
-                target_essid="TestNetwork",
-                channel=6,
-                count=10
+                target_bssid="aa:bb:cc:dd:ee:ff", target_essid="TestNetwork", channel=6, count=10
             )
 
             assert result.attack_type == "deauth"
@@ -469,6 +477,7 @@ class TestDeauthAttack:
 # HANDSEK MANAGER TESTS
 # ============================================================
 
+
 class TestHandshakeManager:
     """Test HandshakeManager class."""
 
@@ -477,7 +486,7 @@ class TestHandshakeManager:
         return HandshakeManager(
             handshake_dir=str(temp_dir / "handshakes"),
             hash_dir=str(temp_dir / "hashes"),
-            cracked_dir=str(temp_dir / "cracked")
+            cracked_dir=str(temp_dir / "cracked"),
         )
 
     @pytest.mark.asyncio
@@ -492,7 +501,7 @@ class TestHandshakeManager:
             gps_lat=37.7749,
             gps_lon=-122.4194,
             vendor="Test Vendor",
-            signal_dbm=-45
+            signal_dbm=-45,
         )
 
         assert handshake is not None
@@ -547,6 +556,7 @@ class TestHandshakeManager:
 # MAC CHANGER TESTS
 # ============================================================
 
+
 class TestMACChanger:
     """Test MACChanger class."""
 
@@ -557,12 +567,12 @@ class TestMACChanger:
     @pytest.mark.asyncio
     async def test_get_current_mac(self, changer):
         """Test getting current MAC."""
-        with patch('asyncio.create_subprocess_exec') as mock_exec:
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_proc = AsyncMock()
             mock_proc.returncode = 0
             mock_proc.communicate.return_value = (
                 b"wlan0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500\n        ether aa:bb:cc:dd:ee:ff  txqueuelen 1000\n",
-                b""
+                b"",
             )
             mock_exec.return_value = mock_proc
 
@@ -575,7 +585,7 @@ class TestMACChanger:
     @pytest.mark.asyncio
     async def test_change_mac_random(self, changer):
         """Test random MAC change."""
-        with patch('asyncio.create_subprocess_exec') as mock_exec:
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_proc = AsyncMock()
             mock_proc.returncode = 0
             mock_proc.communicate.return_value = (b"", b"")
@@ -588,7 +598,7 @@ class TestMACChanger:
     @pytest.mark.asyncio
     async def test_change_mac_oui_profile(self, changer):
         """Test OUI profile MAC change."""
-        with patch('asyncio.create_subprocess_exec') as mock_exec:
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_proc = AsyncMock()
             mock_proc.returncode = 0
             mock_proc.communicate.return_value = (b"", b"")
@@ -600,7 +610,7 @@ class TestMACChanger:
     @pytest.mark.asyncio
     async def test_restore_original_mac(self, changer):
         """Test restoring original MAC."""
-        with patch('asyncio.create_subprocess_exec') as mock_exec:
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_proc = AsyncMock()
             mock_proc.returncode = 0
             mock_proc.communicate.return_value = (b"", b"")
@@ -611,9 +621,11 @@ class TestMACChanger:
             result = changer.restore_original_mac()
             assert result is True or result is False
 
+
 # ============================================================
 # GEO MAPPER TESTS
 # ============================================================
+
 
 class TestGeoMapper:
     """Test GeoMapper class - simplified tests since gpsd module not available in CI."""
@@ -621,10 +633,7 @@ class TestGeoMapper:
     @pytest.fixture
     def mapper(self):
         """Test GeoMapper fixture."""
-        return GeoMapper(
-            gpsd_host="localhost",
-            gpsd_port=2947,
-        )
+        return GeoMapper(gpsd_host="localhost", gpsd_port=2947)
 
     def test_mapper_creation(self, mapper):
         """Test GeoMapper can be created."""
@@ -635,6 +644,7 @@ class TestGeoMapper:
         """Test that gpsd module is not required for basic functionality."""
         # This test just documents that gpsd is optional
         import sys
+
         # In CI/CD, gpsd is not installed, which is expected
         assert "gpsd" not in sys.modules or True
 
@@ -651,12 +661,14 @@ class TestGeoMapper:
 # CHANNEL CONSTANTS TESTS
 # ============================================================
 
+
 class TestChannelConstants:
     """Test channel constants."""
 
     def test_2ghz_channels(self):
         """Test 2.4GHz channels."""
         from urban_hs.modules.wifi.scanner import CHANNELS_2GHZ
+
         assert len(CHANNELS_2GHZ) == 13
         assert CHANNELS_2GHZ[0] == 1
         assert CHANNELS_2GHZ[-1] == 13
@@ -664,6 +676,7 @@ class TestChannelConstants:
     def test_5ghz_channels(self):
         """Test 5GHz channels."""
         from urban_hs.modules.wifi.scanner import CHANNELS_5GHZ
+
         assert len(CHANNELS_5GHZ) == 20
         assert 36 in CHANNELS_5GHZ
         assert 144 in CHANNELS_5GHZ
@@ -672,6 +685,7 @@ class TestChannelConstants:
 # ============================================================
 # ATTACK RESULT TESTS
 # ============================================================
+
 
 class TestAttackResult:
     """Test AttackResult dataclass."""
@@ -711,6 +725,7 @@ class TestAttackResult:
 # ============================================================
 # HANDSHAKE INFO TESTS
 # ============================================================
+
 
 class TestHandshakeInfo:
     """Test HandshakeInfo dataclass."""

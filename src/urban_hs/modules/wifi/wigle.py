@@ -31,6 +31,7 @@ class WigleClient:
     def __init__(self, api_name: str | None = None, api_key: str | None = None):
         if api_name is None or api_key is None:
             from urban_hs.core.config import get_config
+
             cfg = get_config()
             api_name = getattr(cfg, "wigle_api_name", "") or None
             api_key = getattr(cfg, "wigle_api_key", "") or None
@@ -51,10 +52,9 @@ class WigleClient:
         url = f"https://api.wigle.net/api/v2/network/search?netid={urllib.parse.quote(bssid)}"
         auth_header = base64.b64encode(f"{self.api_name}:{self.api_key}".encode()).decode()
 
-        req = urllib.request.Request(url, headers={
-            "Authorization": f"Basic {auth_header}",
-            "Accept": "application/json"
-        })
+        req = urllib.request.Request(
+            url, headers={"Authorization": f"Basic {auth_header}", "Accept": "application/json"}
+        )
 
         try:
             loop = asyncio.get_running_loop()

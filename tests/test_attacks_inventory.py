@@ -22,7 +22,9 @@ def auth_headers() -> dict[str, str]:
 
 
 @pytest.mark.anyio
-async def test_list_attacks_returns_grouped_modules(application: FastAPI, auth_headers: dict) -> None:
+async def test_list_attacks_returns_grouped_modules(
+    application: FastAPI, auth_headers: dict
+) -> None:
     transport = ASGITransport(app=application)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/api/v1/attacks", headers=auth_headers)
@@ -34,7 +36,9 @@ async def test_list_attacks_returns_grouped_modules(application: FastAPI, auth_h
 
 
 @pytest.mark.anyio
-async def test_attack_inventory_items_have_required_fields(application: FastAPI, auth_headers: dict) -> None:
+async def test_attack_inventory_items_have_required_fields(
+    application: FastAPI, auth_headers: dict
+) -> None:
     transport = ASGITransport(app=application)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/api/v1/attacks", headers=auth_headers)

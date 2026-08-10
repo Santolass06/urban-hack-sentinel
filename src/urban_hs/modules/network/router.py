@@ -19,19 +19,12 @@ class RouterScanner:
     Router vulnerability scanner using RouterSploit and Hydra.
     """
 
-    def __init__(
-        self,
-        routersploit_path: str = "routersploit",
-        hydra_path: str = "hydra",
-    ):
+    def __init__(self, routersploit_path: str = "routersploit", hydra_path: str = "hydra"):
         self.routersploit_path = routersploit_path
         self.hydra_path = hydra_path
 
     async def scan_router(
-        self,
-        target_ip: str,
-        ports: list[int] = None,
-        modules: list[str] = None,
+        self, target_ip: str, ports: list[int] = None, modules: list[str] = None
     ) -> list[dict[str, Any]]:
         """Scan a router for known vulnerabilities via RouterSploit.
 
@@ -59,9 +52,7 @@ class RouterScanner:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, _ = await asyncio.wait_for(
-                proc.communicate(script.encode()), timeout=1800
-            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(script.encode()), timeout=1800)
         except Exception as exc:
             logger.warning("routersploit scan failed", target=target_ip, error=str(exc))
             return []
@@ -79,12 +70,14 @@ class RouterScanner:
             if "vulnerable" not in low or "not vulnerable" in low or "non-vulnerable" in low:
                 continue
             match = re.search(r"((?:exploits|creds)/\S+)", line)
-            results.append({
-                "ip": target_ip,
-                "module": match.group(1) if match else None,
-                "vulnerable": True,
-                "detail": line,
-            })
+            results.append(
+                {
+                    "ip": target_ip,
+                    "module": match.group(1) if match else None,
+                    "vulnerable": True,
+                    "detail": line,
+                }
+            )
         return results
 
     async def brute_force_credentials(
@@ -108,18 +101,19 @@ class RouterScanner:
         try:
             cmd = [
                 self.hydra_path,
-                "-L", user_file,
-                "-P", pass_file,
-                "-t", "4",
+                "-L",
+                user_file,
+                "-P",
+                pass_file,
+                "-t",
+                "4",
                 "-f",
                 "-v",
                 f"{service}://{target_ip}:{port}",
             ]
 
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=3600)
 
@@ -130,13 +124,15 @@ class RouterScanner:
                 match = re.search(r"login:\s+(\S+)\s+password:\s+(\S+)", line)
                 if match:
                     username, password = match.group(1), match.group(2)
-                    results.append({
-                        "service": service,
-                        "ip": target_ip,
-                        "port": port,
-                        "username": username,
-                        "password": password,
-                    })
+                    results.append(
+                        {
+                            "service": service,
+                            "ip": target_ip,
+                            "port": port,
+                            "username": username,
+                            "password": password,
+                        }
+                    )
 
             return results
 

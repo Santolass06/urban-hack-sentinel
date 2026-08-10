@@ -20,24 +20,19 @@ logger = structlog.get_logger(__name__)
 
 class BLEBackend(ABC):
     @abstractmethod
-    async def scan(self, duration: int = 10) -> list[Any]:
-        ...
+    async def scan(self, duration: int = 10) -> list[Any]: ...
 
     @abstractmethod
-    async def start(self) -> None:
-        ...
+    async def start(self) -> None: ...
 
     @abstractmethod
-    async def stop(self) -> None:
-        ...
+    async def stop(self) -> None: ...
 
     @abstractmethod
-    def devices(self) -> list[Any]:
-        ...
+    def devices(self) -> list[Any]: ...
 
     @abstractmethod
-    def name(self) -> str:
-        ...
+    def name(self) -> str: ...
 
 
 class _BleakBackend(BLEBackend):
@@ -51,6 +46,7 @@ class _BleakBackend(BLEBackend):
     async def start(self) -> None:
         try:
             from urban_hs.modules.ble.fastpair import FastPairScanner
+
             self._scanner = FastPairScanner(adapter=self.adapter)
             await self._scanner.start()
         except Exception as exc:
@@ -66,6 +62,7 @@ class _BleakBackend(BLEBackend):
     async def scan(self, duration: int = 10) -> list[Any]:
         await self.start()
         import asyncio
+
         await asyncio.sleep(duration)
         await self.stop()
         self._devices = {d.address: d for d in self._scanner.get_devices()}
@@ -102,12 +99,8 @@ class _BlueZBackend(BLEBackend):
             await self._bus.connect()
 
             # Enable the adapter
-            introspection = await self._bus.introspect(
-                "org.bluez", self._adapter_path
-            )
-            proxy = self._bus.get_proxy_object(
-                "org.bluez", self._adapter_path, introspection
-            )
+            introspection = await self._bus.introspect("org.bluez", self._adapter_path)
+            proxy = self._bus.get_proxy_object("org.bluez", self._adapter_path, introspection)
             props = proxy.get_interface("org.freedesktop.DBus.Properties")
             await props.call_set("org.bluez.Adapter1", "Powered", "b", True)
             logger.info("BlueZ adapter powered on", adapter=self.adapter)
@@ -119,18 +112,12 @@ class _BlueZBackend(BLEBackend):
     async def stop(self) -> None:
         if self._scanning and self._bus:
             try:
-                introspection = await self._bus.introspect(
-                    "org.bluez", self._adapter_path
-                )
-                proxy = self._bus.get_proxy_object(
-                    "org.bluez", self._adapter_path, introspection
-                )
+                introspection = await self._bus.introspect("org.bluez", self._adapter_path)
+                proxy = self._bus.get_proxy_object("org.bluez", self._adapter_path, introspection)
                 iface = proxy.get_interface("org.bluez.LEAdvertisingManager1")
                 # Stop discovery
                 props = proxy.get_interface("org.freedesktop.DBus.Properties")
-                await props.call_set(
-                    "org.bluez.Adapter1", "Discovering", "b", False
-                )
+                await props.call_set("org.bluez.Adapter1", "Discovering", "b", False)
                 self._scanning = False
             except Exception:
                 pass
@@ -144,18 +131,15 @@ class _BlueZBackend(BLEBackend):
 
         try:
             # Start discovery
-            introspection = await self._bus.introspect(
-                "org.bluez", self._adapter_path
-            )
-            proxy = self._bus.get_proxy_object(
-                "org.bluez", self._adapter_path, introspection
-            )
+            introspection = await self._bus.introspect("org.bluez", self._adapter_path)
+            proxy = self._bus.get_proxy_object("org.bluez", self._adapter_path, introspection)
             props = proxy.get_interface("org.freedesktop.DBus.Properties")
             await props.call_set("org.bluez.Adapter1", "Discovering", "b", True)
             self._scanning = True
 
             # Wait for discovery
             import asyncio
+
             await asyncio.sleep(duration)
 
             # Get discovered devices
@@ -188,11 +172,7 @@ class _BlueZBackend(BLEBackend):
                 rssi = props.get("RSSI", -100)
 
                 if address and address not in self._devices:
-                    self._devices[address] = BLEDevice(
-                        address=address,
-                        name=name,
-                        rssi=rssi,
-                    )
+                    self._devices[address] = BLEDevice(address=address, name=name, rssi=rssi)
         except Exception as exc:
             logger.debug("BlueZ device enumeration failed", error=str(exc))
 
@@ -212,6 +192,7 @@ def create_ble_backend(adapter: str = "hci0") -> BLEBackend:
     """
     try:
         import dbus_fast  # noqa: F401
+
         return _BlueZBackend(adapter=adapter)
     except ImportError:
         return _BleakBackend(adapter=adapter)

@@ -72,13 +72,11 @@ class SessionScope:
         """
         if not self.allow_active:
             raise PermissionError(
-                "Active attacks are disabled. "
-                "Set allow_active=True or provide an explicit scope."
+                "Active attacks are disabled. Set allow_active=True or provide an explicit scope."
             )
         if not self.allowed_targets:
             raise PermissionError(
-                "No targets in allowlist. "
-                "Add at least one target to SessionScope.allowed_targets."
+                "No targets in allowlist. Add at least one target to SessionScope.allowed_targets."
             )
         if not self.allowed_categories:
             raise PermissionError(
@@ -86,13 +84,9 @@ class SessionScope:
                 "Add at least one category to SessionScope.allowed_categories."
             )
         if target not in self.allowed_targets:
-            raise PermissionError(
-                f"Target '{target}' is not in the session allowlist."
-            )
+            raise PermissionError(f"Target '{target}' is not in the session allowlist.")
         if category not in self.allowed_categories:
-            raise PermissionError(
-                f"Category '{category}' is not in the session allowlist."
-            )
+            raise PermissionError(f"Category '{category}' is not in the session allowlist.")
 
 
 # ----------------------------------------------------------------------

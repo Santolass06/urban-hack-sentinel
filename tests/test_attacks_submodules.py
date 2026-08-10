@@ -38,7 +38,6 @@ class TestHandshakeAttack:
 
         mock_verify = AsyncMock(return_value=True)
 
-
         original_start = attack._start_airodump
 
         async def patched_start(*args, **kwargs):
@@ -49,13 +48,13 @@ class TestHandshakeAttack:
                 cap.write_bytes(b"fake pcap data")
             return mock_proc
 
-        with patch.object(attack, "_start_airodump", side_effect=patched_start), \
-             patch("asyncio.create_subprocess_exec", return_value=mock_proc), \
-             patch.object(attack, "_verify_handshake", mock_verify):
+        with (
+            patch.object(attack, "_start_airodump", side_effect=patched_start),
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+            patch.object(attack, "_verify_handshake", mock_verify),
+        ):
             result = await attack.execute(
-                target_bssid="AA:BB:CC:DD:EE:FF",
-                target_essid="TestNet",
-                channel=6,
+                target_bssid="AA:BB:CC:DD:EE:FF", target_essid="TestNet", channel=6
             )
 
         assert result.status == AttackStatus.SUCCESS
@@ -71,10 +70,7 @@ class TestHandshakeAttack:
         mock_proc.returncode = 0
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            result = await attack.execute(
-                target_bssid="AA:BB:CC:DD:EE:FF",
-                channel=6,
-            )
+            result = await attack.execute(target_bssid="AA:BB:CC:DD:EE:FF", channel=6)
 
         assert result.status == AttackStatus.FAILED
 
@@ -95,10 +91,7 @@ class TestPMKIDAttack:
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
             with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError):
-                result = await attack.execute(
-                    target_bssid="AA:BB:CC:DD:EE:FF",
-                    channel=6,
-                )
+                result = await attack.execute(target_bssid="AA:BB:CC:DD:EE:FF", channel=6)
 
         assert result.status in (AttackStatus.FAILED, AttackStatus.SUCCESS)
 
@@ -110,9 +103,7 @@ class TestWPSPixieAttack:
 
         mock_proc = AsyncMock()
         mock_proc.stdout = AsyncMock()
-        mock_proc.stdout.read = AsyncMock(
-            return_value=b"WPS PIN: 12345670\nWPA PSK: password123\n"
-        )
+        mock_proc.stdout.read = AsyncMock(return_value=b"WPS PIN: 12345670\nWPA PSK: password123\n")
         mock_proc.stderr = AsyncMock()
         mock_proc.stderr.read = AsyncMock(return_value=b"")
         mock_proc.wait = AsyncMock(return_value=None)
@@ -120,10 +111,7 @@ class TestWPSPixieAttack:
         mock_proc.returncode = 0
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            result = await attack.execute(
-                target_bssid="AA:BB:CC:DD:EE:FF",
-                channel=6,
-            )
+            result = await attack.execute(target_bssid="AA:BB:CC:DD:EE:FF", channel=6)
 
         assert result.status == AttackStatus.SUCCESS
         assert result.wps_pin == "12345670"
@@ -143,10 +131,7 @@ class TestWPSPixieAttack:
         mock_proc.returncode = 1
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            result = await attack.execute(
-                target_bssid="AA:BB:CC:DD:EE:FF",
-                channel=6,
-            )
+            result = await attack.execute(target_bssid="AA:BB:CC:DD:EE:FF", channel=6)
 
         assert result.status == AttackStatus.FAILED
 
@@ -161,12 +146,11 @@ class TestDeauthAttack:
         mock_proc.wait = AsyncMock(return_value=None)
         mock_proc.returncode = 0
 
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc), \
-             patch("asyncio.wait_for", return_value=(b"", b"")):
-            result = await attack.execute(
-                target_bssid="AA:BB:CC:DD:EE:FF",
-                channel=6,
-            )
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+            patch("asyncio.wait_for", return_value=(b"", b"")),
+        ):
+            result = await attack.execute(target_bssid="AA:BB:CC:DD:EE:FF", channel=6)
 
         assert result.status == AttackStatus.SUCCESS
 
@@ -179,12 +163,12 @@ class TestDeauthAttack:
         mock_proc.wait = AsyncMock(return_value=None)
         mock_proc.returncode = 0
 
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc), \
-             patch("asyncio.wait_for", return_value=(b"", b"")):
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+            patch("asyncio.wait_for", return_value=(b"", b"")),
+        ):
             result = await attack.execute(
-                target_bssid="AA:BB:CC:DD:EE:FF",
-                channel=6,
-                client_mac="11:22:33:44:55:66",
+                target_bssid="AA:BB:CC:DD:EE:FF", channel=6, client_mac="11:22:33:44:55:66"
             )
 
         assert result.status == AttackStatus.SUCCESS
@@ -201,8 +185,7 @@ class TestKr00kAttack:
     @pytest.mark.asyncio
     async def test_init_custom(self, iface, mock_config, tmp_path):
         attack = Kr00kAttack(
-            iface, output_dir=str(tmp_path),
-            deauth_count=5, capture_after_deauth=15,
+            iface, output_dir=str(tmp_path), deauth_count=5, capture_after_deauth=15
         )
         assert attack.deauth_count == 5
         assert attack.capture_after_deauth == 15

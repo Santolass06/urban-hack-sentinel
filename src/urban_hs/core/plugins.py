@@ -28,6 +28,7 @@ logger = structlog.get_logger(__name__)
 
 class PluginStatus(Enum):
     """Plugin lifecycle status."""
+
     DISCOVERED = "discovered"
     LOADING = "loading"
     LOADED = "loaded"
@@ -39,19 +40,21 @@ class PluginStatus(Enum):
 
 class PluginType(Enum):
     """Types of plugins."""
-    SCANNER = "scanner"           # WiFi, BLE, Network scanners
-    ATTACK = "attack"             # Attack modules
-    EXPLOIT = "exploit"           # Exploit modules
-    REPORTER = "reporter"         # Reporting modules
-    UI = "ui"                     # UI components
-    INTEGRATION = "integration"   # External tool integrations
-    UTILITY = "utility"           # Utility functions
+
+    SCANNER = "scanner"  # WiFi, BLE, Network scanners
+    ATTACK = "attack"  # Attack modules
+    EXPLOIT = "exploit"  # Exploit modules
+    REPORTER = "reporter"  # Reporting modules
+    UI = "ui"  # UI components
+    INTEGRATION = "integration"  # External tool integrations
+    UTILITY = "utility"  # Utility functions
     UNKNOWN = "unknown"
 
 
 @dataclass
 class PluginMetadata:
     """Plugin metadata from entry point or manifest."""
+
     name: str
     version: str
     description: str = ""
@@ -59,8 +62,8 @@ class PluginMetadata:
     license: str = ""
     plugin_type: PluginType = PluginType.UNKNOWN
     dependencies: list[str] = field(default_factory=list)  # Other plugin names
-    provides: list[str] = field(default_factory=list)      # Services this plugin provides
-    requires: list[str] = field(default_factory=list)      # External requirements (pip packages)
+    provides: list[str] = field(default_factory=list)  # Services this plugin provides
+    requires: list[str] = field(default_factory=list)  # External requirements (pip packages)
     entry_point: str = ""  # Module path to plugin class
     config_schema: dict[str, Any] = field(default_factory=dict)  # JSON schema for config
     tags: list[str] = field(default_factory=list)
@@ -93,6 +96,7 @@ class PluginMetadata:
 @dataclass
 class PluginInstance:
     """Runtime plugin instance."""
+
     metadata: PluginMetadata
     instance: Any = None
     status: PluginStatus = PluginStatus.DISCOVERED
@@ -106,7 +110,7 @@ class PluginInstance:
 class UrbanPlugin(ABC):
     """
     Base class for all Urban Hack Sentinel plugins.
-    
+
     Plugins should subclass this and implement the required methods.
     """
 
@@ -120,11 +124,15 @@ class UrbanPlugin(ABC):
     provides: list[str] = []
     config_schema: dict[str, Any] = {}
 
-    def __init__(self, config: dict[str, Any], event_bus: Any | None = None,
-                 services: dict[str, Any] | None = None):
+    def __init__(
+        self,
+        config: dict[str, Any],
+        event_bus: Any | None = None,
+        services: dict[str, Any] | None = None,
+    ):
         """
         Initialize plugin.
-        
+
         Args:
             config: Plugin configuration from main config
             event_bus: EventBus instance for pub/sub
@@ -140,7 +148,7 @@ class UrbanPlugin(ABC):
     async def initialize(self) -> bool:
         """
         Initialize plugin resources and connections.
-        
+
         Returns:
             True if initialization successful, False otherwise
         """
@@ -150,7 +158,7 @@ class UrbanPlugin(ABC):
     async def start(self) -> bool:
         """
         Start plugin operations.
-        
+
         Returns:
             True if start successful, False otherwise
         """
@@ -160,7 +168,7 @@ class UrbanPlugin(ABC):
     async def stop(self) -> bool:
         """
         Stop plugin operations gracefully.
-        
+
         Returns:
             True if stop successful, False otherwise
         """
@@ -169,7 +177,7 @@ class UrbanPlugin(ABC):
     async def cleanup(self) -> bool:
         """
         Cleanup plugin resources.
-        
+
         Returns:
             True if cleanup successful, False otherwise
         """
@@ -177,11 +185,7 @@ class UrbanPlugin(ABC):
 
     def get_health(self) -> dict[str, Any]:
         """Get plugin health status."""
-        return {
-            "name": self.name,
-            "enabled": self._enabled,
-            "status": "healthy",
-        }
+        return {"name": self.name, "enabled": self._enabled, "status": "healthy"}
 
     def get_config_schema(self) -> dict[str, Any]:
         """Get configuration schema for validation."""
@@ -200,7 +204,7 @@ class UrbanPlugin(ABC):
 class PluginManager:
     """
     Manages plugin discovery, loading, and lifecycle.
-    
+
     Features:
     - Entry point discovery via importlib.metadata
     - Dependency resolution with topological sort
@@ -234,14 +238,16 @@ class PluginManager:
         }
         self._core_services.update(self.services)
 
-    async def discover_plugins(self, entry_point_group: str = "urban_hs.plugins") -> list[PluginMetadata]:
+    async def discover_plugins(
+        self, entry_point_group: str = "urban_hs.plugins"
+    ) -> list[PluginMetadata]:
         """Discover plugins via entry points."""
         discovered = []
 
         try:
             # Try importlib.metadata (Python 3.8+)
             eps = importlib.metadata.entry_points()
-            if hasattr(eps, 'select'):
+            if hasattr(eps, "select"):
                 # Python 3.10+
                 plugin_eps = eps.select(group=entry_point_group)
             else:
@@ -254,36 +260,47 @@ class PluginManager:
                     plugin_class = ep.load()
 
                     # Extract metadata
-                    if hasattr(plugin_class, 'metadata') and isinstance(plugin_class.metadata, PluginMetadata):
+                    if hasattr(plugin_class, "metadata") and isinstance(
+                        plugin_class.metadata, PluginMetadata
+                    ):
                         meta = plugin_class.metadata
                     else:
                         # Build from class attributes
                         meta = PluginMetadata(
-                            name=getattr(plugin_class, 'name', ep.name),
-                            version=getattr(plugin_class, 'version', '1.0.0'),
-                            description=getattr(plugin_class, 'description', ''),
-                            author=getattr(plugin_class, 'author', ''),
-                            plugin_type=getattr(plugin_class, 'plugin_type', PluginType.UNKNOWN),
-                            dependencies=getattr(plugin_class, 'dependencies', []),
-                            provides=getattr(plugin_class, 'provides', []),
+                            name=getattr(plugin_class, "name", ep.name),
+                            version=getattr(plugin_class, "version", "1.0.0"),
+                            description=getattr(plugin_class, "description", ""),
+                            author=getattr(plugin_class, "author", ""),
+                            plugin_type=getattr(plugin_class, "plugin_type", PluginType.UNKNOWN),
+                            dependencies=getattr(plugin_class, "dependencies", []),
+                            provides=getattr(plugin_class, "provides", []),
                             entry_point=f"{ep.module}:{ep.name}",
-                            config_schema=getattr(plugin_class, 'config_schema', {}),
-                            tags=getattr(plugin_class, 'tags', []),
+                            config_schema=getattr(plugin_class, "config_schema", {}),
+                            tags=getattr(plugin_class, "tags", []),
                         )
 
                     discovered.append(meta)
                     self._plugin_classes[meta.name] = plugin_class
-                    logger.info("Plugin discovered", name=meta.name, version=meta.version, type=meta.plugin_type.value)
+                    logger.info(
+                        "Plugin discovered",
+                        name=meta.name,
+                        version=meta.version,
+                        type=meta.plugin_type.value,
+                    )
 
                 except Exception as e:
-                    logger.error("Failed to load plugin entry point", entry_point=ep.name, error=str(e))
+                    logger.error(
+                        "Failed to load plugin entry point", entry_point=ep.name, error=str(e)
+                    )
 
         except Exception as e:
             logger.error("Error discovering plugins", error=str(e))
 
         return discovered
 
-    async def load_plugin(self, metadata: PluginMetadata, config: dict[str, Any] | None = None) -> bool:
+    async def load_plugin(
+        self, metadata: PluginMetadata, config: dict[str, Any] | None = None
+    ) -> bool:
         """Load a plugin by metadata."""
         if metadata.name in self._plugins:
             logger.warning("Plugin already loaded", name=metadata.name)
@@ -371,12 +388,12 @@ class PluginManager:
         try:
             plugin.status = PluginStatus.ENABLED
 
-            if plugin.instance and hasattr(plugin.instance, 'initialize'):
+            if plugin.instance and hasattr(plugin.instance, "initialize"):
                 success = await plugin.instance.initialize()
                 if not success:
                     raise RuntimeError("Plugin initialization failed")
 
-            if plugin.instance and hasattr(plugin.instance, 'start'):
+            if plugin.instance and hasattr(plugin.instance, "start"):
                 success = await plugin.instance.start()
                 if not success:
                     raise RuntimeError("Plugin start failed")
@@ -408,10 +425,10 @@ class PluginManager:
             return True
 
         try:
-            if plugin.instance and hasattr(plugin.instance, 'stop'):
+            if plugin.instance and hasattr(plugin.instance, "stop"):
                 await plugin.instance.stop()
 
-            if plugin.instance and hasattr(plugin.instance, 'cleanup'):
+            if plugin.instance and hasattr(plugin.instance, "cleanup"):
                 await plugin.instance.cleanup()
 
             plugin.enabled = False
@@ -439,7 +456,7 @@ class PluginManager:
             return True
 
         try:
-            if plugin.instance and hasattr(plugin.instance, 'cleanup'):
+            if plugin.instance and hasattr(plugin.instance, "cleanup"):
                 await plugin.instance.cleanup()
 
             plugin.status = PluginStatus.UNLOADED
@@ -585,7 +602,7 @@ class PluginManager:
             "load_time": plugin.load_time,
         }
 
-        if plugin.instance and hasattr(plugin.instance, 'get_health'):
+        if plugin.instance and hasattr(plugin.instance, "get_health"):
             info["health"] = plugin.instance.get_health()
 
         return info
@@ -612,10 +629,12 @@ class PluginManager:
         await self.disable_all()
 
 
-def create_plugin_manager(config: dict[str, Any] | None = None,
-                         event_bus: Any | None = None,
-                         services: dict[str, Any] | None = None,
-                         plugin_dirs: list[str] | None = None) -> PluginManager:
+def create_plugin_manager(
+    config: dict[str, Any] | None = None,
+    event_bus: Any | None = None,
+    services: dict[str, Any] | None = None,
+    plugin_dirs: list[str] | None = None,
+) -> PluginManager:
     """Create a plugin manager with default configuration."""
     return PluginManager(config, event_bus, services, plugin_dirs)
 
@@ -632,6 +651,7 @@ def urban_plugin(
     config_schema: dict[str, Any] | None = None,
 ):
     """Decorator to mark a class as an Urban Hack Sentinel plugin."""
+
     def decorator(cls):
         cls.name = name
         cls.version = version
@@ -655,6 +675,7 @@ def urban_plugin(
         )
 
         return cls
+
     return decorator
 
 

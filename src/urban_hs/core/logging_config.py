@@ -38,17 +38,11 @@ class SensitiveFilter(logging.Filter):
 
 
 def build_rotating_handler(
-    path: str,
-    max_bytes: int = 5 * 1024 * 1024,
-    backup_count: int = 5,
-    encoding: str = "utf-8",
+    path: str, max_bytes: int = 5 * 1024 * 1024, backup_count: int = 5, encoding: str = "utf-8"
 ) -> RotatingFileHandler:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     handler = RotatingFileHandler(
-        filename=path,
-        maxBytes=max_bytes,
-        backupCount=backup_count,
-        encoding=encoding,
+        filename=path, maxBytes=max_bytes, backupCount=backup_count, encoding=encoding
     )
     handler.setFormatter(PIIFormatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
     handler.addFilter(SensitiveFilter())
@@ -56,17 +50,11 @@ def build_rotating_handler(
 
 
 def build_time_rotating_handler(
-    path: str,
-    when: str = "midnight",
-    backup_count: int = 14,
-    encoding: str = "utf-8",
+    path: str, when: str = "midnight", backup_count: int = 14, encoding: str = "utf-8"
 ) -> TimedRotatingFileHandler:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     handler = TimedRotatingFileHandler(
-        filename=path,
-        when=when,
-        backupCount=backup_count,
-        encoding=encoding,
+        filename=path, when=when, backupCount=backup_count, encoding=encoding
     )
     handler.setFormatter(PIIFormatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
     handler.addFilter(SensitiveFilter())
@@ -74,9 +62,7 @@ def build_time_rotating_handler(
 
 
 def configure_logging(
-    base_dir: str = "/var/log/urban-hs",
-    level: int = logging.INFO,
-    audit_level: int = logging.INFO,
+    base_dir: str = "/var/log/urban-hs", level: int = logging.INFO, audit_level: int = logging.INFO
 ) -> None:
     """Configure application-wide logging with rotation + PII filtering."""
     root = logging.getLogger()

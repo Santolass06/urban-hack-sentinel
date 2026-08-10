@@ -22,6 +22,7 @@ import structlog
 
 try:
     import gnupg as gpg_module
+
     GPG_AVAILABLE = True
 except ImportError:
     gpg_module = None
@@ -34,14 +35,16 @@ logger = structlog.get_logger(__name__)
 
 class SignatureFormat(Enum):
     """Signature format."""
-    DETACHED_ASCII = "detached_ascii"      # .asc file
-    DETACHED_BINARY = "detached_binary"    # .sig file
-    CLEAR_SIGNED = "clear_signed"          # inline signature
+
+    DETACHED_ASCII = "detached_ascii"  # .asc file
+    DETACHED_BINARY = "detached_binary"  # .sig file
+    CLEAR_SIGNED = "clear_signed"  # inline signature
 
 
 @dataclass
 class EvidenceRecord:
     """Single evidence entry in the chain of custody log."""
+
     id: str = field(default_factory=lambda: str(uuid4()))
     artifact_path: str = ""
     artifact_hash_sha256: str = ""
@@ -64,6 +67,7 @@ class EvidenceRecord:
 @dataclass
 class ChainOfCustody:
     """Complete chain of custody for a session."""
+
     id: str = field(default_factory=lambda: str(uuid4()))
     session_id: str = ""
     entries: list[dict[str, Any]] = field(default_factory=list)
@@ -138,7 +142,7 @@ class ChainOfCustody:
 class GPGSigner:
     """
     GPG signing for evidence and artifacts.
-    
+
     Features:
     - Detached signatures (ASCII armor)
     - Batch signing
@@ -164,11 +168,7 @@ class GPGSigner:
 
         # Initialize GPG
         assert gpg_module is not None  # GPG_AVAILABLE check above guarantees this
-        self.gpg = gpg_module.GPG(
-            gpgbinary=gpg_binary,
-            gnupghome=gpg_home,
-            verbose=False,
-        )
+        self.gpg = gpg_module.GPG(gpgbinary=gpg_binary, gnupghome=gpg_home, verbose=False)
 
         # Warn if no key provided
         if key_id is None:
@@ -182,7 +182,7 @@ class GPGSigner:
         """Verify key exists and is usable."""
         keys = self.gpg.list_keys(secret=True)
         for key in keys:
-            if key_id in key.get('keyid', '') or key_id in key.get('fingerprint', ''):
+            if key_id in key.get("keyid", "") or key_id in key.get("fingerprint", ""):
                 return True
         logger.warning("Key not found in secret keyring", key_id=key_id)
         return False
@@ -196,13 +196,13 @@ class GPGSigner:
     ) -> bool:
         """
         Sign a file with GPG.
-        
+
         Args:
             file_path: Path to file to sign
             output_path: Output path (optional, auto-generated)
             format: Signature format
             key_id: Key ID to use (overrides default)
-        
+
         Returns:
             True if successful
         """
@@ -228,41 +228,29 @@ class GPGSigner:
         os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
         try:
-            with open(file_path, 'rb') as f:
+            with open(file_path, "rb") as f:
                 file_data = f.read()
 
             if format == SignatureFormat.DETACHED_ASCII:
                 signature = self.gpg.sign(
-                    file_data,
-                    keyid=key_id,
-                    passphrase=self.passphrase,
-                    detach=True,
-                    armor=True,
+                    file_data, keyid=key_id, passphrase=self.passphrase, detach=True, armor=True
                 )
             elif format == SignatureFormat.DETACHED_BINARY:
                 signature = self.gpg.sign(
-                    file_data,
-                    keyid=key_id,
-                    passphrase=self.passphrase,
-                    detach=True,
-                    armor=False,
+                    file_data, keyid=key_id, passphrase=self.passphrase, detach=True, armor=False
                 )
             else:  # CLEAR_SIGNED
                 signature = self.gpg.sign(
-                    file_data,
-                    keyid=key_id,
-                    passphrase=self.passphrase,
-                    detach=False,
-                    armor=True,
+                    file_data, keyid=key_id, passphrase=self.passphrase, detach=False, armor=True
                 )
 
             if signature:
                 # Write binary data for binary format, string for ASCII
                 if format == SignatureFormat.DETACHED_BINARY:
-                    with open(output_path, 'wb') as f:
+                    with open(output_path, "wb") as f:
                         f.write(signature.data)  # signature.data is bytes
                 else:
-                    with open(output_path, 'w') as f:
+                    with open(output_path, "w") as f:
                         f.write(str(signature))
 
                 logger.info("File signed", input=file_path, output=output_path, format=format.value)
@@ -294,14 +282,10 @@ class GPGSigner:
 
         return results
 
-    def verify_signature(
-        self,
-        file_path: str,
-        signature_path: str,
-    ) -> dict[str, Any]:
+    def verify_signature(self, file_path: str, signature_path: str) -> dict[str, Any]:
         """
         Verify a detached signature.
-        
+
         Returns:
             Dict with verification result
         """
@@ -315,10 +299,7 @@ class GPGSigner:
             with open(signature_path) as f:
                 signature_data = f.read()
 
-            verified = self.gpg.verify(
-                signature_path,
-                file_path,
-            )
+            verified = self.gpg.verify(signature_path, file_path)
 
             result = {
                 "valid": verified.valid,
@@ -341,16 +322,16 @@ class GPGSigner:
 
         keys = self.gpg.list_keys(secret=True)
         for key in keys:
-            if key_id in key.get('keyid', '') or key_id in key.get('fingerprint', ''):
+            if key_id in key.get("keyid", "") or key_id in key.get("fingerprint", ""):
                 return {
-                    "keyid": key.get('keyid'),
-                    "fingerprint": key.get('fingerprint'),
-                    "uids": key.get('uids', []),
-                    "trust": key.get('trust', ''),
-                    "length": key.get('length'),
-                    "algo": key.get('algo'),
-                    "date": key.get('date'),
-                    "expires": key.get('expires'),
+                    "keyid": key.get("keyid"),
+                    "fingerprint": key.get("fingerprint"),
+                    "uids": key.get("uids", []),
+                    "trust": key.get("trust", ""),
+                    "length": key.get("length"),
+                    "algo": key.get("algo"),
+                    "date": key.get("date"),
+                    "expires": key.get("expires"),
                 }
 
         return {}
@@ -359,20 +340,17 @@ class GPGSigner:
 class EvidenceLogger:
     """
     Maintains append-only evidence log with GPG signatures.
-    
+
     Creates:
     - evidence_log.json: Append-only JSON log
     - evidence_log.json.asc: GPG signature
     - Individual artifact signatures
     """
 
-    def __init__(
-        self,
-        log_dir: str | None = None,
-        gpg_signer: GPGSigner | None = None,
-    ):
+    def __init__(self, log_dir: str | None = None, gpg_signer: GPGSigner | None = None):
         if log_dir is None:
             from urban_hs.core.config import get_config
+
             log_dir = get_config().storage.resolve_evidence_dir()
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -386,12 +364,8 @@ class EvidenceLogger:
 
     def _init_log(self):
         """Initialize empty evidence log."""
-        initial = {
-            "version": "1.0",
-            "created_at": datetime.utcnow().isoformat(),
-            "entries": [],
-        }
-        with open(self.log_file, 'w') as f:
+        initial = {"version": "1.0", "created_at": datetime.utcnow().isoformat(), "entries": []}
+        with open(self.log_file, "w") as f:
             json.dump(initial, f, indent=2)
 
         # Sign initial log
@@ -400,10 +374,7 @@ class EvidenceLogger:
     def _sign_log(self):
         """Sign the log file with GPG."""
         if self.gpg_signer:
-            self.gpg_signer.sign_file(
-                str(self.log_file),
-                format=SignatureFormat.DETACHED_ASCII,
-            )
+            self.gpg_signer.sign_file(str(self.log_file), format=SignatureFormat.DETACHED_ASCII)
 
     def add_entry(
         self,
@@ -440,7 +411,7 @@ class EvidenceLogger:
         log_data["entries"].append(entry)
         log_data["last_updated"] = datetime.utcnow().isoformat()
 
-        with open(self.log_file, 'w') as f:
+        with open(self.log_file, "w") as f:
             json.dump(log_data, f, indent=2)
 
         # Re-sign log
@@ -457,8 +428,8 @@ class EvidenceLogger:
         else:
             raise ValueError(f"Unsupported algorithm: {algorithm}")
 
-        with open(file_path, 'rb') as f:
-            for chunk in iter(lambda: f.read(8192), b''):
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
                 h.update(chunk)
 
         return h.hexdigest()
@@ -509,7 +480,7 @@ class EvidenceLogger:
 class ChainOfCustodyManager:
     """
     High-level chain of custody management.
-    
+
     Coordinates:
     - GPG signing
     - Evidence logging
@@ -518,14 +489,12 @@ class ChainOfCustodyManager:
     """
 
     def __init__(
-        self,
-        session_id: str,
-        base_dir: str | None = None,
-        gpg_signer: GPGSigner | None = None,
+        self, session_id: str, base_dir: str | None = None, gpg_signer: GPGSigner | None = None
     ):
         self.session_id = session_id
         if base_dir is None:
             from urban_hs.core.config import get_config
+
             base_dir = get_config().storage.resolve_evidence_dir()
         self.base_dir = Path(base_dir) / session_id
         self.base_dir.mkdir(parents=True, exist_ok=True)
@@ -533,13 +502,9 @@ class ChainOfCustodyManager:
         self.gpg_signer = gpg_signer
         if gpg_signer is None:
             logger.warning("No GPG signer provided - artifacts will not be signed")
-        self.evidence_log = EvidenceLogger(
-            log_dir=str(self.base_dir),
-            gpg_signer=self.gpg_signer,
-        )
+        self.evidence_log = EvidenceLogger(log_dir=str(self.base_dir), gpg_signer=self.gpg_signer)
         self.custody_chain = ChainOfCustody(
-            session_id=session_id,
-            gpg_key_id=self.gpg_signer.key_id if self.gpg_signer else "",
+            session_id=session_id, gpg_key_id=self.gpg_signer.key_id if self.gpg_signer else ""
         )
 
     def add_artifact(
@@ -578,11 +543,7 @@ class ChainOfCustodyManager:
         # Add to chain
         self.custody_chain.add_entry(evidence_record)
 
-        return {
-            "entry": entry,
-            "evidence_record": evidence_record,
-            "chain_valid": True,
-        }
+        return {"entry": entry, "evidence_record": evidence_record, "chain_valid": True}
 
     def verify_custody_chain(self) -> tuple[bool, list[str]]:
         """Verify entire chain of custody."""
@@ -624,7 +585,7 @@ class ChainOfCustodyManager:
                 "entries": self.custody_chain.entries,
             }
 
-            with open(output_path, 'w') as f:
+            with open(output_path, "w") as f:
                 json.dump(report, f, indent=2, default=str)
 
             return True
@@ -646,10 +607,7 @@ def create_gpg_key(
     """Create a new GPG key for evidence signing."""
     import gnupg
 
-    gpg_obj = gnupg.GPG(
-        gpgbinary=gpg_binary,
-        gnupghome=gpg_home,
-    )
+    gpg_obj = gnupg.GPG(gpgbinary=gpg_binary, gnupghome=gpg_home)
 
     input_data = gpg_obj.gen_key_input(
         name_real=name,
@@ -664,18 +622,12 @@ def create_gpg_key(
 
 
 def verify_gpg_signature(
-    file_path: str,
-    signature_path: str,
-    gpg_home: str | None = None,
-    gpg_binary: str = "gpg",
+    file_path: str, signature_path: str, gpg_home: str | None = None, gpg_binary: str = "gpg"
 ) -> dict[str, Any]:
     """Verify a GPG signature."""
     import gnupg
 
-    gpg = gnupg.GPG(
-        gpgbinary=gpg_binary,
-        gnupghome=gpg_home,
-    )
+    gpg = gnupg.GPG(gpgbinary=gpg_binary, gnupghome=gpg_home)
 
     with open(signature_path) as f:
         signature_data = f.read()

@@ -61,7 +61,15 @@ def pseudonymise_macs(value: Any) -> Any:
         out: dict[str, Any] = {}
         for k, v in value.items():
             lowered = k.lower()
-            if lowered in {"mac", "bssid", "address", "source", "destination", "client", "device_id"}:
+            if lowered in {
+                "mac",
+                "bssid",
+                "address",
+                "source",
+                "destination",
+                "client",
+                "device_id",
+            }:
                 out[k] = pseudonymise_mac(v if isinstance(v, str) else None)
             else:
                 out[k] = pseudonymise_macs(v)
@@ -79,7 +87,3 @@ def redact_text(text: str) -> str:
     if not text:
         return text
     return _MAC_RE.sub(lambda m: pseudonymise_mac(m.group(0)), text)
-
-
-
-

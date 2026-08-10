@@ -30,6 +30,7 @@ from urban_hs.modules.wifi import WiFiScanner
 # mac80211_hwsim Fixture - Virtual WiFi for CI
 # ============================================================
 
+
 class MockHwsim:
     """Manage mac80211_hwsim virtual WiFi interfaces."""
 
@@ -45,7 +46,7 @@ class MockHwsim:
                 ["modprobe", "mac80211_hwsim", f"radios={self.num_radios}"],
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=10,
             )
             if result.returncode == 0:
                 self._loaded = True
@@ -60,10 +61,7 @@ class MockHwsim:
         """Unload mac80211_hwsim kernel module."""
         try:
             result = subprocess.run(
-                ["modprobe", "-r", "mac80211_hwsim"],
-                capture_output=True,
-                text=True,
-                timeout=10
+                ["modprobe", "-r", "mac80211_hwsim"], capture_output=True, text=True, timeout=10
             )
             if result.returncode == 0:
                 self._loaded = False
@@ -101,6 +99,7 @@ def hwsim():
 # Mock BlueZ Fixture - Virtual BLE for CI
 # ============================================================
 
+
 class MockBlueZ:
     """Mock BlueZ D-Bus for BLE testing without hardware."""
 
@@ -109,9 +108,14 @@ class MockBlueZ:
         self.adapters = {}
         self._running = False
 
-    def add_mock_device(self, address: str, name: str = "Mock Device",
-                       services: list = None, manufacturer_data: dict = None,
-                       rssi: int = -50):
+    def add_mock_device(
+        self,
+        address: str,
+        name: str = "Mock Device",
+        services: list = None,
+        manufacturer_data: dict = None,
+        rssi: int = -50,
+    ):
         """Add a mock BLE device."""
         self.devices[address] = {
             "address": address,
@@ -142,12 +146,18 @@ def mock_bluez():
     bluez = MockBlueZ()
 
     # Add some mock devices
-    bluez.add_mock_device("AA:BB:CC:DD:EE:FF", "Test Headphones",
-                          ["0000180d-0000-1000-8000-00805f9b34fb"],
-                          {0x02E5: b"\x01\x02\x03"})
-    bluez.add_mock_device("11:22:33:44:55:66", "ESP32 Device",
-                          ["0000180a-0000-1000-8000-00805f9b34fb"],
-                          {0x02E5: b"\x04\x05\x06"})
+    bluez.add_mock_device(
+        "AA:BB:CC:DD:EE:FF",
+        "Test Headphones",
+        ["0000180d-0000-1000-8000-00805f9b34fb"],
+        {0x02E5: b"\x01\x02\x03"},
+    )
+    bluez.add_mock_device(
+        "11:22:33:44:55:66",
+        "ESP32 Device",
+        ["0000180a-0000-1000-8000-00805f9b34fb"],
+        {0x02E5: b"\x04\x05\x06"},
+    )
     bluez.add_mock_adapter("hci0")
 
     return bluez
@@ -156,6 +166,7 @@ def mock_bluez():
 # ============================================================
 # Testcontainers-like Fixtures for Integration Tests
 # ============================================================
+
 
 class MockServiceContainer:
     """Mock service container for integration tests (similar to testcontainers)."""
@@ -197,6 +208,7 @@ async def metasploit_container():
 # E2E Test Classes
 # ============================================================
 
+
 class TestWiFiE2E:
     """End-to-end WiFi tests with mac80211_hwsim."""
 
@@ -211,7 +223,7 @@ class TestWiFiE2E:
         with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_proc = AsyncMock()
             mock_proc.returncode = 0
-            mock_proc.communicate.return_value = (b'[]', b'')
+            mock_proc.communicate.return_value = (b"[]", b"")
             mock_exec.return_value = mock_proc
 
             networks = await scanner.scan(interface=hwsim.get_interfaces()[0], duration=2)
@@ -225,9 +237,7 @@ class TestWiFiE2E:
         from urban_hs.modules.wifi import HandshakeAttack
 
         attack = HandshakeAttack(
-            interface=hwsim.get_interfaces()[0],
-            output_dir="/tmp/handshakes",
-            deauth_count=1
+            interface=hwsim.get_interfaces()[0], output_dir="/tmp/handshakes", deauth_count=1
         )
 
         # Mock the subprocess calls
@@ -238,14 +248,12 @@ class TestWiFiE2E:
             mock_exec.return_value = mock_proc
 
             result = await attack.execute(
-                target_bssid="AA:BB:CC:DD:EE:FF",
-                target_essid="TestNetwork",
-                channel=6
+                target_bssid="AA:BB:CC:DD:EE:FF", target_essid="TestNetwork", channel=6
             )
 
             # Result structure should be valid
-            assert hasattr(result, 'success')
-            assert hasattr(result, 'message')
+            assert hasattr(result, "success")
+            assert hasattr(result, "message")
 
 
 class TestBLEE2E:
@@ -262,16 +270,16 @@ class TestBLEE2E:
     @pytest.mark.asyncio
     async def test_whisperpair_vulnerability_test(self, mock_bluez):
 
-        tester = WhisperPairTester(
-            adapter="hci0"
-        )
+        tester = WhisperPairTester(adapter="hci0")
 
         # Mock BleakClient to avoid real BLE connections
         with patch("bleak.BleakClient") as mock_client:
             mock_client = AsyncMock()
             mock_client.is_connected = True
             mock_client.services = Mock()
-            mock_client.services.get_characteristic.return_value = Mock(uuid="fe2c1234-8366-4814-8eb0-01de32100bea")
+            mock_client.services.get_characteristic.return_value = Mock(
+                uuid="fe2c1234-8366-4814-8eb0-01de32100bea"
+            )
             mock_client.write_gatt_char = AsyncMock()
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
@@ -288,16 +296,16 @@ class TestBLEE2E:
     @pytest.mark.asyncio
     async def test_whisperpair_exploit_chain(self, mock_bluez):
 
-        exploit = WhisperPairExploit(
-            adapter="hci0"
-        )
+        exploit = WhisperPairExploit(adapter="hci0")
 
         # Mock BleakClient to avoid real BLE connections
         with patch("bleak.BleakClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.is_connected = True
             mock_client.services = Mock()
-            mock_client.services.get_characteristic.return_value = Mock(uuid="fe2c1234-8366-4814-8eb0-01de32100bea")
+            mock_client.services.get_characteristic.return_value = Mock(
+                uuid="fe2c1234-8366-4814-8eb0-01de32100bea"
+            )
             mock_client.write_gatt_char = AsyncMock()
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
@@ -305,8 +313,7 @@ class TestBLEE2E:
 
             # Test exploit chain
             result = await exploit.execute_all_strategies(
-                target_address="AA:BB:CC:DD:EE:FF",
-                model_id=None
+                target_address="AA:BB:CC:DD:EE:FF", model_id=None
             )
 
         # Should have expected structure
@@ -391,8 +398,8 @@ class TestMemoryE2E:
         """Test GC leak detection."""
         report = detect_gc_leaks(threshold_count=5)
 
-        assert hasattr(report, 'leaks')
-        assert hasattr(report, 'top_modules')
+        assert hasattr(report, "leaks")
+        assert hasattr(report, "top_modules")
         assert isinstance(report.leaks, list)
 
 
@@ -428,7 +435,7 @@ class TestStorageE2E:
         """Test SQLite optimization functions."""
 
         # Use temporary database
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
 
         try:
@@ -454,7 +461,7 @@ class TestStorageE2E:
     async def test_vacuum_database(self):
         """Test database vacuum."""
 
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
 
         try:
@@ -463,10 +470,11 @@ class TestStorageE2E:
 
             # Insert some data
             import aiosqlite
+
             async with aiosqlite.connect(db_path) as conn:
                 await conn.execute(
                     "INSERT INTO devices (id, first_seen, last_seen, type, mac) VALUES (?, ?, ?, ?, ?)",
-                    ("test1", 1000, 2000, "wifi_ap", "aa:bb:cc:dd:ee:ff")
+                    ("test1", 1000, 2000, "wifi_ap", "aa:bb:cc:dd:ee:ff"),
                 )
                 await conn.commit()
 
@@ -484,6 +492,7 @@ class TestStorageE2E:
 # ============================================================
 # Pytest Configuration
 # ============================================================
+
 
 def pytest_configure(config):
     """Configure pytest with custom markers."""

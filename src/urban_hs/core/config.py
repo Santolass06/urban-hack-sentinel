@@ -50,14 +50,18 @@ class NetworkConfig(BaseSettings):
     nmap_timing_template: str = "T3"
     nmap_ports: str = "1-1000"
     nmap_scripts: list[str] = Field(default_factory=lambda: ["vuln", "auth", "default"])
-    nuclei_templates: list[str] = Field(default_factory=lambda: ["cves/", "exposures/", "misconfig/"])
+    nuclei_templates: list[str] = Field(
+        default_factory=lambda: ["cves/", "exposures/", "misconfig/"]
+    )
     nuclei_severity: list[str] = Field(default_factory=lambda: ["critical", "high", "medium"])
     hydra_threads: int = 4
     hydra_timeout: int = 30
 
 
 class CameraConfig(BaseSettings):
-    discovery_protocols: list[str] = Field(default_factory=lambda: ["mdns", "upnp", "onvif", "rtsp"])
+    discovery_protocols: list[str] = Field(
+        default_factory=lambda: ["mdns", "upnp", "onvif", "rtsp"]
+    )
     default_creds_file: str = "/etc/urban-hs/camera_default_creds.json"
     onvif_timeout: int = 10
     rtsp_timeout: int = 15
@@ -87,26 +91,34 @@ class ChrootConfig(BaseSettings):
     enabled: bool = True
     path: str = "/opt/urban-chroot"
     alpine_version: str = "3.20"
-    packages: list[str] = Field(default_factory=lambda: [
-        "nmap", "nuclei", "hydra", "metasploit-framework", "hashcat",
-        "searchsploit", "bettercap", "routerSploit", "hashcat", "john"
-    ])
-    bind_mounts: dict[str, str] = Field(default_factory=lambda: {
-        "/data": "/data",
-        "/artifacts": "/artifacts",
-        "/logs": "/logs",
-    })
-    resource_limits: dict[str, int | str] = Field(default_factory=lambda: {
-        "memory": "2G",
-        "cpus": "2",
-        "pids": "100",
-    })
+    packages: list[str] = Field(
+        default_factory=lambda: [
+            "nmap",
+            "nuclei",
+            "hydra",
+            "metasploit-framework",
+            "hashcat",
+            "searchsploit",
+            "bettercap",
+            "routerSploit",
+            "hashcat",
+            "john",
+        ]
+    )
+    bind_mounts: dict[str, str] = Field(
+        default_factory=lambda: {"/data": "/data", "/artifacts": "/artifacts", "/logs": "/logs"}
+    )
+    resource_limits: dict[str, int | str] = Field(
+        default_factory=lambda: {"memory": "2G", "cpus": "2", "pids": "100"}
+    )
 
 
 class HIDUSBConfig(BaseSettings):
     hid_enabled: bool = True
     usb_gadget_enabled: bool = True
-    keyboard_layouts: list[str] = Field(default_factory=lambda: ["us", "gb", "de", "fr", "es", "it", "ru"])
+    keyboard_layouts: list[str] = Field(
+        default_factory=lambda: ["us", "gb", "de", "fr", "es", "it", "ru"]
+    )
     default_vid: str = "0x1d6b"
     default_pid: str = "0x0104"
     mass_storage_images_dir: str = ""  # Defaults to {data_root}/mass_storage if empty
@@ -169,6 +181,7 @@ class StorageConfig(BaseSettings):
 
     def resolve_mass_storage_dir(self) -> str:
         from urban_hs.core.config import get_config
+
         cfg = get_config()
         return cfg.hid_usb.mass_storage_images_dir or f"{self.data_root}/mass_storage"
 
@@ -204,6 +217,7 @@ class APIConfig(BaseSettings):
             return v
         # Skip keyring entirely to avoid blocking on headless systems
         import secrets
+
         return secrets.token_urlsafe(32)
 
 
@@ -281,11 +295,9 @@ async def init_config(config_file: str | None = None, watch: bool = True) -> Con
 
     # Publish config loaded event
     bus = get_event_bus()
-    await bus.publish(Event(
-        type="config.loaded",
-        payload=_config.model_dump(mode="json"),
-        source="config",
-    ))
+    await bus.publish(
+        Event(type="config.loaded", payload=_config.model_dump(mode="json"), source="config")
+    )
 
     return _config
 
@@ -309,12 +321,14 @@ async def _watch_config() -> None:
             globals()["_config"] = config
 
             # Publish reload event
-            await bus.publish(Event(
-                type="config.reloaded",
-                payload=config.model_dump(mode="json"),
-                metadata={"changes": [str(c) for c in changes]},
-                source="config",
-            ))
+            await bus.publish(
+                Event(
+                    type="config.reloaded",
+                    payload=config.model_dump(mode="json"),
+                    metadata={"changes": [str(c) for c in changes]},
+                    source="config",
+                )
+            )
         except Exception as e:
             logger.error("Config reload failed", error=str(e))
 

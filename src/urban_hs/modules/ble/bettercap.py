@@ -36,11 +36,7 @@ class BettercapBLEDevice:
 class BettercapBLEClient:
     """Minimal bettercap REST client for BLE enumeration."""
 
-    def __init__(
-        self,
-        base_url: str = "http://127.0.0.1:8081",
-        event_bus: EventBus | None = None,
-    ):
+    def __init__(self, base_url: str = "http://127.0.0.1:8081", event_bus: EventBus | None = None):
         self.base_url = base_url.rstrip("/")
         self.event_bus = event_bus
 
@@ -110,11 +106,7 @@ class BettercapBLEClient:
             try:
                 await self.event_bus.publish(
                     "scan.completed",
-                    {
-                        "module": "bettercap_ble",
-                        "duration": elapsed,
-                        "count": len(devices),
-                    },
+                    {"module": "bettercap_ble", "duration": elapsed, "count": len(devices)},
                 )
             except Exception as exc:
                 logger.debug("scan.completed publish failed", error=str(exc))

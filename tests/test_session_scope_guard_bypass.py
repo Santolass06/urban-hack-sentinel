@@ -32,18 +32,21 @@ from urban_hs.core.session_scope import SessionScope, set_active_scope
 
 try:
     from urban_hs.modules.bt_hid import bt_hid_attack
+
     _BT_HID_OK = True
 except Exception:  # pragma: no cover - optional dbus_fast dependency missing
     _BT_HID_OK = False
 
 try:
     from urban_hs.modules.urban_hack import UrbanHackEventHandler
+
     _URBAN_OK = True
 except Exception:  # pragma: no cover - optional D-Bus dependency missing
     _URBAN_OK = False
 
 try:
     from urban_hs.modules.ble.plugin import BLEEventHandler
+
     _BLE_OK = True
 except Exception:  # pragma: no cover - optional D-Bus dependency missing
     _BLE_OK = False
@@ -77,6 +80,7 @@ def _ble_test_event() -> Event:
 # Point 1 — bt_hid.bt_hid_attack() standalone entry point
 # ----------------------------------------------------------------------
 
+
 @pytest.mark.skipif(not _BT_HID_OK, reason="bt_hid requires optional dbus_fast dependency")
 @pytest.mark.asyncio()
 async def test_bt_hid_attack_blocked_by_closed_scope():
@@ -100,11 +104,11 @@ async def test_bt_hid_attack_blocked_by_closed_scope():
 @pytest.mark.asyncio()
 async def test_bt_hid_attack_allowed_by_open_scope():
     """Positive control: open scope lets the attack proceed to run_full_attack."""
-    set_active_scope(SessionScope(
-        allow_active=True,
-        allowed_targets={TARGET_ADDR},
-        allowed_categories={"bluetooth_hid"},
-    ))
+    set_active_scope(
+        SessionScope(
+            allow_active=True, allowed_targets={TARGET_ADDR}, allowed_categories={"bluetooth_hid"}
+        )
+    )
     with patch("urban_hs.modules.bt_hid.BTHIDAttacker") as mock_attacker:
         mock_instance = MagicMock()
         mock_instance.run_full_attack = AsyncMock(return_value=MagicMock())
@@ -119,6 +123,7 @@ async def test_bt_hid_attack_allowed_by_open_scope():
 # ----------------------------------------------------------------------
 # Point 2a — ble/plugin.py:_handle_test_request  (ble.test_request)
 # ----------------------------------------------------------------------
+
 
 @pytest.mark.skipif(not _BLE_OK, reason="ble.plugin requires optional D-Bus dependency")
 @pytest.mark.asyncio()
@@ -143,11 +148,9 @@ async def test_ble_plugin_test_blocked_by_closed_scope():
 @pytest.mark.asyncio()
 async def test_ble_plugin_test_allowed_by_open_scope():
     """Positive control: open scope lets the GATT test run + publish test_complete."""
-    set_active_scope(SessionScope(
-        allow_active=True,
-        allowed_targets={TARGET_ADDR},
-        allowed_categories={"ble"},
-    ))
+    set_active_scope(
+        SessionScope(allow_active=True, allowed_targets={TARGET_ADDR}, allowed_categories={"ble"})
+    )
     plugin = MagicMock()
     plugin.test_vulnerability = AsyncMock(return_value={"status": "vulnerable"})
     handler = BLEEventHandler(plugin)
@@ -166,6 +169,7 @@ async def test_ble_plugin_test_allowed_by_open_scope():
 # ----------------------------------------------------------------------
 # Point 2b — urban_hack.py:_handle_ble_test  (ble.test_request, 2nd subscriber)
 # ----------------------------------------------------------------------
+
 
 @pytest.mark.skipif(not _URBAN_OK, reason="urban_hack requires optional D-Bus dependency")
 @pytest.mark.asyncio()
@@ -190,11 +194,9 @@ async def test_urban_ble_test_blocked_by_closed_scope():
 @pytest.mark.asyncio()
 async def test_urban_ble_test_allowed_by_open_scope():
     """Positive control: open scope lets the GATT test run + publish test_complete."""
-    set_active_scope(SessionScope(
-        allow_active=True,
-        allowed_targets={TARGET_ADDR},
-        allowed_categories={"ble"},
-    ))
+    set_active_scope(
+        SessionScope(allow_active=True, allowed_targets={TARGET_ADDR}, allowed_categories={"ble"})
+    )
     plugin = MagicMock()
     plugin.execute_ble_vuln_test = AsyncMock(return_value={"status": "vulnerable"})
     handler = UrbanHackEventHandler(plugin)

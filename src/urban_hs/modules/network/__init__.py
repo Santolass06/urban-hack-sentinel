@@ -25,6 +25,7 @@ import structlog
 
 try:
     import aiohttp
+
     AIOHTTP_AVAILABLE = True
 except ImportError:
     AIOHTTP_AVAILABLE = False
@@ -102,7 +103,7 @@ class Vulnerability:
 class NmapScanner:
     """
     Async Nmap wrapper for network scanning.
-    
+
     Supports:
     - Host discovery (-sn)
     - Port scanning (-sS, -sT, -sU)
@@ -154,7 +155,7 @@ class NmapScanner:
                     validated_targets.append(target)
                 except ValueError:
                     # Could also be a hostname - basic validation
-                    if re.match(r'^[a-zA-Z0-9.-]+$', target):
+                    if re.match(r"^[a-zA-Z0-9.-]+$", target):
                         validated_targets.append(target)
                     else:
                         logger.warning("Skipping invalid target", target=target)
@@ -215,20 +216,22 @@ class NmapScanner:
         # Targets
         cmd.extend(targets)
 
-        logger.info("Starting nmap scan", cmd=" ".join(cmd), targets=targets, scan_type=scan_type.value)
+        logger.info(
+            "Starting nmap scan", cmd=" ".join(cmd), targets=targets, scan_type=scan_type.value
+        )
 
         try:
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
 
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
 
             if proc.returncode != 0 and proc.returncode != 1:  # 1 = hosts down
                 stderr_str = stderr.decode() if stderr else ""
-                logger.error("Nmap scan failed", returncode=proc.returncode, stderr=stderr_str[:500])
+                logger.error(
+                    "Nmap scan failed", returncode=proc.returncode, stderr=stderr_str[:500]
+                )
                 return []
 
             return self._parse_xml_output(stdout.decode())
@@ -345,10 +348,7 @@ class NmapScanner:
 
             scripts = []
             for script_elem in port_elem.findall("script"):
-                scripts.append({
-                    "id": script_elem.get("id"),
-                    "output": script_elem.get("output"),
-                })
+                scripts.append({"id": script_elem.get("id"), "output": script_elem.get("output")})
 
             return PortInfo(
                 port=port,
@@ -368,7 +368,7 @@ class NmapScanner:
 class NucleiRunner:
     """
     Nuclei vulnerability scanner wrapper.
-    
+
     Runs nuclei templates and parses JSONL output.
     Supports template filtering by tags, severity, author, etc.
     """
@@ -435,9 +435,7 @@ class NucleiRunner:
 
         try:
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
 
             vulnerabilities = []
@@ -512,6 +510,7 @@ class NucleiRunner:
         # Format: "http://192.168.1.1:80/path"
         try:
             from urllib.parse import urlparse
+
             parsed = urlparse(matched_at)
             return parsed.hostname or ""
         except Exception:
@@ -526,7 +525,9 @@ class SearchSploitIntegration:
     def __init__(self, searchsploit_path: str = "searchsploit"):
         self.searchsploit_path = searchsploit_path
 
-    async def search(self, query: str, exact: bool = False, json_output: bool = True) -> list[dict[str, Any]]:
+    async def search(
+        self, query: str, exact: bool = False, json_output: bool = True
+    ) -> list[dict[str, Any]]:
         """Search ExploitDB for exploits matching query."""
         cmd = [self.searchsploit_path]
 
@@ -539,9 +540,7 @@ class SearchSploitIntegration:
 
         try:
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
 
@@ -566,16 +565,14 @@ class SearchSploitIntegration:
     async def get_exploit(self, exploit_id: str, output_dir: str) -> str | None:
         """Download exploit by ID to output directory."""
         # Validate exploit_id - ExploitDB IDs are integers
-        if not re.match(r'^\d+$', exploit_id):
+        if not re.match(r"^\d+$", exploit_id):
             logger.error("Invalid exploit_id format", exploit_id=exploit_id)
             return None
 
         try:
             cmd = [self.searchsploit_path, "-m", exploit_id, "-p", output_dir]
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await proc.communicate()
 
@@ -600,38 +597,29 @@ class RouterScanner:
     Router vulnerability scanner using RouterSploit and Hydra.
     """
 
-    def __init__(
-        self,
-        routersploit_path: str = "routersploit",
-        hydra_path: str = "hydra",
-    ):
+    def __init__(self, routersploit_path: str = "routersploit", hydra_path: str = "hydra"):
         self.routersploit_path = routersploit_path
         self.hydra_path = hydra_path
 
     async def scan_router(
-        self,
-        target_ip: str,
-        ports: list[int] | None = None,
-        modules: list[str] | None = None,
+        self, target_ip: str, ports: list[int] | None = None, modules: list[str] | None = None
     ) -> list[dict[str, Any]]:
         """Run RouterSploit modules against target."""
         if not modules:
             modules = ["scanners/autopwn"]
         script_path = self._build_routersploit_script(target_ip, ports, modules)
-        cmd = [
-            self.routersploit_path,
-            "-s",
-            script_path,
-        ]
+        cmd = [self.routersploit_path, "-s", script_path]
         try:
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=600)
             if proc.returncode != 0:
-                logger.error("RouterSploit scan failed", returncode=proc.returncode, stderr=stderr.decode()[:500])
+                logger.error(
+                    "RouterSploit scan failed",
+                    returncode=proc.returncode,
+                    stderr=stderr.decode()[:500],
+                )
                 return []
             return self._parse_routersploit_output(stdout.decode())
         except TimeoutError:
@@ -647,10 +635,7 @@ class RouterScanner:
                 pass
 
     def _build_routersploit_script(
-        self,
-        target_ip: str,
-        ports: list[int] | None = None,
-        modules: list[str] | None = None,
+        self, target_ip: str, ports: list[int] | None = None, modules: list[str] | None = None
     ) -> str:
         modules = modules or ["scanners/autopwn"]
         targets = [f"{target_ip}:{port}" for port in (ports or [80, 443, 8080, 8443])]
@@ -695,18 +680,19 @@ class RouterScanner:
         try:
             cmd = [
                 self.hydra_path,
-                "-L", user_file,
-                "-P", pass_file,
-                "-t", "4",
+                "-L",
+                user_file,
+                "-P",
+                pass_file,
+                "-t",
+                "4",
                 "-f",  # Exit on first success
                 "-v",
                 f"{service}://{target_ip}:{port}",
             ]
 
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=3600)
 
@@ -716,17 +702,20 @@ class RouterScanner:
             # Parse hydra output for successful logins using regex
             # Output format: [22][ssh] host: 192.168.1.1   login: admin   password: 12345
             import re
+
             for line in stdout_str.split("\n"):
                 match = re.search(r"login:\s+(\S+)\s+password:\s+(\S+)", line)
                 if match:
                     username, password = match.group(1), match.group(2)
-                    results.append({
-                        "service": service,
-                        "ip": target_ip,
-                        "port": port,
-                        "username": username,
-                        "password": password,
-                    })
+                    results.append(
+                        {
+                            "service": service,
+                            "ip": target_ip,
+                            "port": port,
+                            "username": username,
+                            "password": password,
+                        }
+                    )
 
             return results
 
@@ -812,7 +801,13 @@ class CameraDiscovery:
         try:
             # Use avahi-browse or dns-sd
             proc = await asyncio.create_subprocess_exec(
-                "avahi-browse", "-t", "_rtsp._tcp", "-t", "_onvif._tcp", "-r", "-p",
+                "avahi-browse",
+                "-t",
+                "_rtsp._tcp",
+                "-t",
+                "_onvif._tcp",
+                "-r",
+                "-p",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -825,14 +820,16 @@ class CameraDiscovery:
                     # =;interface;IPv4/IPv6;name;type;domain;hostname;IP;port;...
                     parts = line.split(";")
                     if len(parts) >= 8:
-                        cameras.append({
-                            "discovery_method": "mdns",
-                            "hostname": parts[6],   # hostname
-                            "ip": parts[7],         # IP address
-                            "port": int(parts[8]) if parts[8].isdigit() else None,
-                            "service": parts[4],    # service type (e.g., _rtsp._tcp)
-                            "interface": parts[1],
-                        })
+                        cameras.append(
+                            {
+                                "discovery_method": "mdns",
+                                "hostname": parts[6],  # hostname
+                                "ip": parts[7],  # IP address
+                                "port": int(parts[8]) if parts[8].isdigit() else None,
+                                "service": parts[4],  # service type (e.g., _rtsp._tcp)
+                                "interface": parts[1],
+                            }
+                        )
         except Exception as e:
             logger.warning("mDNS discovery failed", error=str(e))
 
@@ -846,7 +843,7 @@ class CameraDiscovery:
             ssdp_request = (
                 "M-SEARCH * HTTP/1.1\r\n"
                 "HOST: 239.255.255.250:1900\r\n"
-                "MAN: \"ssdp:discover\"\r\n"
+                'MAN: "ssdp:discover"\r\n'
                 "MX: 3\r\n"
                 "ST: urn:schemas-upnp-org:device:Basic:1\r\n"
                 "\r\n"
@@ -874,12 +871,14 @@ class CameraDiscovery:
 
             for data, addr in responses:
                 response = data.decode()
-                if "camera" in response.lower() or "onvif" in response.lower() or "rtsp" in response.lower():
-                    cameras.append({
-                        "discovery_method": "upnp",
-                        "ip": addr[0],
-                        "response": response[:500],
-                    })
+                if (
+                    "camera" in response.lower()
+                    or "onvif" in response.lower()
+                    or "rtsp" in response.lower()
+                ):
+                    cameras.append(
+                        {"discovery_method": "upnp", "ip": addr[0], "response": response[:500]}
+                    )
 
         except Exception as e:
             logger.warning("UPnP discovery failed", error=str(e))
@@ -896,15 +895,15 @@ class CameraDiscovery:
                 '<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" '
                 'xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing" '
                 'xmlns:wsd="http://schemas.xmlsoap.org/ws/2005/04/discovery">'
-                '<soap:Header>'
-                '<wsa:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</wsa:Action>'
-                '<wsa:MessageID>uuid:12345678-1234-1111-2222-333344445555</wsa:MessageID>'
-                '<wsa:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</wsa:To>'
-                '</soap:Header>'
-                '<soap:Body>'
-                '<wsd:Probe/>'
-                '</soap:Body>'
-                '</soap:Envelope>'
+                "<soap:Header>"
+                "<wsa:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</wsa:Action>"
+                "<wsa:MessageID>uuid:12345678-1234-1111-2222-333344445555</wsa:MessageID>"
+                "<wsa:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</wsa:To>"
+                "</soap:Header>"
+                "<soap:Body>"
+                "<wsd:Probe/>"
+                "</soap:Body>"
+                "</soap:Envelope>"
             )
 
             # Send to multicast address
@@ -923,15 +922,18 @@ class CameraDiscovery:
                         # Parse SOAP response for ONVIF device info
                         if "onvif" in response.lower() or "device" in response.lower():
                             import re
+
                             # Extract XAddrs for device service
-                            xaddrs_match = re.search(r'<d:XAddrs>([^<]+)</d:XAddrs>', response)
-                            types_match = re.search(r'<d:Types>([^<]+)</d:Types>', response)
-                            cameras.append({
-                                "discovery_method": "onvif_ws_discovery",
-                                "ip": addr[0],
-                                "xaddrs": xaddrs_match.group(1) if xaddrs_match else None,
-                                "types": types_match.group(1) if types_match else None,
-                            })
+                            xaddrs_match = re.search(r"<d:XAddrs>([^<]+)</d:XAddrs>", response)
+                            types_match = re.search(r"<d:Types>([^<]+)</d:Types>", response)
+                            cameras.append(
+                                {
+                                    "discovery_method": "onvif_ws_discovery",
+                                    "ip": addr[0],
+                                    "xaddrs": xaddrs_match.group(1) if xaddrs_match else None,
+                                    "types": types_match.group(1) if types_match else None,
+                                }
+                            )
                 except TimeoutError:
                     pass
                 finally:
@@ -950,23 +952,21 @@ class CameraDiscovery:
         try:
             # Use nmap for RTSP port scan
             nmap = NmapScanner()
-            hosts = await nmap.scan(
-                targets=network,
-                scan_type=ScanType.PORT_SCAN,
-                ports="554,8554",
-            )
+            hosts = await nmap.scan(targets=network, scan_type=ScanType.PORT_SCAN, ports="554,8554")
 
             for host in hosts:
                 for port in host.ports:
                     if port.port in (554, 8554) and port.state == "open":
                         # Try RTSP DESCRIBE
                         rtsp_info = await self._rtsp_describe(host.ip, port.port)
-                        cameras.append({
-                            "ip": host.ip,
-                            "port": port.port,
-                            "protocol": "rtsp",
-                            "rtsp_info": rtsp_info,
-                        })
+                        cameras.append(
+                            {
+                                "ip": host.ip,
+                                "port": port.port,
+                                "protocol": "rtsp",
+                                "rtsp_info": rtsp_info,
+                            }
+                        )
         except Exception as e:
             logger.warning("RTSP scan failed", error=str(e))
         return cameras
@@ -1002,17 +1002,30 @@ class CameraDiscovery:
 
             # Common camera paths to check
             camera_paths = [
-                "/", "/index.html", "/video", "/stream", "/live",
-                "/cgi-bin/nph-zms", "/cgi-bin/cgi?action=snapshot",
-                "/snapshot.cgi", "/image.jpg", "/mjpeg.cgi",
-                "/onvif/device_service", "/api/camera", "/web/",
-                "/web/cgi-bin/hi3510/param.cgi", "/cgi-bin/main.cgi",
-                "/ISAPI/Streaming/channels/101/picture", "/onvif/Device"
+                "/",
+                "/index.html",
+                "/video",
+                "/stream",
+                "/live",
+                "/cgi-bin/nph-zms",
+                "/cgi-bin/cgi?action=snapshot",
+                "/snapshot.cgi",
+                "/image.jpg",
+                "/mjpeg.cgi",
+                "/onvif/device_service",
+                "/api/camera",
+                "/web/",
+                "/web/cgi-bin/hi3510/param.cgi",
+                "/cgi-bin/main.cgi",
+                "/ISAPI/Streaming/channels/101/picture",
+                "/onvif/Device",
             ]
 
             async def check_http_camera(host_ip: str, port: int) -> dict[str, Any] | None:
                 try:
-                    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
+                    async with aiohttp.ClientSession(
+                        timeout=aiohttp.ClientTimeout(total=5)
+                    ) as session:
                         for path in camera_paths:
                             try:
                                 url = f"http://{host_ip}:{port}{path}"
@@ -1021,10 +1034,25 @@ class CameraDiscovery:
                                         content = await resp.text()
                                         # Check for camera indicators
                                         camera_indicators = [
-                                            "camera", "ipcam", "webcam", "dvrt", "nvr",
-                                            "hikvision", "dahua", "axis", "foscam", "amcrest",
-                                            "reolink", "tplink", "ubiquiti", "unifi",
-                                            "onvif", "rtsp", "mjpeg", "h264", "h265"
+                                            "camera",
+                                            "ipcam",
+                                            "webcam",
+                                            "dvrt",
+                                            "nvr",
+                                            "hikvision",
+                                            "dahua",
+                                            "axis",
+                                            "foscam",
+                                            "amcrest",
+                                            "reolink",
+                                            "tplink",
+                                            "ubiquiti",
+                                            "unifi",
+                                            "onvif",
+                                            "rtsp",
+                                            "mjpeg",
+                                            "h264",
+                                            "h265",
                                         ]
                                         if any(ind in content.lower() for ind in camera_indicators):
                                             return {
@@ -1045,7 +1073,10 @@ class CameraDiscovery:
             tasks = []
             for host in hosts:
                 for port_info in host.ports:
-                    if port_info.port in (80, 8080, 8081, 8443, 8888, 8889, 5000, 5001) and port_info.state == "open":
+                    if (
+                        port_info.port in (80, 8080, 8081, 8443, 8888, 8889, 5000, 5001)
+                        and port_info.state == "open"
+                    ):
                         tasks.append(check_http_camera(host.ip, port_info.port))
 
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -1060,7 +1091,8 @@ class CameraDiscovery:
     def _extract_title(self, html: str) -> str:
         """Extract title from HTML content."""
         import re
-        match = re.search(r'<title[^>]*>([^<]+)</title>', html, re.IGNORECASE)
+
+        match = re.search(r"<title[^>]*>([^<]+)</title>", html, re.IGNORECASE)
         return match.group(1).strip() if match else ""
 
 
@@ -1079,8 +1111,7 @@ class NetworkModule:
         self.nuclei = NucleiRunner(nuclei_path=nuclei_path)
         self.searchsploit = SearchSploitIntegration(searchsploit_path=searchsploit_path)
         self.router_scanner = RouterScanner(
-            routersploit_path=routersploit_path,
-            hydra_path=hydra_path,
+            routersploit_path=routersploit_path, hydra_path=hydra_path
         )
         self.camera_discovery = CameraDiscovery()
 

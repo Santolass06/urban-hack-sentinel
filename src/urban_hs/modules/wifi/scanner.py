@@ -28,6 +28,7 @@ logger = structlog.get_logger(__name__)
 
 class ScanStrategy(Enum):
     """Available scan strategies."""
+
     PASSIVE_ONLY = "passive_only"
     MODE_SWITCH = "mode_switch"
     DIRECT = "direct"
@@ -36,6 +37,7 @@ class ScanStrategy(Enum):
 @dataclass
 class NetworkInfo:
     """Information about a discovered WiFi network."""
+
     bssid: str
     ssid: str | None = None
     encryption: str = "UNKNOWN"  # OPEN, WEP, WPA, WPA2, WPA3, OWE, WPS
@@ -89,7 +91,9 @@ class ScanBackend(ABC):
     """Abstract base for scan implementations."""
 
     @abstractmethod
-    async def scan(self, interface: str, channels: list[int] | None = None, duration: int = 30) -> list[NetworkInfo]:
+    async def scan(
+        self, interface: str, channels: list[int] | None = None, duration: int = 30
+    ) -> list[NetworkInfo]:
         """Perform scan and return discovered networks."""
         pass
 
@@ -100,7 +104,9 @@ class IWScanBackend(ScanBackend):
     def __init__(self, timeout: int = 15):
         self.timeout = timeout
 
-    async def scan(self, interface: str, channels: list[int] | None = None, duration: int = 30) -> list[NetworkInfo]:
+    async def scan(
+        self, interface: str, channels: list[int] | None = None, duration: int = 30
+    ) -> list[NetworkInfo]:
         cmd = ["iw", "dev", interface, "scan", "-f", "json"]
         if channels:
             freq_list = " ".join(str(self._channel_to_freq(c)) for c in channels)
@@ -108,9 +114,7 @@ class IWScanBackend(ScanBackend):
 
         try:
             process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=self.timeout)
 
@@ -182,7 +186,7 @@ class IWScanBackend(ScanBackend):
                     pmf=pmf,
                     vendor=vendor,
                     meta=extended,
-                    )
+                )
                 networks.append(network)
 
         except json.JSONDecodeError as e:
@@ -274,7 +278,12 @@ class IWScanBackend(ScanBackend):
             meta["he"] = any(key in entry for key in he_keys)
             meta["eht"] = any(key in entry for key in eht_keys)
 
-            caps_raw = entry.get("he_caps") or entry.get("he") or entry.get("he_oper") or entry.get("eht_caps")
+            caps_raw = (
+                entry.get("he_caps")
+                or entry.get("he")
+                or entry.get("he_oper")
+                or entry.get("eht_caps")
+            )
             if isinstance(caps_raw, dict):
                 meta["mhz320"] = "320" in str(caps_raw)
             elif isinstance(caps_raw, str):
@@ -292,6 +301,7 @@ class AirodumpScanBackend(ScanBackend):
     def __init__(self, output_dir: str | None = None):
         if output_dir is None:
             from urban_hs.core.config import get_config
+
             output_dir = get_config().storage.resolve_wifi_scans_dir()
         self.output_dir = Path(output_dir)
         try:
@@ -300,14 +310,19 @@ class AirodumpScanBackend(ScanBackend):
             self.output_dir = Path.home() / ".local/share/urban-hs/wifi_scans"
             self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    async def scan(self, interface: str, channels: list[int] | None = None, duration: int = 30) -> list[NetworkInfo]:
+    async def scan(
+        self, interface: str, channels: list[int] | None = None, duration: int = 30
+    ) -> list[NetworkInfo]:
         csv_prefix = self.output_dir / f"scan_{uuid.uuid4().hex[:8]}"
 
         cmd = [
             "airodump-ng",
-            "--write", str(csv_prefix),
-            "--output-format", "csv",
-            "--write-interval", "1",
+            "--write",
+            str(csv_prefix),
+            "--output-format",
+            "csv",
+            "--write-interval",
+            "1",
             "--manufacturer",
             "--uptime",
         ]
@@ -319,9 +334,7 @@ class AirodumpScanBackend(ScanBackend):
 
         try:
             process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
+                *cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL
             )
 
             await asyncio.sleep(duration)
@@ -353,7 +366,7 @@ class AirodumpScanBackend(ScanBackend):
                 if line.startswith("Station MAC"):
                     break
                 if in_ap_section and line:
-                    parts = [p.strip() for p in line.split(',')]
+                    parts = [p.strip() for p in line.split(",")]
                     if len(parts) >= 14:
                         network = self._parse_ap_line(parts)
                         if network:
@@ -375,7 +388,7 @@ class AirodumpScanBackend(ScanBackend):
             privacy = parts[5]
             cipher = parts[6]
             auth = parts[7]
-            power = int(parts[8]) if parts[8].lstrip('-').isdigit() else -100
+            power = int(parts[8]) if parts[8].lstrip("-").isdigit() else -100
             essid = parts[13] if len(parts) > 13 else None
 
             encryption = self._parse_privacy(privacy, auth)
@@ -429,6 +442,7 @@ class ScanManager:
         self.strategy = strategy
         if output_dir is None:
             from urban_hs.core.config import get_config
+
             output_dir = get_config().storage.resolve_wifi_scans_dir()
         self.output_dir = output_dir
 
@@ -441,7 +455,9 @@ class ScanManager:
         # Known networks cache
         self._known_networks: dict[str, NetworkInfo] = {}
 
-    async def scan(self, channels: list[int] | None = None, duration: int = 30) -> list[NetworkInfo]:
+    async def scan(
+        self, channels: list[int] | None = None, duration: int = 30
+    ) -> list[NetworkInfo]:
         """Perform scan based on configured strategy."""
         backend = self.backends.get(self.strategy)
         if not backend:
@@ -485,12 +501,15 @@ class ScanManager:
     async def _get_current_mode(self) -> str:
         try:
             proc = await asyncio.create_subprocess_exec(
-                "iw", "dev", self.interface, "info",
+                "iw",
+                "dev",
+                self.interface,
+                "info",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
             stdout, _ = await proc.communicate()
-            for line in stdout.decode().split('\n'):
+            for line in stdout.decode().split("\n"):
                 if line.strip().startswith("type"):
                     return line.split()[1].strip()
         except Exception:
@@ -512,9 +531,7 @@ class ScanManager:
     async def _run_cmd(self, cmd: list[str]) -> bool:
         try:
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
+                *cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL
             )
             await proc.wait()
             return proc.returncode == 0
@@ -537,7 +554,9 @@ class WiFiScanner:
     ):
         self.manager = ScanManager(interface, strategy, output_dir)
 
-    async def scan(self, channels: list[int] | None = None, duration: int = 30) -> list[NetworkInfo]:
+    async def scan(
+        self, channels: list[int] | None = None, duration: int = 30
+    ) -> list[NetworkInfo]:
         """Perform a single scan."""
         return await self.manager.scan(channels, duration)
 
@@ -561,6 +580,27 @@ class WiFiScanner:
 
 # Channel lists for common regions
 CHANNELS_2GHZ = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
-CHANNELS_5GHZ = [36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144]
+CHANNELS_5GHZ = [
+    36,
+    40,
+    44,
+    48,
+    52,
+    56,
+    60,
+    64,
+    100,
+    104,
+    108,
+    112,
+    116,
+    120,
+    124,
+    128,
+    132,
+    136,
+    140,
+    144,
+]
 CHANNELS_6GHZ = list(range(1, 234, 4))  # 1, 5, 9, ... 233
 ALL_CHANNELS = CHANNELS_2GHZ + CHANNELS_5GHZ + CHANNELS_6GHZ

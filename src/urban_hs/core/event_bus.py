@@ -32,6 +32,7 @@ class EventPriority(Enum):
 @dataclass
 class Event:
     """Base event class with metadata."""
+
     type: str
     payload: Any = None
     timestamp: datetime = field(default_factory=datetime.utcnow)
@@ -88,7 +89,7 @@ class DeadLetterQueue:
 class EventBus:
     """
     Central event bus for pub/sub communication between modules.
-    
+
     Features:
     - Typed event subscription
     - Priority-based delivery
@@ -98,10 +99,7 @@ class EventBus:
     """
 
     def __init__(
-        self,
-        max_queue_size: int = 10000,
-        dlq_max_size: int = 1000,
-        worker_count: int = 4,
+        self, max_queue_size: int = 10000, dlq_max_size: int = 1000, worker_count: int = 4
     ):
         self.max_queue_size = max_queue_size
         self._queue: asyncio.Queue[Event] = asyncio.Queue(maxsize=max_queue_size)
@@ -110,12 +108,7 @@ class EventBus:
         self._workers: list[asyncio.Task] = []
         self._worker_count = worker_count
         self._dlq = DeadLetterQueue(dlq_max_size)
-        self._stats = {
-            "published": 0,
-            "delivered": 0,
-            "failed": 0,
-            "dlq_size": 0,
-        }
+        self._stats = {"published": 0, "delivered": 0, "failed": 0, "dlq_size": 0}
 
     async def start(self) -> None:
         """Start the event processing workers."""
@@ -123,8 +116,7 @@ class EventBus:
             return
         self._running = True
         self._workers = [
-            asyncio.create_task(self._worker(f"worker-{i}"))
-            for i in range(self._worker_count)
+            asyncio.create_task(self._worker(f"worker-{i}")) for i in range(self._worker_count)
         ]
         logger.info("Event bus started", workers=self._worker_count)
 
@@ -133,8 +125,12 @@ class EventBus:
         if not self._running:
             return
         self._running = False
-        # Wait for queue to drain
-        await asyncio.wait_for(self._queue.join(), timeout=timeout)
+        # Wait for the queue to drain, but never let a stuck handler block
+        # shutdown: on timeout we still cancel the workers below.
+        try:
+            await asyncio.wait_for(self._queue.join(), timeout=timeout)
+        except TimeoutError:
+            logger.warning("Event bus drain timed out; cancelling workers", timeout=timeout)
         # Cancel workers
         for w in self._workers:
             w.cancel()
@@ -145,7 +141,9 @@ class EventBus:
         """Register an event handler for its declared event types."""
         for event_type in handler.event_types:
             self._subscribers[event_type].add(handler)
-            logger.debug("Subscribed handler", event_type=event_type, handler=type(handler).__name__)
+            logger.debug(
+                "Subscribed handler", event_type=event_type, handler=type(handler).__name__
+            )
 
     def unsubscribe(self, handler: EventHandler) -> None:
         """Unregister an event handler."""

@@ -20,7 +20,9 @@ class SearchSploitIntegration:
     def __init__(self, searchsploit_path: str = "searchsploit"):
         self.searchsploit_path = searchsploit_path
 
-    async def search(self, query: str, exact: bool = False, json_output: bool = True) -> list[dict[str, Any]]:
+    async def search(
+        self, query: str, exact: bool = False, json_output: bool = True
+    ) -> list[dict[str, Any]]:
         cmd = [self.searchsploit_path]
 
         if json_output:
@@ -32,9 +34,7 @@ class SearchSploitIntegration:
 
         try:
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
 
@@ -57,16 +57,14 @@ class SearchSploitIntegration:
         return []
 
     async def get_exploit(self, exploit_id: str, output_dir: str) -> str | None:
-        if not re.match(r'^\d+$', exploit_id):
+        if not re.match(r"^\d+$", exploit_id):
             logger.error("Invalid exploit_id format", exploit_id=exploit_id)
             return None
 
         try:
             cmd = [self.searchsploit_path, "-m", exploit_id, "-p", output_dir]
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await proc.communicate()
 

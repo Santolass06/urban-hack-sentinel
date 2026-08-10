@@ -63,7 +63,7 @@ class NmapScanner:
                     ipaddress.ip_address(target)
                     validated_targets.append(target)
                 except ValueError:
-                    if re.match(r'^[a-zA-Z0-9.-]+$', target):
+                    if re.match(r"^[a-zA-Z0-9.-]+$", target):
                         validated_targets.append(target)
                     else:
                         logger.warning("Skipping invalid target", target=target)
@@ -115,20 +115,22 @@ class NmapScanner:
 
         cmd.extend(targets)
 
-        logger.info("Starting nmap scan", cmd=" ".join(cmd), targets=targets, scan_type=scan_type.value)
+        logger.info(
+            "Starting nmap scan", cmd=" ".join(cmd), targets=targets, scan_type=scan_type.value
+        )
 
         try:
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
 
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
 
             if proc.returncode != 0 and proc.returncode != 1:
                 stderr_str = stderr.decode() if stderr else ""
-                logger.error("Nmap scan failed", returncode=proc.returncode, stderr=stderr_str[:500])
+                logger.error(
+                    "Nmap scan failed", returncode=proc.returncode, stderr=stderr_str[:500]
+                )
                 return []
 
             return self._parse_xml_output(stdout.decode())
@@ -237,10 +239,7 @@ class NmapScanner:
 
             scripts = []
             for script_elem in port_elem.findall("script"):
-                scripts.append({
-                    "id": script_elem.get("id"),
-                    "output": script_elem.get("output"),
-                })
+                scripts.append({"id": script_elem.get("id"), "output": script_elem.get("output")})
 
             return PortInfo(
                 port=port,

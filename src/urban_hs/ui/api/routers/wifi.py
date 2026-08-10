@@ -33,9 +33,7 @@ async def list_wifi_interfaces() -> dict[str, Any]:
     if iw:
         try:
             proc = await asyncio.create_subprocess_exec(
-                iw, "dev",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                iw, "dev", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             stdout, _ = await proc.communicate()
             text = stdout.decode(errors="replace")
@@ -49,7 +47,9 @@ async def list_wifi_interfaces() -> dict[str, Any]:
     if not ifaces and os.path.exists("/sys/class/net"):
         try:
             for entry in os.listdir("/sys/class/net"):
-                if entry.startswith(("wlan", "wlo", "wlp", "wlx")) or os.path.exists(f"/sys/class/net/{entry}/wireless"):
+                if entry.startswith(("wlan", "wlo", "wlp", "wlx")) or os.path.exists(
+                    f"/sys/class/net/{entry}/wireless"
+                ):
                     if entry not in ifaces:
                         ifaces.append(entry)
         except Exception as exc:
@@ -78,11 +78,13 @@ async def start_wifi_scan(
             from urban_hs.modules.wifi import ScanStrategy, WiFiScanner
 
             bus = get_event_bus()
-            await bus.publish(Event(
-                type="wifi.scan.started",
-                payload={"job_id": job_id, "interface": interface, "strategy": strategy},
-                source="api",
-            ))
+            await bus.publish(
+                Event(
+                    type="wifi.scan.started",
+                    payload={"job_id": job_id, "interface": interface, "strategy": strategy},
+                    source="api",
+                )
+            )
 
             scanner = WiFiScanner(interface=interface, strategy=ScanStrategy(strategy))
             networks: list[Any] = []
@@ -92,30 +94,36 @@ async def start_wifi_scan(
                 networks = [n.to_dict() for n in nets]
             except Exception as exc:
                 logger.warning("WiFi scan failed, no fallback: %s", exc)
-                await bus.publish(Event(
-                    type="wifi.scan.error",
-                    payload={"job_id": job_id, "error": str(exc)},
-                    source="api",
-                ))
+                await bus.publish(
+                    Event(
+                        type="wifi.scan.error",
+                        payload={"job_id": job_id, "error": str(exc)},
+                        source="api",
+                    )
+                )
                 payload.update({"status": "error", "error": str(exc)})
                 return
 
-            await bus.publish(Event(
-                type="wifi.scan.completed",
-                payload={
-                    "job_id": job_id,
+            await bus.publish(
+                Event(
+                    type="wifi.scan.completed",
+                    payload={
+                        "job_id": job_id,
+                        "count": len(networks),
+                        "networks": networks,
+                        "simulated": simulated,
+                    },
+                    source="api",
+                )
+            )
+            payload.update(
+                {
+                    "status": "completed",
                     "count": len(networks),
                     "networks": networks,
                     "simulated": simulated,
-                },
-                source="api",
-            ))
-            payload.update({
-                "status": "completed",
-                "count": len(networks),
-                "networks": networks,
-                "simulated": simulated,
-            })
+                }
+            )
         except Exception as exc:
             payload.update({"status": "error", "error": str(exc)})
 
@@ -145,21 +153,25 @@ async def get_map_data() -> dict[str, Any]:
     try:
         storage = get_storage()
         # Query devices with GPS metadata or coordinates
-        rows = await storage.fetchall("SELECT id, mac, type, meta FROM devices WHERE meta LIKE '%lat%' OR meta LIKE '%gps%'")
+        rows = await storage.fetchall(
+            "SELECT id, mac, type, meta FROM devices WHERE meta LIKE '%lat%' OR meta LIKE '%gps%'"
+        )
         points = []
         for row in rows:
             meta = json.loads(row.get("meta", "{}"))
             if "lat" in meta and "lon" in meta:
-                points.append({
-                    "id": row.get("id"),
-                    "mac": row.get("mac"),
-                    "type": row.get("type"),
-                    "lat": meta.get("lat"),
-                    "lon": meta.get("lon"),
-                    "ssid": meta.get("ssid", "Hidden"),
-                    "signal_dbm": meta.get("signal_dbm", -70),
-                    "encryption": meta.get("encryption", "WPA2"),
-                })
+                points.append(
+                    {
+                        "id": row.get("id"),
+                        "mac": row.get("mac"),
+                        "type": row.get("type"),
+                        "lat": meta.get("lat"),
+                        "lon": meta.get("lon"),
+                        "ssid": meta.get("ssid", "Hidden"),
+                        "signal_dbm": meta.get("signal_dbm", -70),
+                        "encryption": meta.get("encryption", "WPA2"),
+                    }
+                )
         return {"points": points, "total": len(points)}
     except Exception as exc:
         return {"points": [], "total": 0, "error": str(exc)}

@@ -23,18 +23,11 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 if TYPE_CHECKING:
-    from urban_hs.modules.reporting.gpg_evidence import (
-        EvidenceLogger as EvidenceLogger,
-    )
-    from urban_hs.modules.reporting.gpg_evidence import (
-        GPGSigner as GPGSigner,
-    )
+    from urban_hs.modules.reporting.gpg_evidence import EvidenceLogger as EvidenceLogger
+    from urban_hs.modules.reporting.gpg_evidence import GPGSigner as GPGSigner
 
 try:
-    from urban_hs.modules.reporting.gpg_evidence import (
-        EvidenceLogger,
-        GPGSigner,
-    )
+    from urban_hs.modules.reporting.gpg_evidence import EvidenceLogger, GPGSigner
 
     REPORTING_EVIDENCE_AVAILABLE = True
 except ImportError:  # pragma: no cover - optional dependency path
@@ -107,9 +100,11 @@ class EvidenceBundle:
         return record
 
     def index_path(self) -> str:
-        base = Path(self.base_dir) if self.base_dir else Path(
-            self.records[0]["path"] if self.records else "."
-        ).resolve().parent
+        base = (
+            Path(self.base_dir)
+            if self.base_dir
+            else Path(self.records[0]["path"] if self.records else ".").resolve().parent
+        )
         return str(base / f"{self.session_id}-evidence-index.json")
 
     def write_index(self, path: str | None = None) -> str:
@@ -120,15 +115,16 @@ class EvidenceBundle:
             "artifacts": self.records,
             "custody": self.custody_entries,
         }
-        Path(target).write_text(
-            json.dumps(payload, indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        Path(target).write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
         return target
 
     def seal(self, target_dir: str | None = None) -> str:
         """Relocate session artifacts to append-only/read-only sealed storage and create signed manifest."""
-        base_sealed = Path(target_dir) if target_dir else Path(self.retention.base_dir) / "sealed" / self.session_id
+        base_sealed = (
+            Path(target_dir)
+            if target_dir
+            else Path(self.retention.base_dir) / "sealed" / self.session_id
+        )
         try:
             base_sealed.mkdir(parents=True, exist_ok=True)
         except PermissionError:
@@ -148,7 +144,11 @@ class EvidenceBundle:
                 new_record["sha256"] = self._sha256(str(dest_path))
                 new_record["blake2b"] = self._blake2b(str(dest_path))
                 sealed_records.append(new_record)
-                self._append_custody("seal", str(dest_path), {"src": str(src_path), "sealed_at": datetime.now(UTC).isoformat()})
+                self._append_custody(
+                    "seal",
+                    str(dest_path),
+                    {"src": str(src_path), "sealed_at": datetime.now(UTC).isoformat()},
+                )
 
         self.records = sealed_records
         manifest_path = str(base_sealed / f"{self.session_id}-sealed-manifest.json")
@@ -158,12 +158,7 @@ class EvidenceBundle:
 
     def _append_custody(self, action: str, path: str, meta: dict[str, Any]) -> None:
         self.custody_entries.append(
-            {
-                "ts": datetime.now(UTC).isoformat(),
-                "action": action,
-                "path": path,
-                "meta": meta,
-            }
+            {"ts": datetime.now(UTC).isoformat(), "action": action, "path": path, "meta": meta}
         )
 
     @staticmethod

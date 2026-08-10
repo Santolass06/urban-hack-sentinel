@@ -51,19 +51,12 @@ def get_jwt_secret() -> str:
     return _jwt_secret
 
 
-def create_access_token(
-    subject: str,
-    expires_minutes: int = 60,
-    algorithm: str = "HS256",
-) -> str:
+def create_access_token(subject: str, expires_minutes: int = 60, algorithm: str = "HS256") -> str:
     """Create a signed JWT access token."""
     from datetime import datetime, timedelta
+
     now = datetime.now(UTC)
-    payload = {
-        "sub": subject,
-        "iat": now,
-        "exp": now + timedelta(minutes=expires_minutes),
-    }
+    payload = {"sub": subject, "iat": now, "exp": now + timedelta(minutes=expires_minutes)}
     return jwt.encode(payload, get_jwt_secret(), algorithm=algorithm)
 
 

@@ -24,6 +24,7 @@ logger = structlog.get_logger(__name__)
 
 class Capability(Enum):
     """Linux capabilities for fine-grained privilege control."""
+
     CAP_CHOWN = "CAP_CHOWN"
     CAP_DAC_OVERRIDE = "CAP_DAC_OVERRIDE"
     CAP_DAC_READ_SEARCH = "CAP_DAC_READ_SEARCH"
@@ -68,6 +69,7 @@ class Capability(Enum):
 
 class SeccompAction(Enum):
     """Seccomp filter actions."""
+
     KILL_PROCESS = "SCMP_ACT_KILL_PROCESS"
     KILL_THREAD = "SCMP_ACT_KILL_THREAD"
     KILL = "SCMP_ACT_KILL"
@@ -82,6 +84,7 @@ class SeccompAction(Enum):
 @dataclass
 class SeccompRule:
     """Single seccomp filter rule."""
+
     syscall: str
     action: SeccompAction = SeccompAction.ALLOW
     args: list[tuple[int, int, int]] = field(default_factory=list)  # (index, op, value)
@@ -91,6 +94,7 @@ class SeccompRule:
 @dataclass
 class SeccompProfile:
     """Complete seccomp-bpf filter profile."""
+
     name: str
     default_action: SeccompAction = SeccompAction.ERRNO
     rules: list[SeccompRule] = field(default_factory=list)
@@ -98,17 +102,21 @@ class SeccompProfile:
     def to_json(self) -> str:
         """Export profile as JSON for libseccomp."""
         import json
-        return json.dumps({
-            "defaultAction": self.default_action.value,
-            "syscalls": [
-                {
-                    "name": rule.syscall,
-                    "action": rule.action.value,
-                    "args": [{"index": a[0], "op": a[1], "value": a[2]} for a in rule.args],
-                }
-                for rule in self.rules
-            ]
-        }, indent=2)
+
+        return json.dumps(
+            {
+                "defaultAction": self.default_action.value,
+                "syscalls": [
+                    {
+                        "name": rule.syscall,
+                        "action": rule.action.value,
+                        "args": [{"index": a[0], "op": a[1], "value": a[2]} for a in rule.args],
+                    }
+                    for rule in self.rules
+                ],
+            },
+            indent=2,
+        )
 
 
 # Predefined capability sets per module
@@ -124,23 +132,10 @@ MODULE_CAPABILITIES: dict[str, list[Capability]] = {
         Capability.CAP_DAC_READ_SEARCH,
         Capability.CAP_DAC_OVERRIDE,
     ],
-    "ble_scanner": [
-        Capability.CAP_NET_RAW,
-        Capability.CAP_NET_ADMIN,
-    ],
-    "bt_hid": [
-        Capability.CAP_NET_RAW,
-        Capability.CAP_NET_ADMIN,
-        Capability.CAP_DAC_READ_SEARCH,
-    ],
-    "network_scanner": [
-        Capability.CAP_NET_RAW,
-        Capability.CAP_NET_ADMIN,
-    ],
-    "camera_enum": [
-        Capability.CAP_NET_RAW,
-        Capability.CAP_DAC_READ_SEARCH,
-    ],
+    "ble_scanner": [Capability.CAP_NET_RAW, Capability.CAP_NET_ADMIN],
+    "bt_hid": [Capability.CAP_NET_RAW, Capability.CAP_NET_ADMIN, Capability.CAP_DAC_READ_SEARCH],
+    "network_scanner": [Capability.CAP_NET_RAW, Capability.CAP_NET_ADMIN],
+    "camera_enum": [Capability.CAP_NET_RAW, Capability.CAP_DAC_READ_SEARCH],
     "chroot_manager": [
         Capability.CAP_SYS_CHROOT,
         Capability.CAP_SYS_ADMIN,
@@ -152,9 +147,7 @@ MODULE_CAPABILITIES: dict[str, list[Capability]] = {
         Capability.CAP_SYS_ADMIN,
         Capability.CAP_SYS_PTRACE,
     ],
-    "gps": [
-        Capability.CAP_DAC_READ_SEARCH,
-    ],
+    "gps": [Capability.CAP_DAC_READ_SEARCH],
 }
 
 
@@ -228,6 +221,7 @@ SECCOMP_PROFILES: dict[str, SeccompProfile] = {
 @dataclass
 class CapabilitySet:
     """Set of capabilities with effective/permitted/inheritable flags."""
+
     effective: set[Capability] = field(default_factory=set)
     permitted: set[Capability] = field(default_factory=set)
     inheritable: set[Capability] = field(default_factory=set)
@@ -237,17 +231,13 @@ class CapabilitySet:
     def from_module(cls, module_name: str) -> "CapabilitySet":
         """Create capability set for a module."""
         caps = MODULE_CAPABILITIES.get(module_name, [])
-        return cls(
-            effective=set(caps),
-            permitted=set(caps),
-            inheritable=set(),
-            bounding=set(caps),
-        )
+        return cls(effective=set(caps), permitted=set(caps), inheritable=set(), bounding=set(caps))
 
     def apply(self) -> bool:
         """Apply capability set to current process."""
         try:
             import libcap
+
             cap = libcap.Capabilities()
 
             # Clear all
@@ -281,6 +271,7 @@ class CapabilitySet:
 @dataclass
 class SeccompFilter:
     """Seccomp filter manager."""
+
     profile: SeccompProfile
     _filter: Any | None = None
 
@@ -295,7 +286,7 @@ class SeccompFilter:
                 ctx.add_rule(
                     rule.action.value,
                     rule.syscall,
-                    *[seccomp.Arg(a[0], a[1], a[2]) for a in rule.args]
+                    *[seccomp.Arg(a[0], a[1], a[2]) for a in rule.args],
                 )
 
             ctx.load()
@@ -317,24 +308,29 @@ class SeccompFilter:
 @dataclass
 class RootlessChrootConfig:
     """Configuration for rootless chroot with user namespaces."""
+
     chroot_path: str = "/opt/urban-chroot"
     user_map: str = "0 100000 65536"  # Map root (0) to UID 100000+
     group_map: str = "0 100000 65536"
-    bind_mounts: dict[str, str] = field(default_factory=lambda: {
-        "/data": "/data",
-        "/artifacts": "/artifacts",
-        "/logs": "/logs",
-        "/var/log": "/var/log",
-        "/etc/resolv.conf": "/etc/resolv.conf",
-        "/proc": "/proc",
-        "/sys": "/sys",
-        "/dev": "/dev",
-    })
-    env: dict[str, str] = field(default_factory=lambda: {
-        "HOME": "/root",
-        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-        "TERM": "xterm-256color",
-    })
+    bind_mounts: dict[str, str] = field(
+        default_factory=lambda: {
+            "/data": "/data",
+            "/artifacts": "/artifacts",
+            "/logs": "/logs",
+            "/var/log": "/var/log",
+            "/etc/resolv.conf": "/etc/resolv.conf",
+            "/proc": "/proc",
+            "/sys": "/sys",
+            "/dev": "/dev",
+        }
+    )
+    env: dict[str, str] = field(
+        default_factory=lambda: {
+            "HOME": "/root",
+            "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            "TERM": "xterm-256color",
+        }
+    )
 
 
 class RootlessChroot:
@@ -363,20 +359,23 @@ class RootlessChroot:
             # This requires root or user namespace support
             cmd = [
                 "unshare",
-                "--user", "--map-root-user",
-                "--mount", "--map-root-user",
-                "--pid", "--fork",
+                "--user",
+                "--map-root-user",
+                "--mount",
+                "--map-root-user",
+                "--pid",
+                "--fork",
                 "--",
-                "chroot", self.config.chroot_path,
-                "/bin/sh", "-c",
+                "chroot",
+                self.config.chroot_path,
+                "/bin/sh",
+                "-c",
                 "exec /bin/bash --login",
             ]
 
             # Start the chroot process
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                env={**os.environ, **self.config.env},
-                start_new_session=True,
+                *cmd, env={**os.environ, **self.config.env}, start_new_session=True
             )
 
             self._ns_pid = proc.pid
@@ -395,17 +394,17 @@ class RootlessChroot:
         # Use nsenter to execute in the namespace
         cmd = [
             "nsenter",
-            "--target", str(self._ns_pid),
-            "--user", "--mount", "--pid",
+            "--target",
+            str(self._ns_pid),
+            "--user",
+            "--mount",
+            "--pid",
             "--",
             *command,
         ]
 
         env = {**os.environ, **(env or {})}
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            env=env,
-        )
+        proc = await asyncio.create_subprocess_exec(*cmd, env=env)
 
         return await proc.wait()
 
@@ -425,6 +424,7 @@ class RootlessChroot:
 @dataclass
 class SupplyChainConfig:
     """Configuration for supply chain security."""
+
     cosign_public_key: str | None = None
     cosign_key_path: str | None = None
     slsa_provenance: bool = True
@@ -448,16 +448,17 @@ class SupplyChainVerifier:
         sig_path = f"{artifact_path}.sig"
 
         cmd = [
-            "cosign", "sign-blob",
-            "--key", self.config.cosign_key_path,
-            "--output-signature", sig_path,
+            "cosign",
+            "sign-blob",
+            "--key",
+            self.config.cosign_key_path,
+            "--output-signature",
+            sig_path,
             artifact_path,
         ]
 
         proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         stdout, stderr = await proc.communicate()
 
@@ -474,16 +475,17 @@ class SupplyChainVerifier:
             return False
 
         cmd = [
-            "cosign", "verify-blob",
-            "--key", self.config.cosign_public_key,
-            "--signature", signature_path,
+            "cosign",
+            "verify-blob",
+            "--key",
+            self.config.cosign_public_key,
+            "--signature",
+            signature_path,
             artifact_path,
         ]
 
         proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         stdout, stderr = await proc.communicate()
 
@@ -491,15 +493,10 @@ class SupplyChainVerifier:
 
     async def generate_sbom(self, target_dir: str, output_path: str) -> bool:
         """Generate SBOM using Syft."""
-        cmd = [
-            "syft", target_dir,
-            "-o", f"{self.config.sbom_format}={output_path}",
-        ]
+        cmd = ["syft", target_dir, "-o", f"{self.config.sbom_format}={output_path}"]
 
         proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         stdout, stderr = await proc.communicate()
 
@@ -510,10 +507,7 @@ class SupplyChainVerifier:
         return False
 
     async def verify_slsa_provenance(
-        self,
-        artifact_path: str,
-        provenance_path: str | None = None,
-        source_uri: str | None = None,
+        self, artifact_path: str, provenance_path: str | None = None, source_uri: str | None = None
     ) -> bool:
         """Verify SLSA provenance for an artifact using ``slsa-verifier``.
 
@@ -522,7 +516,9 @@ class SupplyChainVerifier:
         """
         verifier = shutil.which("slsa-verifier")
         if not verifier:
-            logger.error("slsa-verifier not installed; cannot verify provenance", artifact=artifact_path)
+            logger.error(
+                "slsa-verifier not installed; cannot verify provenance", artifact=artifact_path
+            )
             return False
 
         provenance = provenance_path or f"{artifact_path}.intoto.jsonl"
@@ -536,14 +532,16 @@ class SupplyChainVerifier:
             return False
 
         cmd = [
-            verifier, "verify-artifact", artifact_path,
-            "--provenance-path", provenance,
-            "--source-uri", source,
+            verifier,
+            "verify-artifact",
+            artifact_path,
+            "--provenance-path",
+            provenance,
+            "--source-uri",
+            source,
         ]
         proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         _, stderr = await proc.communicate()
 
@@ -592,6 +590,7 @@ async def harden_process(module_name: str) -> dict[str, bool]:
     # Set no-new-privs
     try:
         import prctl
+
         prctl.set_no_new_privs(True)
         results["no_new_privs"] = True
     except ImportError:
@@ -600,9 +599,8 @@ async def harden_process(module_name: str) -> dict[str, bool]:
     # Set securebits
     try:
         import prctl
-        prctl.set_securebits(
-            prctl.SECURE_NOROOT | prctl.SECURE_NO_SETUID_FIXUP
-        )
+
+        prctl.set_securebits(prctl.SECURE_NOROOT | prctl.SECURE_NO_SETUID_FIXUP)
         results["securebits"] = True
     except ImportError:
         results["securebits"] = False
@@ -621,22 +619,18 @@ __all__ = [
     "CapabilitySet",
     "MODULE_CAPABILITIES",
     "drop_privileges",
-
     # Seccomp
     "SeccompAction",
     "SeccompRule",
     "SeccompProfile",
     "SeccompFilter",
     "SECCOMP_PROFILES",
-
     # Rootless chroot
     "RootlessChrootConfig",
     "RootlessChroot",
-
     # Supply chain
     "SupplyChainConfig",
     "SupplyChainVerifier",
-
     # Hardening
     "harden_process",
 ]

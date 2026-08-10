@@ -24,6 +24,7 @@ logger = structlog.get_logger(__name__)
 
 class VulnStatus(Enum):
     """Vulnerability status."""
+
     UNKNOWN = "unknown"
     POTENTIALLY_VULNERABLE = "potentially_vulnerable"
     CONFIRMED_VULNERABLE = "confirmed_vulnerable"
@@ -35,6 +36,7 @@ class VulnStatus(Enum):
 @dataclass
 class CameraVulnerability:
     """Camera vulnerability information."""
+
     cve_id: str
     name: str
     description: str
@@ -56,7 +58,7 @@ class CameraVulnerability:
 class CameraVulnChecker:
     """
     Camera vulnerability checker with CVE database and exploit verification.
-    
+
     Features:
     - Local CVE database for known camera vulnerabilities
     - Nuclei template integration for automated scanning
@@ -95,7 +97,7 @@ class CameraVulnChecker:
         """Save CVE database to JSON file."""
         try:
             data = [self._vuln_to_dict(v) for v in self.cve_db]
-            with open(path, 'w') as f:
+            with open(path, "w") as f:
                 json.dump(data, f, indent=2, default=str)
         except Exception as e:
             logger.error("Failed to save CVE database", path=path, error=str(e))
@@ -137,15 +139,19 @@ class CameraVulnChecker:
         """Get vulnerabilities for specific model."""
         vulns = self.get_by_manufacturer(manufacturer)
         return [
-            v for v in vulns
+            v
+            for v in vulns
             if not v.models_affected or model.lower() in [m.lower() for m in v.models_affected]
         ]
 
-    def get_by_firmware(self, manufacturer: str, firmware_version: str) -> list[CameraVulnerability]:
+    def get_by_firmware(
+        self, manufacturer: str, firmware_version: str
+    ) -> list[CameraVulnerability]:
         """Get vulnerabilities for firmware version."""
         vulns = self.get_by_manufacturer(manufacturer)
         return [
-            v for v in vulns
+            v
+            for v in vulns
             if not v.firmware_versions_affected or firmware_version in v.firmware_versions_affected
         ]
 
@@ -164,7 +170,7 @@ class CameraVulnChecker:
     ) -> list[CameraVulnerability]:
         """
         Check camera for known vulnerabilities.
-        
+
         Args:
             manufacturer: Camera manufacturer
             model: Camera model
@@ -172,7 +178,7 @@ class CameraVulnChecker:
             ip: Camera IP (for active exploitation)
             port: Camera port
             run_exploits: Whether to attempt exploit verification
-            
+
         Returns:
             List of matched vulnerabilities with status
         """
@@ -180,10 +186,19 @@ class CameraVulnChecker:
         vulns = self.get_by_manufacturer(manufacturer)
 
         if model:
-            vulns = [v for v in vulns if not v.models_affected or model.lower() in [m.lower() for m in v.models_affected]]
+            vulns = [
+                v
+                for v in vulns
+                if not v.models_affected or model.lower() in [m.lower() for m in v.models_affected]
+            ]
 
         if firmware_version:
-            vulns = [v for v in vulns if not v.firmware_versions_affected or firmware_version in v.firmware_versions_affected]
+            vulns = [
+                v
+                for v in vulns
+                if not v.firmware_versions_affected
+                or firmware_version in v.firmware_versions_affected
+            ]
 
         results = []
         for vuln in vulns:
@@ -207,9 +222,7 @@ class CameraVulnChecker:
         try:
             # Run specific template
             vulns = await self.nuclei.scan(
-                targets=[f"{ip}:{port}"],
-                template_dirs=[],
-                extra_args=["-t", vuln.nuclei_template]
+                targets=[f"{ip}:{port}"], template_dirs=[], extra_args=["-t", vuln.nuclei_template]
             )
 
             if vulns:
@@ -229,11 +242,7 @@ class CameraVulnChecker:
 
         try:
             target = ExploitTarget(
-                id=f"target_{ip}",
-                target_type="host",
-                address=ip,
-                port=port,
-                service="http",
+                id=f"target_{ip}", target_type="host", address=ip, port=port, service="http"
             )
 
             result = await self.exploit_runner.execute(
@@ -289,11 +298,13 @@ class CameraVulnChecker:
         query = query.lower()
         results = []
         for vuln in self.cve_db:
-            if (query in vuln.cve_id.lower() or
-                query in vuln.name.lower() or
-                query in vuln.description.lower() or
-                query in vuln.manufacturer.lower() or
-                any(query in m.lower() for m in vuln.models_affected)):
+            if (
+                query in vuln.cve_id.lower()
+                or query in vuln.name.lower()
+                or query in vuln.description.lower()
+                or query in vuln.manufacturer.lower()
+                or any(query in m.lower() for m in vuln.models_affected)
+            ):
                 results.append(vuln)
         return results
 
@@ -313,7 +324,9 @@ class CameraVulnChecker:
             stats["by_severity"][vuln.severity] = stats["by_severity"].get(vuln.severity, 0) + 1
 
             # By manufacturer
-            stats["by_manufacturer"][vuln.manufacturer] = stats["by_manufacturer"].get(vuln.manufacturer, 0) + 1
+            stats["by_manufacturer"][vuln.manufacturer] = (
+                stats["by_manufacturer"].get(vuln.manufacturer, 0) + 1
+            )
 
             # Capabilities
             if vuln.exploit_available:
@@ -346,7 +359,7 @@ DEFAULT_CVE_DB = [
         nuclei_template="cves/2017/CVE-2017-7921.yaml",
         references=[
             "https://nvd.nist.gov/vuln/detail/CVE-2017-7921",
-            "https://blog.rapid7.com/2017/08/18/cve-2017-7921/"
+            "https://blog.rapid7.com/2017/08/18/cve-2017-7921/",
         ],
         status=VulnStatus.UNKNOWN,
     ),
@@ -364,7 +377,6 @@ DEFAULT_CVE_DB = [
         references=["https://nvd.nist.gov/vuln/detail/CVE-2021-36260"],
         status=VulnStatus.UNKNOWN,
     ),
-
     # Dahua
     CameraVulnerability(
         cve_id="CVE-2018-19061",
@@ -395,7 +407,6 @@ DEFAULT_CVE_DB = [
         references=["https://nvd.nist.gov/vuln/detail/CVE-2021-33044"],
         status=VulnStatus.UNKNOWN,
     ),
-
     # Axis
     CameraVulnerability(
         cve_id="CVE-2019-2337",
@@ -425,7 +436,6 @@ DEFAULT_CVE_DB = [
         references=["https://nvd.nist.gov/vuln/detail/CVE-2022-34818"],
         status=VulnStatus.UNKNOWN,
     ),
-
     # Foscam
     CameraVulnerability(
         cve_id="CVE-2017-8296",
@@ -456,7 +466,6 @@ DEFAULT_CVE_DB = [
         references=["https://nvd.nist.gov/vuln/detail/CVE-2018-16882"],
         status=VulnStatus.UNKNOWN,
     ),
-
     # Reolink
     CameraVulnerability(
         cve_id="CVE-2020-5854",
@@ -472,7 +481,6 @@ DEFAULT_CVE_DB = [
         references=["https://nvd.nist.gov/vuln/detail/CVE-2020-5854"],
         status=VulnStatus.UNKNOWN,
     ),
-
     # TP-Link Tapo
     CameraVulnerability(
         cve_id="CVE-2023-27159",
@@ -488,7 +496,6 @@ DEFAULT_CVE_DB = [
         references=["https://nvd.nist.gov/vuln/detail/CVE-2023-27159"],
         status=VulnStatus.UNKNOWN,
     ),
-
     # Ubiquiti UniFi
     CameraVulnerability(
         cve_id="CVE-2020-8126",
@@ -505,7 +512,6 @@ DEFAULT_CVE_DB = [
         references=["https://nvd.nist.gov/vuln/detail/CVE-2020-8126"],
         status=VulnStatus.UNKNOWN,
     ),
-
     # Generic / Multiple Vendors
     CameraVulnerability(
         cve_id="CVE-2017-7921",
@@ -522,7 +528,6 @@ DEFAULT_CVE_DB = [
         references=["https://nvd.nist.gov/vuln/detail/CVE-2017-7921"],
         status=VulnStatus.UNKNOWN,
     ),
-
     CameraVulnerability(
         cve_id="CVE-2018-12928",
         name="Multiple Vendor GoAhead Webserver Auth Bypass",

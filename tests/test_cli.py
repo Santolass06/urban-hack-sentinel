@@ -14,12 +14,7 @@ CMD = [sys.executable, "-m", "urban_hs.cli.main"]
 
 
 def run_cli(args: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        CMD + args,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
+    return subprocess.run(CMD + args, capture_output=True, text=True, timeout=30)
 
 
 def test_cli_help() -> None:

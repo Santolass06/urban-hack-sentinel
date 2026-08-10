@@ -204,10 +204,11 @@ CREATE INDEX IF NOT EXISTS idx_artifacts_session ON artifacts(session_id);
 CREATE INDEX IF NOT EXISTS idx_artifacts_type ON artifacts(type);
 """
 
+
 class Storage:
     """
     Async SQLite storage with Redis cache.
-    
+
     Features:
     - WAL mode for concurrent reads
     - Connection pooling
@@ -226,6 +227,7 @@ class Storage:
     ):
         if sqlite_path is None or redis_url is None:
             from urban_hs.core.config import get_config
+
             cfg = get_config()
             if sqlite_path is None:
                 sqlite_path = cfg.storage.resolve_sqlite_path()
@@ -291,7 +293,9 @@ class Storage:
                 current_version = 0
 
             if current_version < SCHEMA_VERSION:
-                logger.info("Running migration", from_version=current_version, to_version=SCHEMA_VERSION)
+                logger.info(
+                    "Running migration", from_version=current_version, to_version=SCHEMA_VERSION
+                )
                 await conn.executescript(SCHEMA)
                 await conn.execute(
                     "INSERT OR REPLACE INTO schema_version (version, applied_at) VALUES (?, ?)",
@@ -395,7 +399,9 @@ class Storage:
         if not self._redis:
             return 0
         try:
-            serialized = json.dumps(message, default=str) if not isinstance(message, str) else message
+            serialized = (
+                json.dumps(message, default=str) if not isinstance(message, str) else message
+            )
             return await self._redis.publish(channel, serialized)
         except Exception as e:
             logger.warning("Publish failed", channel=channel, error=str(e))
@@ -421,7 +427,8 @@ class Storage:
     # Device CRUD
     async def upsert_device(self, device: dict[str, Any]) -> None:
         """Insert or update device."""
-        await self.execute("""
+        await self.execute(
+            """
             INSERT INTO devices (id, first_seen, last_seen, type, mac, ip, vendor, labels, meta)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
@@ -430,26 +437,25 @@ class Storage:
                 vendor=excluded.vendor,
                 labels=excluded.labels,
                 meta=excluded.meta
-        """, (
-            device["id"],
-            device["first_seen"],
-            device["last_seen"],
-            device["type"],
-            device.get("mac"),
-            device.get("ip"),
-            device.get("vendor"),
-            json.dumps(device.get("labels", [])),
-            json.dumps(device.get("meta", {})),
-        ))
+        """,
+            (
+                device["id"],
+                device["first_seen"],
+                device["last_seen"],
+                device["type"],
+                device.get("mac"),
+                device.get("ip"),
+                device.get("vendor"),
+                json.dumps(device.get("labels", [])),
+                json.dumps(device.get("meta", {})),
+            ),
+        )
 
     async def get_device(self, device_id: str) -> dict[str, Any] | None:
         return await self.fetchone("SELECT * FROM devices WHERE id=?", (device_id,))
 
     async def list_devices(
-        self,
-        device_type: str | None = None,
-        limit: int = 100,
-        offset: int = 0,
+        self, device_type: str | None = None, limit: int = 100, offset: int = 0
     ) -> list[dict[str, Any]]:
         if device_type:
             return await self.fetchall(
@@ -457,13 +463,13 @@ class Storage:
                 (device_type, limit, offset),
             )
         return await self.fetchall(
-            "SELECT * FROM devices ORDER BY last_seen DESC LIMIT ? OFFSET ?",
-            (limit, offset),
+            "SELECT * FROM devices ORDER BY last_seen DESC LIMIT ? OFFSET ?", (limit, offset)
         )
 
     # WiFi Network CRUD
     async def upsert_wifi_network(self, network: dict[str, Any]) -> None:
-        await self.execute("""
+        await self.execute(
+            """
             INSERT INTO wifi_networks (device_id, ssid, bssid, encryption, channel, frequency, signal_dbm, bandwidth, wps_enabled, wps_locked, pmf, meta)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(bssid) DO UPDATE SET
@@ -477,29 +483,28 @@ class Storage:
                 wps_locked=excluded.wps_locked,
                 pmf=excluded.pmf,
                 meta=excluded.meta
-        """, (
-            network["device_id"],
-            network.get("ssid"),
-            network["bssid"],
-            network.get("encryption"),
-            network.get("channel"),
-            network.get("frequency"),
-            network.get("signal_dbm"),
-            network.get("bandwidth"),
-            int(network.get("wps_enabled", False)),
-            int(network.get("wps_locked", False)),
-            network.get("pmf"),
-            json.dumps(network.get("meta", {})),
-        ))
+        """,
+            (
+                network["device_id"],
+                network.get("ssid"),
+                network["bssid"],
+                network.get("encryption"),
+                network.get("channel"),
+                network.get("frequency"),
+                network.get("signal_dbm"),
+                network.get("bandwidth"),
+                int(network.get("wps_enabled", False)),
+                int(network.get("wps_locked", False)),
+                network.get("pmf"),
+                json.dumps(network.get("meta", {})),
+            ),
+        )
 
     async def get_wifi_network(self, bssid: str) -> dict[str, Any] | None:
         return await self.fetchone("SELECT * FROM wifi_networks WHERE bssid=?", (bssid,))
 
     async def list_wifi_networks(
-        self,
-        encryption: str | None = None,
-        limit: int = 100,
-        offset: int = 0,
+        self, encryption: str | None = None, limit: int = 100, offset: int = 0
     ) -> list[dict[str, Any]]:
         if encryption:
             return await self.fetchall(
@@ -507,13 +512,13 @@ class Storage:
                 (encryption, limit, offset),
             )
         return await self.fetchall(
-            "SELECT * FROM wifi_networks ORDER BY signal_dbm DESC LIMIT ? OFFSET ?",
-            (limit, offset),
+            "SELECT * FROM wifi_networks ORDER BY signal_dbm DESC LIMIT ? OFFSET ?", (limit, offset)
         )
 
     # Handshake CRUD
     async def upsert_handshake(self, handshake: dict[str, Any]) -> None:
-        await self.execute("""
+        await self.execute(
+            """
             INSERT INTO wifi_handshakes (id, network_id, bssid, essid, capture_path, hash_path, hashcat_mode, crack_status, password, cracked_at, meta)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
@@ -524,21 +529,25 @@ class Storage:
                 password=excluded.password,
                 cracked_at=excluded.cracked_at,
                 meta=excluded.meta
-        """, (
-            handshake["id"],
-            handshake.get("network_id"),
-            handshake["bssid"],
-            handshake.get("essid"),
-            handshake["capture_path"],
-            handshake.get("hash_path"),
-            handshake.get("hashcat_mode"),
-            handshake.get("crack_status", "uncracked"),
-            handshake.get("password"),
-            handshake.get("cracked_at"),
-            json.dumps(handshake.get("meta", {})),
-        ))
+        """,
+            (
+                handshake["id"],
+                handshake.get("network_id"),
+                handshake["bssid"],
+                handshake.get("essid"),
+                handshake["capture_path"],
+                handshake.get("hash_path"),
+                handshake.get("hashcat_mode"),
+                handshake.get("crack_status", "uncracked"),
+                handshake.get("password"),
+                handshake.get("cracked_at"),
+                json.dumps(handshake.get("meta", {})),
+            ),
+        )
 
-    async def list_handshakes(self, status: str | None = None, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
+    async def list_handshakes(
+        self, status: str | None = None, limit: int = 100, offset: int = 0
+    ) -> list[dict[str, Any]]:
         if status:
             return await self.fetchall(
                 "SELECT * FROM wifi_handshakes WHERE crack_status=? ORDER BY cracked_at DESC LIMIT ? OFFSET ?",
@@ -551,7 +560,8 @@ class Storage:
 
     # BLE Device CRUD
     async def upsert_ble_device(self, device: dict[str, Any]) -> None:
-        await self.execute("""
+        await self.execute(
+            """
             INSERT INTO ble_devices (device_id, address_type, name, rssi, tx_power, services, manufacturer_data,
                 is_fast_pair, fast_pair_model_id, fast_pair_mode, whisperpair_vuln, whisperpair_exploited,
                 account_key_written, hfp_connected, audio_recordings, meta)
@@ -571,31 +581,34 @@ class Storage:
                 hfp_connected=excluded.hfp_connected,
                 audio_recordings=excluded.audio_recordings,
                 meta=excluded.meta
-        """, (
-            device["device_id"],
-            device.get("address_type"),
-            device.get("name"),
-            device.get("rssi"),
-            device.get("tx_power"),
-            json.dumps(device.get("services", [])),
-            json.dumps(device.get("manufacturer_data", {})),
-            int(device.get("is_fast_pair", False)),
-            device.get("fast_pair_model_id"),
-            device.get("fast_pair_mode"),
-            device.get("whisperpair_vuln"),
-            int(device.get("whisperpair_exploited", False)),
-            int(device.get("account_key_written", False)),
-            int(device.get("hfp_connected", False)),
-            device.get("audio_recordings", 0),
-            json.dumps(device.get("meta", {})),
-        ))
+        """,
+            (
+                device["device_id"],
+                device.get("address_type"),
+                device.get("name"),
+                device.get("rssi"),
+                device.get("tx_power"),
+                json.dumps(device.get("services", [])),
+                json.dumps(device.get("manufacturer_data", {})),
+                int(device.get("is_fast_pair", False)),
+                device.get("fast_pair_model_id"),
+                device.get("fast_pair_mode"),
+                device.get("whisperpair_vuln"),
+                int(device.get("whisperpair_exploited", False)),
+                int(device.get("account_key_written", False)),
+                int(device.get("hfp_connected", False)),
+                device.get("audio_recordings", 0),
+                json.dumps(device.get("meta", {})),
+            ),
+        )
 
     async def get_ble_device(self, device_id: str) -> dict[str, Any] | None:
         return await self.fetchone("SELECT * FROM ble_devices WHERE device_id=?", (device_id,))
 
     # Vulnerability CRUD
     async def upsert_vulnerability(self, vuln: dict[str, Any]) -> None:
-        await self.execute("""
+        await self.execute(
+            """
             INSERT INTO vulnerabilities (id, target_id, target_type, cve_id, name, severity, exploit_available,
                 exploit_path, metasploit_module, nuclei_template, status, exploited_at, proof, meta)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -604,22 +617,24 @@ class Storage:
                 exploited_at=excluded.exploited_at,
                 proof=excluded.proof,
                 meta=excluded.meta
-        """, (
-            vuln["id"],
-            vuln["target_id"],
-            vuln["target_type"],
-            vuln.get("cve_id"),
-            vuln["name"],
-            vuln["severity"],
-            int(vuln.get("exploit_available", False)),
-            vuln.get("exploit_path"),
-            vuln.get("metasploit_module"),
-            vuln.get("nuclei_template"),
-            vuln.get("status", "identified"),
-            vuln.get("exploited_at"),
-            json.dumps(vuln.get("proof", {})),
-            json.dumps(vuln.get("meta", {})),
-        ))
+        """,
+            (
+                vuln["id"],
+                vuln["target_id"],
+                vuln["target_type"],
+                vuln.get("cve_id"),
+                vuln["name"],
+                vuln["severity"],
+                int(vuln.get("exploit_available", False)),
+                vuln.get("exploit_path"),
+                vuln.get("metasploit_module"),
+                vuln.get("nuclei_template"),
+                vuln.get("status", "identified"),
+                vuln.get("exploited_at"),
+                json.dumps(vuln.get("proof", {})),
+                json.dumps(vuln.get("meta", {})),
+            ),
+        )
 
     async def list_vulnerabilities(
         self,
@@ -652,44 +667,50 @@ class Storage:
 
     # Credentials CRUD
     async def upsert_credential(self, cred: dict[str, Any]) -> None:
-        await self.execute("""
+        await self.execute(
+            """
             INSERT INTO credentials (id, target_id, target_type, username, password, hash, hash_type, source, captured_at, meta)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 password=excluded.password,
                 hash=excluded.hash,
                 meta=excluded.meta
-        """, (
-            cred["id"],
-            cred["target_id"],
-            cred["target_type"],
-            cred.get("username"),
-            cred.get("password"),
-            cred.get("hash"),
-            cred.get("hash_type"),
-            cred["source"],
-            cred["captured_at"],
-            json.dumps(cred.get("meta", {})),
-        ))
+        """,
+            (
+                cred["id"],
+                cred["target_id"],
+                cred["target_type"],
+                cred.get("username"),
+                cred.get("password"),
+                cred.get("hash"),
+                cred.get("hash_type"),
+                cred["source"],
+                cred["captured_at"],
+                json.dumps(cred.get("meta", {})),
+            ),
+        )
 
     # Artifact CRUD
     async def upsert_artifact(self, artifact: dict[str, Any]) -> None:
-        await self.execute("""
+        await self.execute(
+            """
             INSERT INTO artifacts (id, session_id, type, path, mime_type, size_bytes, meta, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 path=excluded.path,
                 meta=excluded.meta
-        """, (
-            artifact["id"],
-            artifact.get("session_id"),
-            artifact["type"],
-            artifact["path"],
-            artifact.get("mime_type"),
-            artifact.get("size_bytes"),
-            json.dumps(artifact.get("meta", {})),
-            artifact["created_at"],
-        ))
+        """,
+            (
+                artifact["id"],
+                artifact.get("session_id"),
+                artifact["type"],
+                artifact["path"],
+                artifact.get("mime_type"),
+                artifact.get("size_bytes"),
+                json.dumps(artifact.get("meta", {})),
+                artifact["created_at"],
+            ),
+        )
 
     async def list_artifacts(
         self,
@@ -718,21 +739,27 @@ class Storage:
 
     # Audit Session CRUD
     async def create_session(self, session: dict[str, Any]) -> None:
-        await self.execute("""
+        await self.execute(
+            """
             INSERT INTO audit_sessions (id, started_at, config_snapshot, stats, notes)
             VALUES (?, ?, ?, ?, ?)
-        """, (
-            session["id"],
-            session["started_at"],
-            json.dumps(session.get("config_snapshot", {})),
-            json.dumps(session.get("stats", {})),
-            session.get("notes", ""),
-        ))
+        """,
+            (
+                session["id"],
+                session["started_at"],
+                json.dumps(session.get("config_snapshot", {})),
+                json.dumps(session.get("stats", {})),
+                session.get("notes", ""),
+            ),
+        )
 
     async def end_session(self, session_id: str, stats: dict[str, Any]) -> None:
-        await self.execute("""
+        await self.execute(
+            """
             UPDATE audit_sessions SET ended_at=?, stats=? WHERE id=?
-        """, (int(datetime.utcnow().timestamp()), json.dumps(stats), session_id))
+        """,
+            (int(datetime.utcnow().timestamp()), json.dumps(stats), session_id),
+        )
 
     # JSONL Logging
     async def log_jsonl(self, table: str, record: dict[str, Any]) -> None:
@@ -740,6 +767,7 @@ class Storage:
         import aiofiles
 
         from urban_hs.core.config import get_config
+
         log_dir = Path(get_config().storage.resolve_jsonl_dir())
         log_dir.mkdir(parents=True, exist_ok=True)
         log_file = log_dir / f"{table}.jsonl"
@@ -773,41 +801,32 @@ class Storage:
             # Device queries
             "CREATE INDEX IF NOT EXISTS idx_devices_type_last_seen ON devices(type, last_seen DESC);",
             "CREATE INDEX IF NOT EXISTS idx_devices_mac_type ON devices(mac, type);",
-
             # WiFi network queries
             "CREATE INDEX IF NOT EXISTS idx_wifi_encryption_channel ON wifi_networks(encryption, channel);",
             "CREATE INDEX IF NOT EXISTS idx_wifi_signal_encryption ON wifi_networks(signal_dbm DESC, encryption);",
             "CREATE INDEX IF NOT EXISTS idx_wifi_vendor_encryption ON wifi_networks(vendor, encryption);",
-
             # Handshake queries
             "CREATE INDEX IF NOT EXISTS idx_handshakes_network_status ON wifi_handshakes(network_id, crack_status);",
             "CREATE INDEX IF NOT EXISTS idx_handshakes_bssid_status ON wifi_handshakes(bssid, crack_status);",
-
             # BLE device queries
             "CREATE INDEX IF NOT EXISTS idx_ble_name_rssi ON ble_devices(name, rssi DESC);",
             "CREATE INDEX IF NOT EXISTS idx_ble_fastpair_vuln ON ble_devices(is_fast_pair, whisperpair_vuln);",
             "CREATE INDEX IF NOT EXISTS idx_ble_hfp_audio ON ble_devices(hfp_connected, audio_recordings);",
-
             # Camera queries
             "CREATE INDEX IF NOT EXISTS idx_cameras_vuln_manufacturer ON cameras(vulnerable, manufacturer);",
             "CREATE INDEX IF NOT EXISTS idx_cameras_vuln_cves ON cameras(vulnerable, cves);",
-
             # Network host queries
             "CREATE INDEX IF NOT EXISTS idx_hosts_os_vulns ON network_hosts(os_guess, vulns);",
             "CREATE INDEX IF NOT EXISTS idx_hosts_ports_services ON network_hosts(ports_open);",
-
             # Vulnerability queries
             "CREATE INDEX IF NOT EXISTS idx_vulns_type_severity ON vulnerabilities(target_type, severity);",
             "CREATE INDEX IF NOT EXISTS idx_vulns_exploit_available ON vulnerabilities(exploit_available, severity);",
             "CREATE INDEX IF NOT EXISTS idx_vulns_cve_status ON vulnerabilities(cve_id, status);",
-
             # Credential queries
             "CREATE INDEX IF NOT EXISTS idx_creds_type_source ON credentials(target_type, source);",
             "CREATE INDEX IF NOT EXISTS idx_creds_hash_type ON credentials(hash_type, hash);",
-
             # Audit session queries
             "CREATE INDEX IF NOT EXISTS idx_sessions_time_range ON audit_sessions(started_at, ended_at);",
-
             # Artifact queries
             "CREATE INDEX IF NOT EXISTS idx_artifacts_type_time ON artifacts(type, created_at DESC);",
             "CREATE INDEX IF NOT EXISTS idx_artifacts_session_type ON artifacts(session_id, type);",
@@ -872,7 +891,9 @@ class Storage:
                 "page_count": page_count[0] if page_count else 0,
                 "page_size": page_size[0] if page_size else 0,
                 "freelist_count": freelist[0] if freelist else 0,
-                "db_size_mb": (page_count[0] * page_size[0]) / (1024 * 1024) if page_count and page_size else 0,
+                "db_size_mb": (page_count[0] * page_size[0]) / (1024 * 1024)
+                if page_count and page_size
+                else 0,
             }
 
             await conn.commit()
@@ -890,7 +911,11 @@ class Storage:
             page_count_before = await cursor.fetchone()
             cursor = await conn.execute("PRAGMA page_size;")
             page_size = await cursor.fetchone()
-            size_before = (page_count_before[0] * page_size[0]) / (1024 * 1024) if page_count_before and page_size else 0
+            size_before = (
+                (page_count_before[0] * page_size[0]) / (1024 * 1024)
+                if page_count_before and page_size
+                else 0
+            )
 
             if full:
                 await conn.execute("VACUUM;")
@@ -903,7 +928,11 @@ class Storage:
             page_count_after = await cursor.fetchone()
             cursor = await conn.execute("PRAGMA page_size;")
             page_size = await cursor.fetchone() if page_size is None else page_size
-            size_after = (page_count_after[0] * page_size[0]) / (1024 * 1024) if page_count_after and page_size else 0
+            size_after = (
+                (page_count_after[0] * page_size[0]) / (1024 * 1024)
+                if page_count_after and page_size
+                else 0
+            )
 
             results["size_before_mb"] = round(size_before, 2)
             results["size_after_mb"] = round(size_after, 2)

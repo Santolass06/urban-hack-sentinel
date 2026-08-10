@@ -17,6 +17,7 @@ import structlog
 
 try:
     import aiohttp
+
     AIOHTTP_AVAILABLE = True
 except ImportError:
     AIOHTTP_AVAILABLE = False
@@ -26,6 +27,7 @@ logger = structlog.get_logger(__name__)
 
 class MsfModuleType(Enum):
     """Metasploit module types."""
+
     EXPLOIT = "exploit"
     AUXILIARY = "auxiliary"
     POST = "post"
@@ -37,6 +39,7 @@ class MsfModuleType(Enum):
 
 class MsfSessionType(Enum):
     """Metasploit session types."""
+
     METERPRETER = "meterpreter"
     SHELL = "shell"
     VNC = "vnc"
@@ -46,6 +49,7 @@ class MsfSessionType(Enum):
 @dataclass
 class MsfModule:
     """Metasploit module information."""
+
     fullname: str
     name: str
     type: MsfModuleType
@@ -64,6 +68,7 @@ class MsfModule:
 @dataclass
 class MsfSession:
     """Metasploit session information."""
+
     id: int
     type: MsfSessionType
     tunnel_local: str
@@ -88,6 +93,7 @@ class MsfSession:
 @dataclass
 class MsfJob:
     """Metasploit background job."""
+
     id: int
     name: str
     start_time: datetime
@@ -100,6 +106,7 @@ class MsfJob:
 @dataclass
 class MsfConfig:
     """Metasploit RPC configuration."""
+
     host: str = "127.0.0.1"
     port: int = 55553
     username: str = "msf"
@@ -123,7 +130,7 @@ class MsfConfig:
 class MetasploitRPC:
     """
     Async Metasploit RPC (msgrpc) client.
-    
+
     Uses MessagePack over HTTP(S) for communication with msgrpc service.
     Provides full module search/execution, session management, and meterpreter interaction.
     """
@@ -155,10 +162,7 @@ class MetasploitRPC:
             timeout = aiohttp.ClientTimeout(total=self.config.timeout)
             connector = aiohttp.TCPConnector(ssl=ssl_context)
 
-            self._session = aiohttp.ClientSession(
-                connector=connector,
-                timeout=timeout,
-            )
+            self._session = aiohttp.ClientSession(connector=connector, timeout=timeout)
 
             # Authenticate
             auth_result = await self._call("auth.login", self.config.username, self.config.password)
@@ -166,14 +170,18 @@ class MetasploitRPC:
             if auth_result.get("result") == "success":
                 self._token = auth_result.get("token")
                 self._connected = True
-                logger.info("Connected to Metasploit RPC", host=self.config.host, port=self.config.port)
+                logger.info(
+                    "Connected to Metasploit RPC", host=self.config.host, port=self.config.port
+                )
 
                 # Load existing jobs and sessions
                 await self._refresh_jobs()
                 await self._refresh_sessions()
 
                 return True
-            logger.error("Metasploit authentication failed", error=auth_result.get("error", "Unknown"))
+            logger.error(
+                "Metasploit authentication failed", error=auth_result.get("error", "Unknown")
+            )
             await self.disconnect()
             return False
 
@@ -216,9 +224,7 @@ class MetasploitRPC:
 
         try:
             async with self._session.post(
-                self.config.uri,
-                data=packed,
-                headers={"Content-Type": "application/msgpack"},
+                self.config.uri, data=packed, headers={"Content-Type": "application/msgpack"}
             ) as response:
                 if response.status != 200:
                     raise RuntimeError(f"HTTP {response.status}: {await response.text()}")
@@ -260,7 +266,9 @@ class MetasploitRPC:
                 self._jobs[int(job_id)] = MsfJob(
                     id=int(job_id),
                     name=job_info.get("name", ""),
-                    start_time=datetime.fromisoformat(job_info.get("start_time", datetime.now().isoformat())),
+                    start_time=datetime.fromisoformat(
+                        job_info.get("start_time", datetime.now().isoformat())
+                    ),
                     status=job_info.get("status", "unknown"),
                     module=job_info.get("module", ""),
                     workspace=job_info.get("workspace", "default"),
@@ -307,21 +315,23 @@ class MetasploitRPC:
 
         modules = []
         for mod in modules_data:
-            modules.append(MsfModule(
-                fullname=mod.get("fullname", ""),
-                name=mod.get("name", ""),
-                type=MsfModuleType(mod.get("type", "unknown")),
-                description=mod.get("description", ""),
-                references=mod.get("references", []),
-                authors=mod.get("authors", []),
-                platform=mod.get("platform", []),
-                arch=mod.get("arch", []),
-                targets=mod.get("targets", []),
-                options=mod.get("options", {}),
-                required_options=mod.get("required", []),
-                advanced_options=mod.get("advanced", {}),
-                evasion_options=mod.get("evasion", {}),
-            ))
+            modules.append(
+                MsfModule(
+                    fullname=mod.get("fullname", ""),
+                    name=mod.get("name", ""),
+                    type=MsfModuleType(mod.get("type", "unknown")),
+                    description=mod.get("description", ""),
+                    references=mod.get("references", []),
+                    authors=mod.get("authors", []),
+                    platform=mod.get("platform", []),
+                    arch=mod.get("arch", []),
+                    targets=mod.get("targets", []),
+                    options=mod.get("options", {}),
+                    required_options=mod.get("required", []),
+                    advanced_options=mod.get("advanced", {}),
+                    evasion_options=mod.get("evasion", {}),
+                )
+            )
 
         return modules
 
@@ -361,7 +371,7 @@ class MetasploitRPC:
     ) -> dict[str, Any]:
         """
         Execute a module with given options.
-        
+
         Returns job ID or session info depending on module type.
         """
         params = [module_type.value, module_name, options]
@@ -387,7 +397,7 @@ class MetasploitRPC:
     ) -> dict[str, Any]:
         """
         Execute an exploit module against a target.
-        
+
         Returns job ID if background, or session info if successful.
         """
         options = options or {}
@@ -403,37 +413,24 @@ class MetasploitRPC:
         )
 
     async def auxiliary_execute(
-        self,
-        auxiliary_name: str,
-        target: str,
-        options: dict[str, Any] | None = None,
+        self, auxiliary_name: str, target: str, options: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         """Execute an auxiliary module (scanner, etc.)."""
         options = options or {}
         options["RHOSTS"] = target
 
         return await self.module_execute(
-            MsfModuleType.AUXILIARY,
-            auxiliary_name,
-            options,
-            target=target,
+            MsfModuleType.AUXILIARY, auxiliary_name, options, target=target
         )
 
     async def post_execute(
-        self,
-        post_name: str,
-        session_id: int,
-        options: dict[str, Any] | None = None,
+        self, post_name: str, session_id: int, options: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         """Execute a post-exploitation module on a session."""
         options = options or {}
         options["SESSION"] = session_id
 
-        return await self.module_execute(
-            MsfModuleType.POST,
-            post_name,
-            options,
-        )
+        return await self.module_execute(MsfModuleType.POST, post_name, options)
 
     # === Session Management ===
 

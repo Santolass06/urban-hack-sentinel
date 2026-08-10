@@ -23,14 +23,16 @@ logger = structlog.get_logger(__name__)
 
 class ChrootExecMode(Enum):
     """Execution mode for chroot commands."""
-    CHROOT = "chroot"           # Standard chroot (requires root)
-    NSENTER = "nsenter"         # nsenter (preferred, more isolation)
+
+    CHROOT = "chroot"  # Standard chroot (requires root)
+    NSENTER = "nsenter"  # nsenter (preferred, more isolation)
     UNPRIVILEGED = "unprivileged"  # user namespaces (rootless)
 
 
 @dataclass
 class ChrootConfig:
     """Configuration for chroot execution."""
+
     chroot_path: str = "/opt/urban-hs/chroot/alpine"
     mode: ChrootExecMode = ChrootExecMode.NSENTER
     bind_mounts: dict[str, str] = field(default_factory=dict)
@@ -50,6 +52,7 @@ class ChrootConfig:
 @dataclass
 class ProcessResult:
     """Result of a chroot process execution."""
+
     command: str
     returncode: int
     stdout: str
@@ -62,7 +65,7 @@ class ProcessResult:
 class ChrootProcessManager:
     """
     Manages process execution inside Alpine chroot.
-    
+
     Features:
     - Multiple execution modes (chroot, nsenter, unprivileged)
     - Configurable bind mounts
@@ -77,6 +80,7 @@ class ChrootProcessManager:
         self.config = config or ChrootConfig()
         self._active_processes: dict[int, asyncio.subprocess.Process] = {}
         from urban_hs.core.config import get_config
+
         cfg = get_config()
         self._default_binds = {
             "/proc": "/proc",
@@ -166,13 +170,13 @@ class ChrootProcessManager:
     ) -> ProcessResult:
         """
         Execute command in chroot.
-        
+
         Args:
             cmd: Command to execute (string or list)
             timeout: Timeout in seconds (overrides config)
             input_data: Optional stdin input
             progress_callback: Called with (stream_name, line) for stdout/stderr
-            
+
         Returns:
             ProcessResult with execution details
         """
@@ -220,8 +224,7 @@ class ChrootProcessManager:
 
             try:
                 await asyncio.wait_for(
-                    asyncio.gather(stdout_task, stderr_task, proc.wait()),
-                    timeout=timeout
+                    asyncio.gather(stdout_task, stderr_task, proc.wait()), timeout=timeout
                 )
                 returncode = proc.returncode
                 timed_out = False
@@ -243,7 +246,7 @@ class ChrootProcessManager:
                 timed_out=False,
             )
         finally:
-            if 'proc' in locals() and proc.pid in self._active_processes:
+            if "proc" in locals() and proc.pid in self._active_processes:
                 del self._active_processes[proc.pid]
 
         duration_ms = int((time.time() - start_time) * 1000)
@@ -255,7 +258,7 @@ class ChrootProcessManager:
             stderr="\n".join(stderr_lines),
             duration_ms=duration_ms,
             timed_out=timed_out,
-            pid=proc.pid if 'proc' in locals() else None,
+            pid=proc.pid if "proc" in locals() else None,
         )
 
     async def execute_streaming(
@@ -267,13 +270,14 @@ class ChrootProcessManager:
     ) -> ProcessResult:
         """
         Execute command with real-time streaming callbacks.
-        
+
         Args:
             cmd: Command to execute
             timeout: Timeout in seconds
             on_stdout: Callback for each stdout line
             on_stderr: Callback for each stderr line
         """
+
         def progress_cb(stream, line):
             if stream == "stdout" and on_stdout:
                 on_stdout(line)
@@ -305,10 +309,7 @@ class ChrootProcessManager:
         return await self.execute(cmd, timeout, progress_callback=progress_callback)
 
     async def run_python(
-        self,
-        code: str,
-        timeout: int | None = None,
-        args: list[str] = None,
+        self, code: str, timeout: int | None = None, args: list[str] = None
     ) -> ProcessResult:
         """Run Python code in chroot."""
         args = args or []
@@ -339,7 +340,7 @@ class ChrootProcessManager:
 class ChrootManager:
     """
     High-level chroot lifecycle manager.
-    
+
     Handles:
     - Bootstrap (delegates to bootstrap_chroot.sh)
     - Mount/umount bind mounts
@@ -379,9 +380,7 @@ class ChrootManager:
 
         # Run as root (required for chroot bootstrap)
         result = await asyncio.create_subprocess_exec(
-            "sudo", str(script_path),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            "sudo", str(script_path), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         stdout, stderr = await result.communicate()
 
@@ -422,10 +421,7 @@ class ChrootManager:
             return
 
         # Unmount in reverse order
-        mounts = [
-            "/data", "/artifacts", "/logs",
-            "/run", "/dev/pts", "/dev", "/sys", "/proc"
-        ]
+        mounts = ["/data", "/artifacts", "/logs", "/run", "/dev/pts", "/dev", "/sys", "/proc"]
 
         for m in mounts:
             path = os.path.join(self.chroot_path, m.lstrip("/"))
@@ -449,9 +445,7 @@ class ChrootManager:
 
 # Convenience functions
 async def quick_chroot_cmd(
-    cmd: str | list[str],
-    chroot_path: str = "/opt/urban-hs/chroot/alpine",
-    timeout: int = 60,
+    cmd: str | list[str], chroot_path: str = "/opt/urban-hs/chroot/alpine", timeout: int = 60
 ) -> ProcessResult:
     """Quick one-off command execution in chroot."""
     config = ChrootConfig(chroot_path=chroot_path, timeout=timeout)
@@ -460,9 +454,7 @@ async def quick_chroot_cmd(
 
 
 async def run_in_chroot(
-    script: str,
-    chroot_path: str = "/opt/urban-hs/chroot/alpine",
-    timeout: int = 300,
+    script: str, chroot_path: str = "/opt/urban-hs/chroot/alpine", timeout: int = 300
 ) -> ProcessResult:
     """Run a script file in chroot."""
     return await quick_chroot_cmd([script], chroot_path, timeout)

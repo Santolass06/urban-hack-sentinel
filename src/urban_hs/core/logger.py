@@ -56,7 +56,7 @@ def setup_logging(
 ) -> None:
     """
     Configure structured logging.
-    
+
     Args:
         level: Log level (TRACE, DEBUG, INFO, WARNING, ERROR, CRITICAL)
         jsonl_dir: Directory for JSONL logs (per-module files). Defaults to Config.storage.jsonl_dir.
@@ -65,6 +65,7 @@ def setup_logging(
     """
     if jsonl_dir is None:
         from urban_hs.core.config import get_config
+
         jsonl_dir = get_config().storage.resolve_jsonl_dir()
     # Parse level
     log_level = getattr(logging, level.upper(), logging.INFO)
@@ -130,11 +131,7 @@ def setup_logging(
     )
 
     # Also configure stdlib logging to route through structlog
-    logging.basicConfig(
-        format="%(message)s",
-        stream=sys.stdout,
-        level=log_level,
-    )
+    logging.basicConfig(format="%(message)s", stream=sys.stdout, level=log_level)
 
 
 def get_logger(name: str = None) -> structlog.BoundLogger:

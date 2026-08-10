@@ -152,10 +152,7 @@ class TUIApp(App):
     }
     """
 
-    BINDINGS = [
-        ("q", "app.quit", "Quit"),
-        ("d", "toggle_dark", "Toggle dark mode"),
-    ]
+    BINDINGS = [("q", "app.quit", "Quit"), ("d", "toggle_dark", "Toggle dark mode")]
 
     def __init__(self) -> None:
         super().__init__()
@@ -164,6 +161,7 @@ class TUIApp(App):
         self._attack_log: list[str] = []
         self._wifi_plugin: Any = None
         self._ble_plugin: Any = None
+        self._urban_plugin: Any = None
         # Strong refs: bus.subscribe() stores handlers in a WeakSet, so
         # anything not held here would be garbage-collected and silently
         # stop receiving events.
@@ -182,6 +180,7 @@ class TUIApp(App):
                             Button("Scan", id="btn-wifi-scan", variant="primary"),
                             Button("Interfaces", id="btn-wifi-interfaces"),
                             Button("GPS Wardrive", id="btn-wifi-gps"),
+                            Button("⚡ Attack All", id="btn-attack-all", variant="error"),
                             classes="btn-row",
                         ),
                         Horizontal(
@@ -263,7 +262,10 @@ class TUIApp(App):
                 with TabPane("Terminal", id="tab-terminal"):
                     yield Vertical(
                         RichLog(id="terminal-log", auto_scroll=True, markup=True),
-                        Input(placeholder="Digita um comando bash/CLI (ex: urban-hs info, iw dev, ping 1.1.1.1)...", id="cmd-input"),
+                        Input(
+                            placeholder="Digita um comando bash/CLI (ex: urban-hs info, iw dev, ping 1.1.1.1)...",
+                            id="cmd-input",
+                        ),
                     )
                 with TabPane("Logs", id="tab-logs"):
                     yield RichLog(id="app-log", auto_scroll=True, markup=True)
@@ -368,7 +370,10 @@ class TUIApp(App):
             hosts = message.payload.get("hosts", [])
             results = self.query_one("#net-results", Static)
             if hosts:
-                lines = [f"{h.get('ip', '?')} — {h.get('hostname', '')} ({h.get('os_guess', '')})" for h in hosts]
+                lines = [
+                    f"{h.get('ip', '?')} — {h.get('hostname', '')} ({h.get('os_guess', '')})"
+                    for h in hosts
+                ]
                 results.update("\n".join(lines))
             else:
                 results.update("(no hosts found on LAN)")
@@ -428,12 +433,18 @@ class TUIApp(App):
             logs.write("[yellow]Running SSID Confusion assessment…[/yellow]")
             asyncio.create_task(self._ssid_confusion())
         elif bid == "btn-wifi-fragattacks":
-            self._confirm("Run FragAttacks (CVE-2020-2458x) on selected network?", self._wifi_fragattacks)
+            self._confirm(
+                "Run FragAttacks (CVE-2020-2458x) on selected network?", self._wifi_fragattacks
+            )
         elif bid == "btn-wifi-krook":
             self._confirm("Run Kr00k (CVE-2019-15126) attack?", self._wifi_krook)
         elif bid == "btn-wifi-gps":
             logs.write("[yellow]Starting GPS Wardriving tick…[/yellow]")
             asyncio.create_task(self._wifi_gps_wardrive())
+        elif bid == "btn-attack-all":
+            self._confirm(
+                "⚡ ATTACK ALL discovered WiFi + BLE targets in parallel?", self._attack_all
+            )
         elif bid == "btn-ble-scan":
             logs.write("[yellow]Triggering BLE scan…[/yellow]")
             asyncio.create_task(self._ble_scan())
@@ -554,8 +565,12 @@ class TUIApp(App):
             targets = await detector.scan_networks()
             ft = [t for t in targets if t.ft_enabled]
             if ft:
-                lines = [f"{t.bssid} {t.ssid} ({t.security_type}) MD={t.mobility_domain}" for t in ft]
-                results.update(f"802.11r FT-capable ({len(ft)}/{len(targets)}):\n" + "\n".join(lines))
+                lines = [
+                    f"{t.bssid} {t.ssid} ({t.security_type}) MD={t.mobility_domain}" for t in ft
+                ]
+                results.update(
+                    f"802.11r FT-capable ({len(ft)}/{len(targets)}):\n" + "\n".join(lines)
+                )
             else:
                 results.update(f"802.11r FT scan: {len(targets)} networks, none FT-capable.")
         except Exception as exc:
@@ -583,6 +598,28 @@ class TUIApp(App):
         except Exception as exc:
             logs.write(f"[red]GPS wardrive failed: {exc}[/red]")
 
+    async def _attack_all(self) -> None:
+        results = self.query_one("#wifi-results", Static)
+        results.update(
+            "[yellow]⚡ Attack All: fanning out every discovered target (WiFi + BLE)...[/yellow]"
+        )
+        try:
+            from urban_hs.modules.urban_hack import UrbanHackConfig, create_urban_hack_plugin
+
+            if self._urban_plugin is None:
+                self._urban_plugin = await create_urban_hack_plugin(UrbanHackConfig())
+            summary = await self._urban_plugin.attack_all(
+                progress_callback=lambda m: self.query_one("#app-log", RichLog).write(
+                    f"[dim]{m}[/dim]"
+                )
+            )
+            results.update(
+                f"Attack All: dispatched {summary['dispatched']}, ok={summary['ok']}, "
+                f"errors={len(summary['errors'])}"
+            )
+        except Exception as exc:
+            results.update(f"Attack All failed: {exc}")
+
     async def _ssid_confusion(self) -> None:
         results = self.query_one("#wifi-results", Static)
         results.update("[yellow]Running SSID Confusion assessment (CVE-2023-52425)...[/yellow]")
@@ -592,7 +629,9 @@ class TUIApp(App):
             iface = self._get_selected_wifi_interface()
             report = await scan_ssid_confusion(interface=iface)
             vulnerable = report.get("vulnerable", report.get("results", []))
-            results.update(f"SSID Confusion: {len(vulnerable)} candidate(s). {report.get('summary', '')}")
+            results.update(
+                f"SSID Confusion: {len(vulnerable)} candidate(s). {report.get('summary', '')}"
+            )
         except Exception as exc:
             results.update(f"SSID Confusion scan failed: {exc}")
 
@@ -675,6 +714,7 @@ class TUIApp(App):
         results.update("[yellow]Running Nuclei vulnerability scan on LAN...[/yellow]")
         try:
             from urban_hs.modules.network import NucleiRunner
+
             runner = NucleiRunner()
             vulns = await runner.scan("192.168.1.1")
             if vulns:
@@ -684,7 +724,9 @@ class TUIApp(App):
                 ]
                 results.update("\n".join(lines))
             else:
-                results.update("Nuclei scan completed: No critical vulnerabilities found on target.")
+                results.update(
+                    "Nuclei scan completed: No critical vulnerabilities found on target."
+                )
         except Exception as exc:
             results.update(f"Nuclei scan error: {exc}")
 
@@ -693,6 +735,7 @@ class TUIApp(App):
         results.update("[yellow]Discovering IP Cameras (ONVIF/RTSP/mDNS)...[/yellow]")
         try:
             from urban_hs.modules.network import CameraDiscovery
+
             disc = CameraDiscovery()
             cams = await disc.discover_cameras(network=self._get_subnet_target())
             if cams:
@@ -720,7 +763,9 @@ class TUIApp(App):
                 ]
                 results.update("\n".join(lines))
             else:
-                results.update("ESP32 Probe completed: No vulnerable ESP32 microcontrollers detected.")
+                results.update(
+                    "ESP32 Probe completed: No vulnerable ESP32 microcontrollers detected."
+                )
         except Exception as exc:
             results.update(f"ESP32 Probe error: {exc}")
 
@@ -746,14 +791,18 @@ class TUIApp(App):
         results = self.query_one("#net-results", Static)
         # Router IP: the subnet input with the host octet forced to .1 (gateway).
         target = self._get_subnet_target().split("/")[0].rsplit(".", 1)[0] + ".1"
-        results.update(f"[yellow]Router vulnerability scan (RouterSploit autopwn) on {target}...[/yellow]")
+        results.update(
+            f"[yellow]Router vulnerability scan (RouterSploit autopwn) on {target}...[/yellow]"
+        )
         try:
             from urban_hs.modules.network.router import RouterScanner
 
             findings = await RouterScanner().scan_router(target_ip=target)
             if findings:
                 lines = [f"[VULN] {f.get('module')}" for f in findings]
-                results.update(f"Router scan on {target}: {len(findings)} vulnerable\n" + "\n".join(lines))
+                results.update(
+                    f"Router scan on {target}: {len(findings)} vulnerable\n" + "\n".join(lines)
+                )
             else:
                 results.update(f"Router scan on {target}: no known vulnerabilities found.")
         except Exception as exc:
@@ -824,7 +873,9 @@ class TUIApp(App):
             pass
         return "192.168.1.0/24"
 
-    def _publish_wifi_attack(self, attack_type: str, extra_params: dict[str, Any] | None = None) -> None:
+    def _publish_wifi_attack(
+        self, attack_type: str, extra_params: dict[str, Any] | None = None
+    ) -> None:
         import uuid
         from datetime import UTC, datetime
 
@@ -833,12 +884,7 @@ class TUIApp(App):
 
         bssid = self._get_selected_wifi_bssid()
         iface = self._get_selected_wifi_interface()
-        payload = {
-            "type": attack_type,
-            "bssid": bssid,
-            "interface": iface,
-            **(extra_params or {}),
-        }
+        payload = {"type": attack_type, "bssid": bssid, "interface": iface, **(extra_params or {})}
         bus = get_event_bus()
         event = Event(
             type="wifi.attack_request",
@@ -852,7 +898,9 @@ class TUIApp(App):
         asyncio.create_task(bus.publish(event))
         try:
             logs = self.query_one("#app-log", RichLog)
-            logs.write(f"[bold green]Dispatched WiFi attack '{attack_type}' to target {bssid} on {iface}[/bold green]")
+            logs.write(
+                f"[bold green]Dispatched WiFi attack '{attack_type}' to target {bssid} on {iface}[/bold green]"
+            )
         except Exception:
             pass
 
@@ -868,14 +916,16 @@ class TUIApp(App):
             nets = await scanner.scan(duration=30)
             self._wifi_networks = [n.to_dict() for n in nets]
             self._refresh_wifi_table()
-            self.post_message(EventMessage(
-                "wifi.scan.completed",
-                {
-                    "count": len(self._wifi_networks),
-                    "networks": self._wifi_networks,
-                    "simulated": False,
-                },
-            ))
+            self.post_message(
+                EventMessage(
+                    "wifi.scan.completed",
+                    {
+                        "count": len(self._wifi_networks),
+                        "networks": self._wifi_networks,
+                        "simulated": False,
+                    },
+                )
+            )
         except Exception as exc:
             self.post_message(EventMessage("wifi.scan.error", {"error": str(exc)}))
 
@@ -885,10 +935,7 @@ class TUIApp(App):
 
             result = await list_wifi_interfaces()
             ifaces = result.get("interfaces", [])
-            self.post_message(EventMessage(
-                "wifi.interfaces.listed",
-                {"interfaces": ifaces},
-            ))
+            self.post_message(EventMessage("wifi.interfaces.listed", {"interfaces": ifaces}))
         except Exception as exc:
             self.post_message(EventMessage("wifi.interfaces.error", {"error": str(exc)}))
 
@@ -900,7 +947,9 @@ class TUIApp(App):
             # Ensure Bluetooth power is ON via bluetoothctl / hciconfig
             try:
                 proc = await asyncio.create_subprocess_exec(
-                    "bluetoothctl", "power", "on",
+                    "bluetoothctl",
+                    "power",
+                    "on",
                     stdout=asyncio.subprocess.DEVNULL,
                     stderr=asyncio.subprocess.DEVNULL,
                 )
@@ -916,18 +965,18 @@ class TUIApp(App):
             await asyncio.sleep(10)
             await scanner.stop()
             devices = scanner.get_devices()
-            self._ble_devices = [
-                d.to_dict() if hasattr(d, "to_dict") else vars(d) for d in devices
-            ]
+            self._ble_devices = [d.to_dict() if hasattr(d, "to_dict") else vars(d) for d in devices]
             self._refresh_ble_table()
-            self.post_message(EventMessage(
-                "ble.scan.completed",
-                {
-                    "count": len(self._ble_devices),
-                    "devices": self._ble_devices,
-                    "simulated": False,
-                },
-            ))
+            self.post_message(
+                EventMessage(
+                    "ble.scan.completed",
+                    {
+                        "count": len(self._ble_devices),
+                        "devices": self._ble_devices,
+                        "simulated": False,
+                    },
+                )
+            )
         except Exception as exc:
             logs.write(f"[red]BLE scan error: {exc}[/red]")
             self.post_message(EventMessage("ble.scan.error", {"error": str(exc)}))
@@ -938,15 +987,15 @@ class TUIApp(App):
 
             module = NetworkModule()
             hosts = await module.nmap.scan(
-                ["192.168.1.0/24"],
-                scan_type=ScanType.HOST_DISCOVERY,
-                timeout=60,
+                ["192.168.1.0/24"], scan_type=ScanType.HOST_DISCOVERY, timeout=60
             )
             result = [vars(h) for h in hosts]
-            self.post_message(EventMessage(
-                "network.scan.completed",
-                {"count": len(result), "hosts": result, "simulated": False},
-            ))
+            self.post_message(
+                EventMessage(
+                    "network.scan.completed",
+                    {"count": len(result), "hosts": result, "simulated": False},
+                )
+            )
         except Exception as exc:
             self.post_message(EventMessage("network.scan.error", {"error": str(exc)}))
 
@@ -962,9 +1011,7 @@ class TUIApp(App):
         log.write(f"[bold green]$ {cmd}[/bold green]")
         try:
             proc = await asyncio.create_subprocess_shell(
-                cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await proc.communicate()
             if stdout:

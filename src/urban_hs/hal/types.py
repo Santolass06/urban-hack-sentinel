@@ -23,6 +23,7 @@ class BLEDeviceType(Enum):
 @dataclass
 class BLEDevice:
     """Information about a discovered BLE device."""
+
     address: str
     name: str | None = None
     rssi: int = -100
@@ -46,7 +47,9 @@ class BLEDevice:
             "address": self.address,
             "name": self.name,
             "rssi": self.rssi,
-            "device_type": self.device_type.value if isinstance(self.device_type, BLEDeviceType) else self.device_type,
+            "device_type": self.device_type.value
+            if isinstance(self.device_type, BLEDeviceType)
+            else self.device_type,
             "fast_pair_model_id": self.fast_pair_model_id,
             "fast_pair_in_pairing_mode": self.fast_pair_in_pairing_mode,
             "has_account_key_filter": self.has_account_key_filter,

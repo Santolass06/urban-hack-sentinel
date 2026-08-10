@@ -43,11 +43,13 @@ def _reset_rate_limiter():
 def _open_session_scope():
     """Default to an open scope so non-exploit tests pass."""
     original = SessionScope()
-    set_session_scope(SessionScope(
-        allow_active=True,
-        allowed_targets={"*"},
-        allowed_categories={"wifi", "ble", "network", "exploit"},
-    ))
+    set_session_scope(
+        SessionScope(
+            allow_active=True,
+            allowed_targets={"*"},
+            allowed_categories={"wifi", "ble", "network", "exploit"},
+        )
+    )
     yield
     set_session_scope(original)
 
@@ -71,15 +73,15 @@ def test_execute_known_attack_returns_job(client: TestClient, auth_headers: dict
 
 def test_execute_unknown_attack_returns_404(client: TestClient, auth_headers: dict) -> None:
     response = client.post(
-        "/api/v1/attacks/does_not_exist/execute",
-        json={"params": {}},
-        headers=auth_headers,
+        "/api/v1/attacks/does_not_exist/execute", json={"params": {}}, headers=auth_headers
     )
 
     assert response.status_code == 404
 
 
-def test_execute_dry_run_returns_job_without_process(client: TestClient, auth_headers: dict) -> None:
+def test_execute_dry_run_returns_job_without_process(
+    client: TestClient, auth_headers: dict
+) -> None:
     from urban_hs.modules import list_modules
 
     attack_name = next(iter(list_modules()))
@@ -95,23 +97,22 @@ def test_execute_dry_run_returns_job_without_process(client: TestClient, auth_he
 
 
 def test_execute_unauthorized_returns_401(client: TestClient) -> None:
-    response = client.post(
-        "/api/v1/attacks/some_attack/execute",
-        json={"params": {}},
-    )
+    response = client.post("/api/v1/attacks/some_attack/execute", json={"params": {}})
     assert response.status_code == 401
 
 
-def test_execute_exploit_without_guard_rails_returns_403(client: TestClient, auth_headers: dict) -> None:
+def test_execute_exploit_without_guard_rails_returns_403(
+    client: TestClient, auth_headers: dict
+) -> None:
     cfg = get_config()
     cfg.wifi.enable_active_attacks = False
     cfg.wifi.legal_warning_shown = False
     # Configure session scope to allow exploit so the exploit-specific guard rail is tested
-    set_session_scope(SessionScope(
-        allow_active=True,
-        allowed_targets={"10.0.0.5", "*"},
-        allowed_categories={"exploit"},
-    ))
+    set_session_scope(
+        SessionScope(
+            allow_active=True, allowed_targets={"10.0.0.5", "*"}, allowed_categories={"exploit"}
+        )
+    )
     try:
         response = client.post(
             "/api/v1/attacks/exploit/execute",
@@ -125,15 +126,17 @@ def test_execute_exploit_without_guard_rails_returns_403(client: TestClient, aut
         cfg.wifi.enable_active_attacks = False
 
 
-def test_execute_exploit_with_only_one_guard_rail_still_denied(client: TestClient, auth_headers: dict) -> None:
+def test_execute_exploit_with_only_one_guard_rail_still_denied(
+    client: TestClient, auth_headers: dict
+) -> None:
     cfg = get_config()
     cfg.wifi.enable_active_attacks = True
     cfg.wifi.legal_warning_shown = False
-    set_session_scope(SessionScope(
-        allow_active=True,
-        allowed_targets={"10.0.0.5", "*"},
-        allowed_categories={"exploit"},
-    ))
+    set_session_scope(
+        SessionScope(
+            allow_active=True, allowed_targets={"10.0.0.5", "*"}, allowed_categories={"exploit"}
+        )
+    )
     try:
         response = client.post(
             "/api/v1/attacks/exploit/execute",
@@ -152,11 +155,11 @@ def test_execute_exploit_with_guard_rails_satisfied_dispatches_real_runner(
     cfg.wifi.enable_active_attacks = True
     cfg.wifi.legal_warning_shown = True
     cfg.storage.artifact_root = str(tmp_path / "artifacts")
-    set_session_scope(SessionScope(
-        allow_active=True,
-        allowed_targets={"10.0.0.5", "*"},
-        allowed_categories={"exploit"},
-    ))
+    set_session_scope(
+        SessionScope(
+            allow_active=True, allowed_targets={"10.0.0.5", "*"}, allowed_categories={"exploit"}
+        )
+    )
     try:
         response = client.post(
             "/api/v1/attacks/exploit/execute",
@@ -221,3 +224,16 @@ def test_execute_rate_limit_triggers_429(client: TestClient, auth_headers: dict)
         ).status_code
 
     assert last_status == 429
+
+
+def test_attack_all_endpoint_dispatches(client: TestClient, auth_headers: dict) -> None:
+    """POST /attacks/attack-all returns a job id without blocking on the fan-out."""
+    response = client.post(
+        "/api/v1/attacks/attack-all",
+        json={"active": False, "ble_exploit": False},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "dispatched"
+    assert "job_id" in body

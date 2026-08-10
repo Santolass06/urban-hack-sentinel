@@ -45,16 +45,19 @@ class HFPAudioCapture:
         if not target_address:
             raise ValueError("target_address is required for HFP audio capture")
         self.target_address = target_address
-        self.output_file = output_file or Path(
-            tempfile.gettempdir()
-        ) / f"hfp_{target_address.replace(':', '')}.wav"
+        self.output_file = (
+            output_file
+            or Path(tempfile.gettempdir()) / f"hfp_{target_address.replace(':', '')}.wav"
+        )
         self.duration = duration
         self.event_bus = event_bus
         self._process: asyncio.subprocess.Process | None = None
         self.session = HFPSession(target_address=target_address)
 
     async def start(self) -> None:
-        logger.info("Starting HFP capture", target=self.target_address, output=str(self.output_file))
+        logger.info(
+            "Starting HFP capture", target=self.target_address, output=str(self.output_file)
+        )
         pcm = self._detect_pcm_device()
         if pcm is None:
             raise RuntimeError(
@@ -66,7 +69,11 @@ class HFPAudioCapture:
             try:
                 await self.event_bus.publish(
                     "hfp.started",
-                    {"target_address": self.target_address, "pcm": pcm, "output": str(self.output_file)},
+                    {
+                        "target_address": self.target_address,
+                        "pcm": pcm,
+                        "output": str(self.output_file),
+                    },
                 )
             except Exception as exc:
                 logger.debug("hfp.started publish failed", error=str(exc))

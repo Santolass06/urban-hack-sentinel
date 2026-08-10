@@ -14,23 +14,17 @@ class WiFiBackend(ABC):
 
     @abstractmethod
     async def scan(
-        self,
-        channels: list[int] | None = None,
-        duration: int = 30,
-    ) -> list[NetworkInfo]:
-        ...
+        self, channels: list[int] | None = None, duration: int = 30
+    ) -> list[NetworkInfo]: ...
 
     @abstractmethod
-    async def set_channel(self, channel: int) -> bool:
-        ...
+    async def set_channel(self, channel: int) -> bool: ...
 
     @abstractmethod
-    async def set_mode(self, mode: str) -> bool:
-        ...
+    async def set_mode(self, mode: str) -> bool: ...
 
     @abstractmethod
-    def name(self) -> str:
-        ...
+    def name(self) -> str: ...
 
 
 # ---------------------------------------------------------------------------
@@ -44,16 +38,18 @@ class _IWBackend(WiFiBackend):
     async def scan(self, channels=None, duration=30) -> list[NetworkInfo]:
         from urban_hs.modules.wifi.scanner import ScanStrategy, WiFiScanner
 
-        scanner = WiFiScanner(
-            interface=self.interface,
-            strategy=ScanStrategy(self.strategy),
-        )
+        scanner = WiFiScanner(interface=self.interface, strategy=ScanStrategy(self.strategy))
         return await scanner.scan(channels=channels, duration=duration)
 
     async def set_channel(self, channel: int) -> bool:
         try:
             proc = await asyncio.create_subprocess_exec(
-                "iw", "dev", self.interface, "set", "channel", str(channel),
+                "iw",
+                "dev",
+                self.interface,
+                "set",
+                "channel",
+                str(channel),
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -71,9 +67,7 @@ class _IWBackend(WiFiBackend):
             ]
             for cmd in cmds:
                 proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL,
+                    *cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL
                 )
                 await proc.wait()
                 if proc.returncode != 0:
@@ -112,15 +106,18 @@ class _ScapyBackend(WiFiBackend):
                     if hasattr(pkt, "dBm_AntSignal"):
                         rssi = pkt.dBm_AntSignal
                     if bssid:
-                        found.setdefault(bssid, NetworkInfo(
-                            bssid=bssid,
-                            ssid=ssid,
-                            encryption="UNKNOWN",
-                            signal_dbm=rssi,
-                            channel=0,
-                            frequency=0,
-                            bandwidth="UNKNOWN",
-                        ))
+                        found.setdefault(
+                            bssid,
+                            NetworkInfo(
+                                bssid=bssid,
+                                ssid=ssid,
+                                encryption="UNKNOWN",
+                                signal_dbm=rssi,
+                                channel=0,
+                                frequency=0,
+                                bandwidth="UNKNOWN",
+                            ),
+                        )
             except Exception:
                 pass
 
@@ -169,9 +166,7 @@ async def detect_interface_capabilities(interface: str) -> InterfaceCapabilities
 
     try:
         proc = await asyncio.create_subprocess_exec(
-            iw_bin, "phy",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            iw_bin, "phy", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         stdout, _ = await proc.communicate()
         text = stdout.decode(errors="replace")

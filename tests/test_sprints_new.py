@@ -2,7 +2,6 @@
 Unit & Integration Tests for Sprints 1 to 4 Features.
 """
 
-
 import pytest
 
 from urban_hs.core.offloading import HashtopolisClient

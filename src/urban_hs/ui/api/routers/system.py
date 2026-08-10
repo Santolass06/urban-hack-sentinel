@@ -24,6 +24,7 @@ async def system_info() -> dict[str, str]:
         import platform
 
         from urban_hs import __version__
+
         return {
             "version": __version__,
             "platform": platform.system(),
@@ -39,8 +40,10 @@ async def system_status() -> dict[str, Any]:
     """Get system runtime metrics and status (F2.2)."""
     import os
     import time
+
     try:
         import psutil
+
         cpu_percent = psutil.cpu_percent()
         mem = psutil.virtual_memory()
         mem_percent = mem.percent
@@ -73,7 +76,9 @@ async def list_cracked_hashes() -> dict[str, Any]:
                 for line in lines:
                     if ":" in line:
                         parts = line.split(":", 2)
-                        cracked_items.append({"hash": parts[0], "password": parts[1] if len(parts) > 1 else ""})
+                        cracked_items.append(
+                            {"hash": parts[0], "password": parts[1] if len(parts) > 1 else ""}
+                        )
             except Exception:
                 pass
 

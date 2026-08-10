@@ -47,11 +47,7 @@ class BinaryManifest:
 class BinaryVerifier:
     """Validates installed binaries against manifest expectations."""
 
-    def __init__(
-        self,
-        manifest: BinaryManifest | None = None,
-        enforcement: str = "warn",
-    ):
+    def __init__(self, manifest: BinaryManifest | None = None, enforcement: str = "warn"):
         """
         Args:
             manifest: Known-good binary registry.
@@ -98,9 +94,7 @@ class BinaryVerifier:
 
         path = self.resolve_path(name)
         if not path or not os.path.exists(path):
-            logger.warning(
-                "Binary not found", name=name, expected=record.path, record=record
-            )
+            logger.warning("Binary not found", name=name, expected=record.path, record=record)
             return self._handle_failure(name, "missing")
 
         actual = self.sha256_of(path)
@@ -110,11 +104,7 @@ class BinaryVerifier:
 
         if actual != record.sha256:
             logger.warning(
-                "Binary hash mismatch",
-                name=name,
-                path=path,
-                expected=record.sha256,
-                actual=actual,
+                "Binary hash mismatch", name=name, path=path, expected=record.sha256, actual=actual
             )
             return self._handle_failure(name, "mismatch")
 
@@ -126,9 +116,7 @@ class BinaryVerifier:
 
     def _handle_failure(self, name: str, reason: str) -> bool:
         if self.enforcement == "enforce":
-            raise RuntimeError(
-                f"Binary integrity check failed for {name}: {reason}"
-            )
+            raise RuntimeError(f"Binary integrity check failed for {name}: {reason}")
         return False
 
 
@@ -173,9 +161,7 @@ def build_manifest() -> BinaryManifest:
     # WiFi toolkit
     manifest.add(
         BinaryRecord(
-            name="airodump-ng",
-            path=_detect_aircrack_ng(),
-            description="Aircrack-ng capture tool",
+            name="airodump-ng", path=_detect_aircrack_ng(), description="Aircrack-ng capture tool"
         )
     )
     manifest.add(
@@ -194,9 +180,7 @@ def build_manifest() -> BinaryManifest:
     )
     manifest.add(
         BinaryRecord(
-            name="hcxdumptool",
-            path=_detect_hcxdumptool(),
-            description="PMKID/handshake capture",
+            name="hcxdumptool", path=_detect_hcxdumptool(), description="PMKID/handshake capture"
         )
     )
     manifest.add(
@@ -228,11 +212,7 @@ def build_manifest() -> BinaryManifest:
         )
     )
     manifest.add(
-        BinaryRecord(
-            name="iw",
-            path=shutil_which("iw") or "iw",
-            description="nl80211 WiFi CLI",
-        )
+        BinaryRecord(name="iw", path=shutil_which("iw") or "iw", description="nl80211 WiFi CLI")
     )
     # Network toolkit
     manifest.add(

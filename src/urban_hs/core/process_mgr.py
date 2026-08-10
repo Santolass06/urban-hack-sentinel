@@ -21,6 +21,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class ProcessResult:
     """Result of a completed process execution."""
+
     cmd: str
     args: list[str]
     stdout: str
@@ -39,6 +40,7 @@ class ProcessResult:
 @dataclass
 class ProcessLimits:
     """Resource limits for process execution."""
+
     max_memory_mb: int | None = None  # MB
     max_cpu_percent: float | None = None  # percentage
     max_duration_sec: int | None = None
@@ -106,6 +108,7 @@ class StreamCallback(ProcessCallback):
 @dataclass
 class ProcessContext:
     """Holds process execution state."""
+
     cmd: list[str]
     cwd: str
     env: dict[str, str]
@@ -168,7 +171,7 @@ class ProcessManager:
     ) -> ProcessResult:
         """
         Run a command with full control and monitoring.
-        
+
         Args:
             cmd: Command as string or list of args
             cwd: Working directory
@@ -180,7 +183,7 @@ class ProcessManager:
             chroot_path: Path to chroot
             chroot_bind_mounts: Additional bind mounts for chroot
             capture_output: Whether to capture stdout/stderr in result
-            
+
         Returns:
             ProcessResult with stdout, stderr, exit_code, timing
         """
@@ -223,7 +226,7 @@ class ProcessManager:
     ) -> StreamCallback:
         """
         Run command and return StreamCallback for async iteration.
-        
+
         Usage:
             callback = await pm.run_streaming("long-running-command")
             async for line in callback.stdout_lines():
@@ -248,11 +251,7 @@ class ProcessManager:
         callback._run_task = task  # type: ignore
         return callback
 
-    async def _execute(
-        self,
-        ctx: ProcessContext,
-        capture_output: bool,
-    ) -> ProcessResult:
+    async def _execute(self, ctx: ProcessContext, capture_output: bool) -> ProcessResult:
         started_at = datetime.utcnow()
         ctx.started_at = started_at
 
@@ -263,8 +262,16 @@ class ProcessManager:
             full_cmd = ctx.cmd
 
         # Prepare pipes
-        stdout_pipe = asyncio.subprocess.PIPE if capture_output or ctx.callback else asyncio.subprocess.DEVNULL
-        stderr_pipe = asyncio.subprocess.PIPE if capture_output or ctx.callback else asyncio.subprocess.DEVNULL
+        stdout_pipe = (
+            asyncio.subprocess.PIPE
+            if capture_output or ctx.callback
+            else asyncio.subprocess.DEVNULL
+        )
+        stderr_pipe = (
+            asyncio.subprocess.PIPE
+            if capture_output or ctx.callback
+            else asyncio.subprocess.DEVNULL
+        )
         stdin_pipe = asyncio.subprocess.PIPE if ctx.stdin_data else asyncio.subprocess.DEVNULL
 
         logger.debug(
@@ -334,7 +341,9 @@ class ProcessManager:
             else:
                 await proc.wait()
         except TimeoutError:
-            logger.warning("Process timeout, killing", pid=proc.pid, timeout=ctx.limits.max_duration_sec)
+            logger.warning(
+                "Process timeout, killing", pid=proc.pid, timeout=ctx.limits.max_duration_sec
+            )
             await self._kill_process_tree(proc.pid)
             raise
 
@@ -400,13 +409,17 @@ class ProcessManager:
         # Fallback to chroot if nsexec not available
         cmd = [
             "nsexec",
-            "--user", "0",
-            "--group", "0",
+            "--user",
+            "0",
+            "--group",
+            "0",
             *bind_args,
             "--",
-            "chroot", ctx.chroot_path,
-            "/bin/sh", "-c",
-            " ".join(shlex.quote(arg) for arg in ctx.cmd)
+            "chroot",
+            ctx.chroot_path,
+            "/bin/sh",
+            "-c",
+            " ".join(shlex.quote(arg) for arg in ctx.cmd),
         ]
         return cmd
 
@@ -451,10 +464,7 @@ class ProcessManager:
             logger.warning("Capability apply skipped", module=module, error=str(exc))
 
     async def _read_stream(
-        self,
-        stream: asyncio.StreamReader | None,
-        ctx: ProcessContext,
-        stream_name: str,
+        self, stream: asyncio.StreamReader | None, ctx: ProcessContext, stream_name: str
     ) -> None:
         """Read from stdout/stderr with callbacks and buffering."""
         if not stream:
@@ -475,8 +485,14 @@ class ProcessManager:
                 bytes_count += len(line)
 
                 if bytes_count > limit:
-                    logger.warning("Output limit reached, truncating", stream=stream_name, limit_mb=ctx.limits.max_output_mb)
-                    buffer.append(f"... [OUTPUT TRUNCATED - LIMIT {ctx.limits.max_output_mb}MB REACHED]")
+                    logger.warning(
+                        "Output limit reached, truncating",
+                        stream=stream_name,
+                        limit_mb=ctx.limits.max_output_mb,
+                    )
+                    buffer.append(
+                        f"... [OUTPUT TRUNCATED - LIMIT {ctx.limits.max_output_mb}MB REACHED]"
+                    )
                     break
 
                 if ctx.callback:
@@ -517,7 +533,9 @@ class ProcessManager:
                 logger.error("Monitor error", error=str(e))
                 break
 
-    async def _kill_process_tree(self, pid: int, signal_num: int = signal.SIGTERM, force_after: float = 5.0) -> None:
+    async def _kill_process_tree(
+        self, pid: int, signal_num: int = signal.SIGTERM, force_after: float = 5.0
+    ) -> None:
         """Kill process and all children with escalating signals."""
         try:
             # Get child PIDs
@@ -548,7 +566,9 @@ class ProcessManager:
         """Get all descendant PIDs of a process."""
         try:
             proc = await asyncio.create_subprocess_exec(
-                "pgrep", "-P", str(pid),
+                "pgrep",
+                "-P",
+                str(pid),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -603,11 +623,13 @@ class ProcessManager:
 
         try:
             await asyncio.wait_for(
-                asyncio.gather(*[
-                    ctx.process.wait()
-                    for ctx in self._active_processes.values()
-                    if ctx.process and ctx.process.returncode is None
-                ]),
+                asyncio.gather(
+                    *[
+                        ctx.process.wait()
+                        for ctx in self._active_processes.values()
+                        if ctx.process and ctx.process.returncode is None
+                    ]
+                ),
                 timeout=timeout,
             )
         except TimeoutError:

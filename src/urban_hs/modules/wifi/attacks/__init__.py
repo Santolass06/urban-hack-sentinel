@@ -5,11 +5,7 @@ Re-exports all attack classes for backward compatibility.
 """
 
 from urban_hs.modules.wifi.attacks.base import AttackResult, AttackStatus, BaseAttack
-from urban_hs.modules.wifi.attacks.deauth import (
-    DeauthAttack,
-    Kr00kAttack,
-    WPA3DowngradeAttack,
-)
+from urban_hs.modules.wifi.attacks.deauth import DeauthAttack, Kr00kAttack, WPA3DowngradeAttack
 from urban_hs.modules.wifi.attacks.wpa import HandshakeAttack, PMKIDAttack
 from urban_hs.modules.wifi.attacks.wps import WPSPinAttack, WPSPixieAttack
 

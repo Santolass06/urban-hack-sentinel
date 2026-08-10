@@ -31,12 +31,38 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class WiFiModuleConfig:
     """Configuration for WiFi module."""
+
     enabled: bool = True
     interface: str = "wlan0"
     scan_strategy: str = "passive_only"
     scan_interval: int = 30
-    channels_2ghz: list[int] = field(default_factory=lambda: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
-    channels_5ghz: list[int] = field(default_factory=lambda: [36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144])
+    channels_2ghz: list[int] = field(
+        default_factory=lambda: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+    )
+    channels_5ghz: list[int] = field(
+        default_factory=lambda: [
+            36,
+            40,
+            44,
+            48,
+            52,
+            56,
+            60,
+            64,
+            100,
+            104,
+            108,
+            112,
+            116,
+            120,
+            124,
+            128,
+            132,
+            136,
+            140,
+            144,
+        ]
+    )
     channels_6ghz: list[int] = field(default_factory=list)
     attack_timeout: int = 60
     handshake_timeout: int = 60
@@ -111,28 +137,22 @@ class WiFiPlugin:
             deauth_count=self.config.deauth_count,
         )
         self._pmkid_attack = PMKIDAttack(
-            interface=self.config.interface,
-            attack_timeout=self.config.pmkid_timeout,
+            interface=self.config.interface, attack_timeout=self.config.pmkid_timeout
         )
         self._wps_pixie_attack = WPSPixieAttack(
-            interface=self.config.interface,
-            attack_timeout=self.config.wps_timeout,
+            interface=self.config.interface, attack_timeout=self.config.wps_timeout
         )
         self._wps_pin_attack = WPSPinAttack(
-            interface=self.config.interface,
-            attack_timeout=self.config.wps_timeout,
+            interface=self.config.interface, attack_timeout=self.config.wps_timeout
         )
         self._deauth_attack = DeauthAttack(
-            interface=self.config.interface,
-            attack_timeout=self.config.attack_timeout,
+            interface=self.config.interface, attack_timeout=self.config.attack_timeout
         )
         self._kr00k_attack = Kr00kAttack(
-            interface=self.config.interface,
-            attack_timeout=self.config.attack_timeout,
+            interface=self.config.interface, attack_timeout=self.config.attack_timeout
         )
         self._wpa3_downgrade_attack = WPA3DowngradeAttack(
-            interface=self.config.interface,
-            attack_timeout=self.config.attack_timeout,
+            interface=self.config.interface, attack_timeout=self.config.attack_timeout
         )
 
         logger.info("WiFi plugin initialized", interface=self.config.interface)
@@ -183,8 +203,7 @@ class WiFiPlugin:
         while self._running:
             try:
                 networks = await self.scanner.manager.scan(
-                    channels=self._get_all_channels(),
-                    duration=self.config.scan_interval,
+                    channels=self._get_all_channels(), duration=self.config.scan_interval
                 )
 
                 # Enrich with GPS
@@ -201,11 +220,13 @@ class WiFiPlugin:
 
                 # Publish event
                 bus = get_event_bus()
-                await bus.publish(Event(
-                    type="wifi.networks_updated",
-                    payload={"networks": [n.to_dict() for n in networks]},
-                    source="wifi_scanner",
-                ))
+                await bus.publish(
+                    Event(
+                        type="wifi.networks_updated",
+                        payload={"networks": [n.to_dict() for n in networks]},
+                        source="wifi_scanner",
+                    )
+                )
 
             except Exception as e:
                 logger.error("Scan error", error=str(e))
@@ -225,16 +246,18 @@ class WiFiPlugin:
         storage = get_storage()
         for net in networks:
             # Store as device
-            await storage.upsert_device({
-                "id": f"wifi_{net.bssid.replace(':', '_')}",
-                "first_seen": net.last_seen,
-                "last_seen": net.last_seen,
-                "type": "wifi_ap",
-                "mac": net.bssid,
-                "vendor": net.vendor,
-                "labels": ["wifi", "access_point"],
-                "meta": net.to_dict(),
-            })
+            await storage.upsert_device(
+                {
+                    "id": f"wifi_{net.bssid.replace(':', '_')}",
+                    "first_seen": net.last_seen,
+                    "last_seen": net.last_seen,
+                    "type": "wifi_ap",
+                    "mac": net.bssid,
+                    "vendor": net.vendor,
+                    "labels": ["wifi", "access_point"],
+                    "meta": net.to_dict(),
+                }
+            )
 
     async def _mac_randomization_loop(self) -> None:
         """Periodically randomize MAC address."""
@@ -257,10 +280,7 @@ class WiFiPlugin:
         """Execute handshake capture attack."""
         async with self._attack_semaphore:
             return await self._handshake_attack.execute(
-                target_bssid=bssid,
-                target_essid=essid,
-                channel=channel,
-                callback=progress_callback,
+                target_bssid=bssid, target_essid=essid, channel=channel, callback=progress_callback
             )
 
     async def execute_pmkid_attack(
@@ -273,10 +293,7 @@ class WiFiPlugin:
         """Execute PMKID attack."""
         async with self._attack_semaphore:
             return await self._pmkid_attack.execute(
-                target_bssid=bssid,
-                target_essid=essid,
-                channel=channel,
-                callback=progress_callback,
+                target_bssid=bssid, target_essid=essid, channel=channel, callback=progress_callback
             )
 
     async def execute_wps_pixie_attack(
@@ -289,10 +306,7 @@ class WiFiPlugin:
         """Execute WPS Pixie Dust attack."""
         async with self._attack_semaphore:
             return await self._wps_pixie_attack.execute(
-                target_bssid=bssid,
-                target_essid=essid,
-                channel=channel,
-                callback=progress_callback,
+                target_bssid=bssid, target_essid=essid, channel=channel, callback=progress_callback
             )
 
     async def execute_wps_pin_attack(
@@ -305,10 +319,7 @@ class WiFiPlugin:
         """Execute WPS PIN dictionary attack."""
         async with self._attack_semaphore:
             return await self._wps_pin_attack.execute(
-                target_bssid=bssid,
-                target_essid=essid,
-                channel=channel,
-                callback=progress_callback,
+                target_bssid=bssid, target_essid=essid, channel=channel, callback=progress_callback
             )
 
     async def execute_deauth(
@@ -423,18 +434,17 @@ class WiFiEventHandler(EventHandler):
         channels = payload.get("channels")
         duration = payload.get("duration", 30)
 
-        networks = await self.plugin.scanner.manager.scan(
-            channels=channels,
-            duration=duration,
-        )
+        networks = await self.plugin.scanner.manager.scan(channels=channels, duration=duration)
 
         bus = get_event_bus()
-        await bus.publish(Event(
-            type="wifi.scan_complete",
-            payload={"networks": [n.to_dict() for n in networks]},
-            source="wifi.plugin",
-            correlation_id=event.correlation_id,
-        ))
+        await bus.publish(
+            Event(
+                type="wifi.scan_complete",
+                payload={"networks": [n.to_dict() for n in networks]},
+                source="wifi.plugin",
+                correlation_id=event.correlation_id,
+            )
+        )
 
     async def _handle_attack_request(self, event: Event) -> None:
         """Handle attack request event."""
@@ -452,12 +462,14 @@ class WiFiEventHandler(EventHandler):
             get_active_scope().validate(bssid, "wifi")
         except PermissionError as exc:
             bus = get_event_bus()
-            await bus.publish(Event(
-                type="wifi.attack_denied",
-                payload={"bssid": bssid, "type": attack_type, "reason": str(exc)},
-                source="wifi.plugin",
-                correlation_id=event.correlation_id,
-            ))
+            await bus.publish(
+                Event(
+                    type="wifi.attack_denied",
+                    payload={"bssid": bssid, "type": attack_type, "reason": str(exc)},
+                    source="wifi.plugin",
+                    correlation_id=event.correlation_id,
+                )
+            )
             return
 
         progress_updates = []
@@ -523,25 +535,29 @@ class WiFiEventHandler(EventHandler):
                 )
 
             bus = get_event_bus()
-            await bus.publish(Event(
-                type="wifi.attack_complete",
-                payload={
-                    "result": result.to_dict() if result else None,
-                    "progress": progress_updates,
-                },
-                source="wifi.plugin",
-                correlation_id=event.correlation_id,
-            ))
+            await bus.publish(
+                Event(
+                    type="wifi.attack_complete",
+                    payload={
+                        "result": result.to_dict() if result else None,
+                        "progress": progress_updates,
+                    },
+                    source="wifi.plugin",
+                    correlation_id=event.correlation_id,
+                )
+            )
 
         except Exception as e:
             logger.error("Attack failed", error=str(e))
             bus = get_event_bus()
-            await bus.publish(Event(
-                type="wifi.attack_failed",
-                payload={"error": str(e)},
-                source="wifi.plugin",
-                correlation_id=event.correlation_id,
-            ))
+            await bus.publish(
+                Event(
+                    type="wifi.attack_failed",
+                    payload={"error": str(e)},
+                    source="wifi.plugin",
+                    correlation_id=event.correlation_id,
+                )
+            )
 
 
 # Plugin entry point
@@ -553,9 +569,4 @@ async def create_wifi_plugin(config: WiFiModuleConfig | None = None) -> "WiFiPlu
 
 
 # Module exports
-__all__ = [
-    "WiFiPlugin",
-    "WiFiModuleConfig",
-    "WiFiEventHandler",
-    "create_wifi_plugin",
-]
+__all__ = ["WiFiPlugin", "WiFiModuleConfig", "WiFiEventHandler", "create_wifi_plugin"]

@@ -10,7 +10,8 @@ from typing import Any
 import structlog
 
 try:
-    import aiohttp
+    import aiohttp  # noqa: F401
+
     AIOHTTP_AVAILABLE = True
 except ImportError:
     AIOHTTP_AVAILABLE = False
@@ -74,7 +75,13 @@ class CameraDiscovery:
         cameras = []
         try:
             proc = await asyncio.create_subprocess_exec(
-                "avahi-browse", "-t", "_rtsp._tcp", "-t", "_onvif._tcp", "-r", "-p",
+                "avahi-browse",
+                "-t",
+                "_rtsp._tcp",
+                "-t",
+                "_onvif._tcp",
+                "-r",
+                "-p",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -84,14 +91,16 @@ class CameraDiscovery:
                 if "IPv4" in line or "IPv6" in line:
                     parts = line.split(";")
                     if len(parts) >= 8:
-                        cameras.append({
-                            "discovery_method": "mdns",
-                            "hostname": parts[6],
-                            "ip": parts[7],
-                            "port": int(parts[8]) if parts[8].isdigit() else None,
-                            "service": parts[4],
-                            "interface": parts[1],
-                        })
+                        cameras.append(
+                            {
+                                "discovery_method": "mdns",
+                                "hostname": parts[6],
+                                "ip": parts[7],
+                                "port": int(parts[8]) if parts[8].isdigit() else None,
+                                "service": parts[4],
+                                "interface": parts[1],
+                            }
+                        )
         except Exception as e:
             logger.warning("mDNS discovery failed", error=str(e))
 
@@ -103,7 +112,7 @@ class CameraDiscovery:
             ssdp_request = (
                 "M-SEARCH * HTTP/1.1\r\n"
                 "HOST: 239.255.255.250:1900\r\n"
-                "MAN: \"ssdp:discover\"\r\n"
+                'MAN: "ssdp:discover"\r\n'
                 "MX: 3\r\n"
                 "ST: urn:schemas-upnp-org:device:Basic:1\r\n"
                 "\r\n"
@@ -130,12 +139,14 @@ class CameraDiscovery:
 
             for data, addr in responses:
                 response = data.decode()
-                if "camera" in response.lower() or "onvif" in response.lower() or "rtsp" in response.lower():
-                    cameras.append({
-                        "discovery_method": "upnp",
-                        "ip": addr[0],
-                        "response": response[:500],
-                    })
+                if (
+                    "camera" in response.lower()
+                    or "onvif" in response.lower()
+                    or "rtsp" in response.lower()
+                ):
+                    cameras.append(
+                        {"discovery_method": "upnp", "ip": addr[0], "response": response[:500]}
+                    )
 
         except Exception as e:
             logger.warning("UPnP discovery failed", error=str(e))
@@ -150,15 +161,15 @@ class CameraDiscovery:
                 '<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" '
                 'xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing" '
                 'xmlns:wsd="http://schemas.xmlsoap.org/ws/2005/04/discovery">'
-                '<soap:Header>'
-                '<wsa:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</wsa:Action>'
-                '<wsa:MessageID>uuid:12345678-1234-1111-2222-333344445555</wsa:MessageID>'
-                '<wsa:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</wsa:To>'
-                '</soap:Header>'
-                '<soap:Body>'
-                '<wsd:Probe/>'
-                '</soap:Body>'
-                '</soap:Envelope>'
+                "<soap:Header>"
+                "<wsa:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</wsa:Action>"
+                "<wsa:MessageID>uuid:12345678-1234-1111-2222-333344445555</wsa:MessageID>"
+                "<wsa:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</wsa:To>"
+                "</soap:Header>"
+                "<soap:Body>"
+                "<wsd:Probe/>"
+                "</soap:Body>"
+                "</soap:Envelope>"
             )
 
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -173,14 +184,16 @@ class CameraDiscovery:
                         data, addr = await asyncio.to_thread(sock.recvfrom, 65535)
                         response = data.decode()
                         if "onvif" in response.lower() or "device" in response.lower():
-                            xaddrs_match = re.search(r'<d:XAddrs>([^<]+)</d:XAddrs>', response)
-                            types_match = re.search(r'<d:Types>([^<]+)</d:Types>', response)
-                            cameras.append({
-                                "discovery_method": "onvif_ws_discovery",
-                                "ip": addr[0],
-                                "xaddrs": xaddrs_match.group(1) if xaddrs_match else None,
-                                "types": types_match.group(1) if types_match else None,
-                            })
+                            xaddrs_match = re.search(r"<d:XAddrs>([^<]+)</d:XAddrs>", response)
+                            types_match = re.search(r"<d:Types>([^<]+)</d:Types>", response)
+                            cameras.append(
+                                {
+                                    "discovery_method": "onvif_ws_discovery",
+                                    "ip": addr[0],
+                                    "xaddrs": xaddrs_match.group(1) if xaddrs_match else None,
+                                    "types": types_match.group(1) if types_match else None,
+                                }
+                            )
                 except TimeoutError:
                     pass
                 finally:
@@ -197,22 +210,20 @@ class CameraDiscovery:
         cameras = []
         try:
             nmap = NmapScanner()
-            hosts = await nmap.scan(
-                targets=network,
-                scan_type=ScanType.PORT_SCAN,
-                ports="554,8554",
-            )
+            hosts = await nmap.scan(targets=network, scan_type=ScanType.PORT_SCAN, ports="554,8554")
 
             for host in hosts:
                 for port in host.ports:
                     if port.port in (554, 8554) and port.state == "open":
                         rtsp_info = await self._rtsp_describe(host.ip, port.port)
-                        cameras.append({
-                            "ip": host.ip,
-                            "port": port.port,
-                            "protocol": "rtsp",
-                            "rtsp_info": rtsp_info,
-                        })
+                        cameras.append(
+                            {
+                                "ip": host.ip,
+                                "port": port.port,
+                                "protocol": "rtsp",
+                                "rtsp_info": rtsp_info,
+                            }
+                        )
         except Exception as e:
             logger.warning("RTSP scan failed", error=str(e))
         return cameras
@@ -241,17 +252,30 @@ class CameraDiscovery:
             import aiohttp
 
             camera_paths = [
-                "/", "/index.html", "/video", "/stream", "/live",
-                "/cgi-bin/nph-zms", "/cgi-bin/cgi?action=snapshot",
-                "/snapshot.cgi", "/image.jpg", "/mjpeg.cgi",
-                "/onvif/device_service", "/api/camera", "/web/",
-                "/web/cgi-bin/hi3510/param.cgi", "/cgi-bin/main.cgi",
-                "/ISAPI/Streaming/channels/101/picture", "/onvif/Device"
+                "/",
+                "/index.html",
+                "/video",
+                "/stream",
+                "/live",
+                "/cgi-bin/nph-zms",
+                "/cgi-bin/cgi?action=snapshot",
+                "/snapshot.cgi",
+                "/image.jpg",
+                "/mjpeg.cgi",
+                "/onvif/device_service",
+                "/api/camera",
+                "/web/",
+                "/web/cgi-bin/hi3510/param.cgi",
+                "/cgi-bin/main.cgi",
+                "/ISAPI/Streaming/channels/101/picture",
+                "/onvif/Device",
             ]
 
             async def check_http_camera(host_ip: str, port: int) -> dict[str, Any] | None:
                 try:
-                    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
+                    async with aiohttp.ClientSession(
+                        timeout=aiohttp.ClientTimeout(total=5)
+                    ) as session:
                         for path in camera_paths:
                             try:
                                 url = f"http://{host_ip}:{port}{path}"
@@ -259,10 +283,25 @@ class CameraDiscovery:
                                     if resp.status == 200:
                                         content = await resp.text()
                                         camera_indicators = [
-                                            "camera", "ipcam", "webcam", "dvrt", "nvr",
-                                            "hikvision", "dahua", "axis", "foscam", "amcrest",
-                                            "reolink", "tplink", "ubiquiti", "unifi",
-                                            "onvif", "rtsp", "mjpeg", "h264", "h265"
+                                            "camera",
+                                            "ipcam",
+                                            "webcam",
+                                            "dvrt",
+                                            "nvr",
+                                            "hikvision",
+                                            "dahua",
+                                            "axis",
+                                            "foscam",
+                                            "amcrest",
+                                            "reolink",
+                                            "tplink",
+                                            "ubiquiti",
+                                            "unifi",
+                                            "onvif",
+                                            "rtsp",
+                                            "mjpeg",
+                                            "h264",
+                                            "h265",
                                         ]
                                         if any(ind in content.lower() for ind in camera_indicators):
                                             return {
@@ -282,7 +321,10 @@ class CameraDiscovery:
             tasks = []
             for host in hosts:
                 for port_info in host.ports:
-                    if port_info.port in (80, 8080, 8081, 8443, 8888, 8889, 5000, 5001) and port_info.state == "open":
+                    if (
+                        port_info.port in (80, 8080, 8081, 8443, 8888, 8889, 5000, 5001)
+                        and port_info.state == "open"
+                    ):
                         tasks.append(check_http_camera(host.ip, port_info.port))
 
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -295,5 +337,5 @@ class CameraDiscovery:
         return cameras
 
     def _extract_title(self, html: str) -> str:
-        match = re.search(r'<title[^>]*>([^<]+)</title>', html, re.IGNORECASE)
+        match = re.search(r"<title[^>]*>([^<]+)</title>", html, re.IGNORECASE)
         return match.group(1).strip() if match else ""

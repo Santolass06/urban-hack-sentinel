@@ -75,7 +75,12 @@ def info(
 def run(
     config_file: str | None = typer.Option(None, "--config", "-c", help="Config YAML path."),
     log_level: str = typer.Option("INFO", "--log-level", help="Logging level."),
-    wardrive: bool = typer.Option(False, "--wardrive", "-w", help="Enable dedicated wardrive mode (continuous scan + GPS logging, no active attacks)."),
+    wardrive: bool = typer.Option(
+        False,
+        "--wardrive",
+        "-w",
+        help="Enable dedicated wardrive mode (continuous scan + GPS logging, no active attacks).",
+    ),
 ) -> None:
     """Bootstrap core services and run until Ctrl-C."""
 
@@ -107,7 +112,9 @@ def run(
             if wardrive:
                 cfg.wifi.enable_active_attacks = False
                 cfg.wifi.passive_scan = True
-                console.print("[bold cyan]Wardrive mode enabled: passive scanning + GPS logging only (active attacks disabled).[/bold cyan]")
+                console.print(
+                    "[bold cyan]Wardrive mode enabled: passive scanning + GPS logging only (active attacks disabled).[/bold cyan]"
+                )
             console.print("[green]Core initialised. Press Ctrl-C to stop.[/green]")
             await stop
             console.print("\n[yellow]Shutting down…[/yellow]")
@@ -229,7 +236,9 @@ def verify_session(
 @app.command(name="seal")
 def seal_session(
     session_id: str = typer.Argument(..., help="Session ID to seal."),
-    target_dir: str | None = typer.Option(None, "--target-dir", help="Destination path for sealed storage."),
+    target_dir: str | None = typer.Option(
+        None, "--target-dir", help="Destination path for sealed storage."
+    ),
 ) -> None:
     """Move session artifacts to append-only / read-only sealed storage."""
     try:
@@ -294,27 +303,21 @@ def audit_trail(
     table.add_column("Action")
     table.add_column("Path")
     for entry in custody:
-        table.add_row(
-            entry.get("ts", ""),
-            entry.get("action", ""),
-            entry.get("path", ""),
-        )
+        table.add_row(entry.get("ts", ""), entry.get("action", ""), entry.get("path", ""))
     console.print(table)
 
 
 @app.command(name="report")
 def generate_report(
     session_id: str = typer.Option("default", "--session", help="Session ID."),
-    format_type: str = typer.Option("markdown", "--format", "-f", help="Output format: markdown, html, json."),
+    format_type: str = typer.Option(
+        "markdown", "--format", "-f", help="Output format: markdown, html, json."
+    ),
     output: str | None = typer.Option(None, "--output", "-o", help="Output destination file path."),
 ) -> None:
     """Generate executive audit report for session (Issue #2.1)."""
     try:
-        from urban_hs.modules.reporting.generator import (
-            AuditSession,
-            ReportFormat,
-            ReportGenerator,
-        )
+        from urban_hs.modules.reporting.generator import AuditSession, ReportFormat, ReportGenerator
 
         fmt = ReportFormat(format_type.lower())
 
@@ -345,9 +348,51 @@ def generate_report(
             shutil.move(str(generated_path), str(out_path))
         else:
             out_path = generated_path
-        console.print(f"[bold green]Audit report generated successfully:[/bold green] [cyan]{out_path}[/cyan]")
+        console.print(
+            f"[bold green]Audit report generated successfully:[/bold green] [cyan]{out_path}[/cyan]"
+        )
     except Exception as exc:
         console.print(f"[red]Report generation failed:[/red] {exc}")
+        raise typer.Exit(1)
+
+
+@app.command(name="attack-all")
+def attack_all(
+    active: bool = typer.Option(False, "--active", help="Also run deauth (active attacks)."),
+    ble_exploit: bool = typer.Option(
+        False, "--ble-exploit", help="Also chain the BLE WhisperPair exploit."
+    ),
+    config_file: str | None = typer.Option(None, "--config", help="Config file path."),
+) -> None:
+    """Attack every discovered target in parallel (WiFi APs + BLE devices)."""
+
+    async def _run() -> None:
+        from urban_hs.core import init_core, shutdown_core
+        from urban_hs.modules.urban_hack import UrbanHackConfig, create_urban_hack_plugin
+
+        await init_core(config_file=config_file)
+        try:
+            plugin = await create_urban_hack_plugin(UrbanHackConfig())
+            if active:
+                plugin.config.wifi_enable_active_attacks = True
+            if ble_exploit:
+                plugin.config.attack_all_ble_exploit = True
+            result = await plugin.attack_all(
+                progress_callback=lambda m: console.print(f"[dim]{m}[/dim]")
+            )
+            console.print(
+                f"[bold green]attack_all:[/bold green] dispatched {result['dispatched']}, "
+                f"ok={result['ok']}, errors={len(result['errors'])}"
+            )
+            for err in result["errors"][:10]:
+                console.print(f"  [red]err:[/red] {err}")
+        finally:
+            await shutdown_core()
+
+    try:
+        asyncio.run(_run())
+    except Exception as exc:
+        console.print(f"[red]attack-all failed:[/red] {exc}")
         raise typer.Exit(1)
 
 

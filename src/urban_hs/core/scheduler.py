@@ -22,6 +22,7 @@ import structlog
 
 try:
     from croniter import croniter
+
     CRONITER_AVAILABLE = True
 except ImportError:
     CRONITER_AVAILABLE = False
@@ -31,6 +32,7 @@ logger = structlog.get_logger(__name__)
 
 class TriggerType(Enum):
     """Types of schedule triggers."""
+
     INTERVAL = "interval"
     CRON = "cron"
     ONCE = "once"
@@ -40,6 +42,7 @@ class TriggerType(Enum):
 
 class JobStatus(Enum):
     """Job execution status."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -51,6 +54,7 @@ class JobStatus(Enum):
 @dataclass
 class ScheduledJob:
     """A scheduled job definition."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     name: str = ""
     func: Callable[..., Awaitable[Any]] = None
@@ -219,7 +223,9 @@ class ScheduledJob:
             self.status = JobStatus.PENDING
             # Schedule retry
             self.next_run = time.time() + self.retry_delay
-            logger.warning("Job failed, will retry", job_id=self.id, attempt=self.retry_count, error=error)
+            logger.warning(
+                "Job failed, will retry", job_id=self.id, attempt=self.retry_count, error=error
+            )
 
     def mark_skipped(self, reason: str = ""):
         """Mark job as skipped."""
@@ -251,7 +257,7 @@ class ScheduledJob:
 class Scheduler:
     """
     Async job scheduler with multiple trigger types.
-    
+
     Features:
     - Interval, cron, one-shot, startup, shutdown triggers
     - Job persistence (in-memory with optional Redis backend)
@@ -343,7 +349,9 @@ class Scheduler:
             logger.info("Job removed", job_id=job_id, name=job.name)
 
             if self.event_bus:
-                asyncio.create_task(self.event_bus.publish("scheduler.job_removed", {"job_id": job_id}))
+                asyncio.create_task(
+                    self.event_bus.publish("scheduler.job_removed", {"job_id": job_id})
+                )
 
             return True
         return False
@@ -520,27 +528,41 @@ class Scheduler:
                 duration = time.time() - start_time
                 job.mark_completed()
 
-                logger.info("Job completed", job_id=job.id, name=job.name, duration_ms=round(duration * 1000, 2))
+                logger.info(
+                    "Job completed",
+                    job_id=job.id,
+                    name=job.name,
+                    duration_ms=round(duration * 1000, 2),
+                )
 
                 if self.event_bus:
-                    await self.event_bus.publish("scheduler.job_completed", {
-                        **job.to_dict(),
-                        "duration_ms": round(duration * 1000, 2),
-                    })
+                    await self.event_bus.publish(
+                        "scheduler.job_completed",
+                        {**job.to_dict(), "duration_ms": round(duration * 1000, 2)},
+                    )
 
             except Exception as e:
                 duration = time.time() - start_time
                 error_msg = f"{type(e).__name__}: {e}"
                 job.mark_failed(error_msg)
 
-                logger.error("Job failed", job_id=job.id, name=job.name, error=error_msg, duration_ms=round(duration * 1000, 2))
+                logger.error(
+                    "Job failed",
+                    job_id=job.id,
+                    name=job.name,
+                    error=error_msg,
+                    duration_ms=round(duration * 1000, 2),
+                )
 
                 if self.event_bus:
-                    await self.event_bus.publish("scheduler.job_failed", {
-                        **job.to_dict(),
-                        "error": error_msg,
-                        "duration_ms": round(duration * 1000, 2),
-                    })
+                    await self.event_bus.publish(
+                        "scheduler.job_failed",
+                        {
+                            **job.to_dict(),
+                            "error": error_msg,
+                            "duration_ms": round(duration * 1000, 2),
+                        },
+                    )
 
     # Convenience methods for common schedules
     def every_seconds(self, seconds: int, func: Callable, name: str = "", **kwargs) -> ScheduledJob:
@@ -550,7 +572,7 @@ class Scheduler:
             name=name,
             trigger=TriggerType.INTERVAL,
             trigger_config={"seconds": seconds},
-            **kwargs
+            **kwargs,
         )
 
     def every_minutes(self, minutes: int, func: Callable, name: str = "", **kwargs) -> ScheduledJob:
@@ -560,7 +582,7 @@ class Scheduler:
             name=name,
             trigger=TriggerType.INTERVAL,
             trigger_config={"minutes": minutes},
-            **kwargs
+            **kwargs,
         )
 
     def every_hours(self, hours: int, func: Callable, name: str = "", **kwargs) -> ScheduledJob:
@@ -570,7 +592,7 @@ class Scheduler:
             name=name,
             trigger=TriggerType.INTERVAL,
             trigger_config={"hours": hours},
-            **kwargs
+            **kwargs,
         )
 
     def cron(self, expression: str, func: Callable, name: str = "", **kwargs) -> ScheduledJob:
@@ -580,10 +602,17 @@ class Scheduler:
             name=name,
             trigger=TriggerType.CRON,
             trigger_config={"expression": expression},
-            **kwargs
+            **kwargs,
         )
 
-    def once(self, delay: float = 0, func: Callable = None, name: str = "", run_at: float | None = None, **kwargs) -> ScheduledJob:
+    def once(
+        self,
+        delay: float = 0,
+        func: Callable = None,
+        name: str = "",
+        run_at: float | None = None,
+        **kwargs,
+    ) -> ScheduledJob:
         """Schedule a one-shot job."""
         if run_at is not None:
             trigger_config = {"run_at": run_at}
@@ -591,31 +620,19 @@ class Scheduler:
             trigger_config = {"delay": delay}
 
         return self.add_job(
-            func=func,
-            name=name,
-            trigger=TriggerType.ONCE,
-            trigger_config=trigger_config,
-            **kwargs
+            func=func, name=name, trigger=TriggerType.ONCE, trigger_config=trigger_config, **kwargs
         )
 
     def on_startup(self, func: Callable, name: str = "", **kwargs) -> ScheduledJob:
         """Schedule job to run on scheduler startup."""
         return self.add_job(
-            func=func,
-            name=name,
-            trigger=TriggerType.STARTUP,
-            trigger_config={},
-            **kwargs
+            func=func, name=name, trigger=TriggerType.STARTUP, trigger_config={}, **kwargs
         )
 
     def on_shutdown(self, func: Callable, name: str = "", **kwargs) -> ScheduledJob:
         """Schedule job to run on scheduler shutdown."""
         return self.add_job(
-            func=func,
-            name=name,
-            trigger=TriggerType.SHUTDOWN,
-            trigger_config={},
-            **kwargs
+            func=func, name=name, trigger=TriggerType.SHUTDOWN, trigger_config={}, **kwargs
         )
 
     def get_stats(self) -> dict[str, Any]:
@@ -637,9 +654,4 @@ class Scheduler:
 
 
 # Export all public classes
-__all__ = [
-    "TriggerType",
-    "JobStatus",
-    "ScheduledJob",
-    "Scheduler",
-]
+__all__ = ["TriggerType", "JobStatus", "ScheduledJob", "Scheduler"]

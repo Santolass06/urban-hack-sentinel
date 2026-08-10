@@ -1,15 +1,8 @@
 """Tests for network module types and classes."""
 
-
 import pytest
 
-from urban_hs.modules.network.types import (
-    HostInfo,
-    PortInfo,
-    ScanType,
-    Severity,
-    Vulnerability,
-)
+from urban_hs.modules.network.types import HostInfo, PortInfo, ScanType, Severity, Vulnerability
 
 
 class TestScanType:
@@ -41,8 +34,7 @@ class TestPortInfo:
 
     def test_with_service(self):
         p = PortInfo(
-            port=22, protocol="tcp", state="open",
-            service="ssh", version="8.9", product="OpenSSH",
+            port=22, protocol="tcp", state="open", service="ssh", version="8.9", product="OpenSSH"
         )
         assert p.service == "ssh"
         assert p.version == "8.9"
@@ -71,10 +63,7 @@ class TestVulnerability:
 
     def test_with_cve(self):
         v = Vulnerability(
-            id="CVE-2024-1234",
-            cve_id="CVE-2024-1234",
-            severity=Severity.CRITICAL,
-            cvss_score=9.8,
+            id="CVE-2024-1234", cve_id="CVE-2024-1234", severity=Severity.CRITICAL, cvss_score=9.8
         )
         assert v.cve_id == "CVE-2024-1234"
         assert v.cvss_score == 9.8
@@ -84,6 +73,7 @@ class TestNmapScanner:
     @pytest.mark.asyncio
     async def test_scan_invalid_targets(self):
         from urban_hs.modules.network.scanner import NmapScanner
+
         scanner = NmapScanner()
         result = await scanner.scan("'; rm -rf /")
         assert result == []
@@ -91,18 +81,21 @@ class TestNmapScanner:
     @pytest.mark.asyncio
     async def test_scan_empty_targets(self):
         from urban_hs.modules.network.scanner import NmapScanner
+
         scanner = NmapScanner()
         result = await scanner.scan([])
         assert result == []
 
     def test_parse_xml_empty(self):
         from urban_hs.modules.network.scanner import NmapScanner
+
         scanner = NmapScanner()
         result = scanner._parse_xml_output("<nmaprun></nmaprun>")
         assert result == []
 
     def test_parse_xml_invalid(self):
         from urban_hs.modules.network.scanner import NmapScanner
+
         scanner = NmapScanner()
         result = scanner._parse_xml_output("not xml")
         assert result == []
@@ -112,6 +105,7 @@ class TestSearchSploitIntegration:
     @pytest.mark.asyncio
     async def test_search_invalid_exploit_id(self):
         from urban_hs.modules.network.searchsploit import SearchSploitIntegration
+
         ss = SearchSploitIntegration()
         result = await ss.get_exploit("'; rm -rf /", "/tmp")
         assert result is None
@@ -119,6 +113,7 @@ class TestSearchSploitIntegration:
     @pytest.mark.asyncio
     async def test_search_non_numeric_id(self):
         from urban_hs.modules.network.searchsploit import SearchSploitIntegration
+
         ss = SearchSploitIntegration()
         result = await ss.get_exploit("abc123", "/tmp")
         assert result is None

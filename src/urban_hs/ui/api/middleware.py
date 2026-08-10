@@ -56,13 +56,7 @@ class IPAllowlistMiddleware(BaseHTTPMiddleware):
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Basic token-bucket style rate limiter per client IP."""
 
-    def __init__(
-        self,
-        app,
-        *,
-        requests_per_minute: int = 120,
-        enabled: bool = True,
-    ) -> None:
+    def __init__(self, app, *, requests_per_minute: int = 120, enabled: bool = True) -> None:
         super().__init__(app)
         self.enabled = enabled
         self.limit = max(1, requests_per_minute)

@@ -20,6 +20,7 @@ logger = structlog.get_logger(__name__)
 
 class KeyboardLayout(Enum):
     """Supported keyboard layouts."""
+
     US = "us"
     GB = "gb"
     DE = "de"
@@ -31,6 +32,7 @@ class KeyboardLayout(Enum):
 
 class DuckyCommandType(Enum):
     """Types of DuckyScript commands."""
+
     DELAY = "DELAY"
     STRING = "STRING"
     DEFAULT_DELAY = "DEFAULT_DELAY"
@@ -100,6 +102,7 @@ class DuckyCommandType(Enum):
 @dataclass
 class DuckyCommand:
     """Parsed DuckyScript command."""
+
     type: DuckyCommandType
     args: list[str] = field(default_factory=list)
     line_number: int = 0
@@ -112,12 +115,13 @@ class DuckyCommand:
     var_value: str = ""
     function_name: str = ""
     condition: str = ""
-    body: list['DuckyCommand'] = field(default_factory=list)
+    body: list["DuckyCommand"] = field(default_factory=list)
 
 
 @dataclass
 class ParsedScript:
     """Result of parsing a DuckyScript file."""
+
     commands: list[DuckyCommand] = field(default_factory=list)
     variables: dict[str, str] = field(default_factory=dict)
     functions: dict[str, list[DuckyCommand]] = field(default_factory=dict)
@@ -132,65 +136,143 @@ class KeyMapper:
 
     # US Layout (base)
     US_KEYMAP = {
-        'a': 0x04, 'b': 0x05, 'c': 0x06, 'd': 0x07, 'e': 0x08,
-        'f': 0x09, 'g': 0x0A, 'h': 0x0B, 'i': 0x0C, 'j': 0x0D,
-        'k': 0x0E, 'l': 0x0F, 'm': 0x10, 'n': 0x11, 'o': 0x12,
-        'p': 0x13, 'q': 0x14, 'r': 0x15, 's': 0x16, 't': 0x17,
-        'u': 0x18, 'v': 0x19, 'w': 0x1A, 'x': 0x1B, 'y': 0x1C, 'z': 0x1D,
-        '1': 0x1E, '2': 0x1F, '3': 0x20, '4': 0x21, '5': 0x22,
-        '6': 0x23, '7': 0x24, '8': 0x25, '9': 0x26, '0': 0x27,
-        'enter': 0x28, 'escape': 0x29, 'backspace': 0x2A, 'tab': 0x2B,
-        'space': 0x2C, 'minus': 0x2D, 'equal': 0x2E,
-        'left_brace': 0x2F, 'right_brace': 0x30,
-        'backslash': 0x31, 'nonus_hash': 0x32,
-        'semicolon': 0x33, 'quote': 0x34, 'grave': 0x35,
-        'comma': 0x36, 'period': 0x37, 'slash': 0x38,
-        'caps_lock': 0x39,
-        'f1': 0x3A, 'f2': 0x3B, 'f3': 0x3C, 'f4': 0x3D,
-        'f5': 0x3E, 'f6': 0x3F, 'f7': 0x40, 'f8': 0x41,
-        'f9': 0x42, 'f10': 0x43, 'f11': 0x44, 'f12': 0x45,
-        'print_screen': 0x46, 'scroll_lock': 0x47, 'pause': 0x48,
-        'insert': 0x49, 'home': 0x4A, 'page_up': 0x4B,
-        'delete': 0x4C, 'end': 0x4D, 'page_down': 0x4E,
-        'right_arrow': 0x4F, 'left_arrow': 0x50,
-        'down_arrow': 0x51, 'up_arrow': 0x52,
-        'keypad_numlock': 0x53, 'keypad_slash': 0x54,
-        'keypad_asterisk': 0x55, 'keypad_minus': 0x56,
-        'keypad_plus': 0x57, 'keypad_enter': 0x58,
-        'keypad_1': 0x59, 'keypad_2': 0x5A, 'keypad_3': 0x5B,
-        'keypad_4': 0x5C, 'keypad_5': 0x5D, 'keypad_6': 0x5E,
-        'keypad_7': 0x5F, 'keypad_8': 0x60, 'keypad_9': 0x61,
-        'keypad_0': 0x62, 'keypad_period': 0x63,
-        'nonus_backslash': 0x64, 'application': 0x65,
-        'power': 0x66, 'keypad_equal': 0x67,
+        "a": 0x04,
+        "b": 0x05,
+        "c": 0x06,
+        "d": 0x07,
+        "e": 0x08,
+        "f": 0x09,
+        "g": 0x0A,
+        "h": 0x0B,
+        "i": 0x0C,
+        "j": 0x0D,
+        "k": 0x0E,
+        "l": 0x0F,
+        "m": 0x10,
+        "n": 0x11,
+        "o": 0x12,
+        "p": 0x13,
+        "q": 0x14,
+        "r": 0x15,
+        "s": 0x16,
+        "t": 0x17,
+        "u": 0x18,
+        "v": 0x19,
+        "w": 0x1A,
+        "x": 0x1B,
+        "y": 0x1C,
+        "z": 0x1D,
+        "1": 0x1E,
+        "2": 0x1F,
+        "3": 0x20,
+        "4": 0x21,
+        "5": 0x22,
+        "6": 0x23,
+        "7": 0x24,
+        "8": 0x25,
+        "9": 0x26,
+        "0": 0x27,
+        "enter": 0x28,
+        "escape": 0x29,
+        "backspace": 0x2A,
+        "tab": 0x2B,
+        "space": 0x2C,
+        "minus": 0x2D,
+        "equal": 0x2E,
+        "left_brace": 0x2F,
+        "right_brace": 0x30,
+        "backslash": 0x31,
+        "nonus_hash": 0x32,
+        "semicolon": 0x33,
+        "quote": 0x34,
+        "grave": 0x35,
+        "comma": 0x36,
+        "period": 0x37,
+        "slash": 0x38,
+        "caps_lock": 0x39,
+        "f1": 0x3A,
+        "f2": 0x3B,
+        "f3": 0x3C,
+        "f4": 0x3D,
+        "f5": 0x3E,
+        "f6": 0x3F,
+        "f7": 0x40,
+        "f8": 0x41,
+        "f9": 0x42,
+        "f10": 0x43,
+        "f11": 0x44,
+        "f12": 0x45,
+        "print_screen": 0x46,
+        "scroll_lock": 0x47,
+        "pause": 0x48,
+        "insert": 0x49,
+        "home": 0x4A,
+        "page_up": 0x4B,
+        "delete": 0x4C,
+        "end": 0x4D,
+        "page_down": 0x4E,
+        "right_arrow": 0x4F,
+        "left_arrow": 0x50,
+        "down_arrow": 0x51,
+        "up_arrow": 0x52,
+        "keypad_numlock": 0x53,
+        "keypad_slash": 0x54,
+        "keypad_asterisk": 0x55,
+        "keypad_minus": 0x56,
+        "keypad_plus": 0x57,
+        "keypad_enter": 0x58,
+        "keypad_1": 0x59,
+        "keypad_2": 0x5A,
+        "keypad_3": 0x5B,
+        "keypad_4": 0x5C,
+        "keypad_5": 0x5D,
+        "keypad_6": 0x5E,
+        "keypad_7": 0x5F,
+        "keypad_8": 0x60,
+        "keypad_9": 0x61,
+        "keypad_0": 0x62,
+        "keypad_period": 0x63,
+        "nonus_backslash": 0x64,
+        "application": 0x65,
+        "power": 0x66,
+        "keypad_equal": 0x67,
         # Modifiers
-        'left_control': 0xE0, 'left_shift': 0xE1,
-        'left_alt': 0xE2, 'left_gui': 0xE3,
-        'right_control': 0xE4, 'right_shift': 0xE5,
-        'right_alt': 0xE6, 'right_gui': 0xE7,
+        "left_control": 0xE0,
+        "left_shift": 0xE1,
+        "left_alt": 0xE2,
+        "left_gui": 0xE3,
+        "right_control": 0xE4,
+        "right_shift": 0xE5,
+        "right_alt": 0xE6,
+        "right_gui": 0xE7,
     }
 
     # Layout-specific overrides
     LAYOUT_OVERRIDES = {
         KeyboardLayout.GB: {
-            'grave': 0x35,  # § key
-            '2': 0x1F, '3': 0x20,  # " and £ swapped
+            "grave": 0x35,  # § key
+            "2": 0x1F,
+            "3": 0x20,  # " and £ swapped
         },
         KeyboardLayout.DE: {
-            'y': 0x1C, 'z': 0x1D,  # Y and Z swapped
-            'semicolon': 0x33,  # ö
-            'quote': 0x34,  # ä
-            'left_brace': 0x2F,  # ü
+            "y": 0x1C,
+            "z": 0x1D,  # Y and Z swapped
+            "semicolon": 0x33,  # ö
+            "quote": 0x34,  # ä
+            "left_brace": 0x2F,  # ü
         },
         KeyboardLayout.FR: {
-            'a': 0x04, 'z': 0x1D, 'q': 0x14, 'w': 0x1A,  # AZERTY
-            'm': 0x33, 'comma': 0x36,  # ; and :
+            "a": 0x04,
+            "z": 0x1D,
+            "q": 0x14,
+            "w": 0x1A,  # AZERTY
+            "m": 0x33,
+            "comma": 0x36,  # ; and :
         },
         KeyboardLayout.ES: {
-            'semicolon': 0x33,  # ñ
+            "semicolon": 0x33  # ñ
         },
-        KeyboardLayout.IT: {
-        },
+        KeyboardLayout.IT: {},
         KeyboardLayout.RU: {
             # Russian layout would need full remapping
         },
@@ -221,11 +303,27 @@ class KeyMapper:
             elif char in '!@#$%^&*()_+{}|:"<>?':
                 # Shifted symbols
                 shifted_map = {
-                    '!': '1', '@': '2', '#': '3', '$': '4', '%': '5',
-                    '^': '6', '&': '7', '*': '8', '(': '9', ')': '0',
-                    '_': '-', '+': '=', '{': '[', '}': ']', '|': '\\',
-                    ':': ';', '"': "'", '<': ',', '>': '.', '?': '/',
-                    '~': '`',
+                    "!": "1",
+                    "@": "2",
+                    "#": "3",
+                    "$": "4",
+                    "%": "5",
+                    "^": "6",
+                    "&": "7",
+                    "*": "8",
+                    "(": "9",
+                    ")": "0",
+                    "_": "-",
+                    "+": "=",
+                    "{": "[",
+                    "}": "]",
+                    "|": "\\",
+                    ":": ";",
+                    '"': "'",
+                    "<": ",",
+                    ">": ".",
+                    "?": "/",
+                    "~": "`",
                 }
                 base = shifted_map.get(char)
                 if base and base in self.keymap:
@@ -248,7 +346,7 @@ class DuckyParser:
     def parse(self, content: str) -> ParsedScript:
         """Parse DuckyScript content."""
         script = ParsedScript()
-        lines = content.split('\n')
+        lines = content.split("\n")
 
         i = 0
         while i < len(lines):
@@ -256,7 +354,7 @@ class DuckyParser:
             line_num = i + 1
 
             # Skip empty lines and comments
-            if not line.strip() or line.strip().startswith(('#', 'REM')):
+            if not line.strip() or line.strip().startswith(("#", "REM")):
                 i += 1
                 continue
 
@@ -271,11 +369,11 @@ class DuckyParser:
                         script.default_delay = self.default_delay
                     elif cmd.type == DuckyCommandType.VAR:
                         if len(cmd.args) >= 2:
-                            self.variables[cmd.args[0]] = ' '.join(cmd.args[1:])
-                            script.variables[cmd.args[0]] = ' '.join(cmd.args[1:])
+                            self.variables[cmd.args[0]] = " ".join(cmd.args[1:])
+                            script.variables[cmd.args[0]] = " ".join(cmd.args[1:])
                     elif cmd.type == DuckyCommandType.FUNCTION:
                         # Function definition
-                        func_name = cmd.args[0] if cmd.args else ''
+                        func_name = cmd.args[0] if cmd.args else ""
                         func_body, consumed_lines = self._parse_function_body(lines, i + 1)
                         script.functions[func_name] = func_body
                         i += consumed_lines
@@ -286,24 +384,26 @@ class DuckyParser:
             i += 1
 
         script.metadata = {
-            'layout': self.layout.value,
-            'variable_count': len(script.variables),
-            'function_count': len(script.functions),
-            'command_count': len(script.commands),
+            "layout": self.layout.value,
+            "variable_count": len(script.variables),
+            "function_count": len(script.functions),
+            "command_count": len(script.commands),
         }
 
         return script
 
-    def _parse_line(self, line: str, line_num: int, all_lines: list[str], current_idx: int) -> tuple:
+    def _parse_line(
+        self, line: str, line_num: int, all_lines: list[str], current_idx: int
+    ) -> tuple:
         """Parse a single line into a DuckyCommand."""
         stripped = line.strip()
         if not stripped:
             return None, 0
 
         # Split into command and args
-        parts = stripped.split(' ', 1)
+        parts = stripped.split(" ", 1)
         cmd_str = parts[0].upper()
-        args_str = parts[1] if len(parts) > 1 else ''
+        args_str = parts[1] if len(parts) > 1 else ""
 
         # Parse arguments (respect quotes)
         args = self._parse_args(args_str)
@@ -311,19 +411,14 @@ class DuckyParser:
         # Map command
         cmd_type = self._map_command(cmd_str)
 
-        cmd = DuckyCommand(
-            type=cmd_type,
-            args=args,
-            line_number=line_num,
-            raw_line=line,
-        )
+        cmd = DuckyCommand(type=cmd_type, args=args, line_number=line_num, raw_line=line)
 
         return cmd, 0
 
     def _parse_args(self, args_str: str) -> list[str]:
         """Parse arguments respecting quotes."""
         args = []
-        current = ''
+        current = ""
         in_quotes = False
         quote_char = None
 
@@ -336,10 +431,10 @@ class DuckyParser:
             elif char == quote_char and in_quotes:
                 in_quotes = False
                 quote_char = None
-            elif char == ' ' and not in_quotes:
+            elif char == " " and not in_quotes:
                 if current:
                     args.append(current)
-                    current = ''
+                    current = ""
             else:
                 current += char
             i += 1
@@ -353,13 +448,13 @@ class DuckyParser:
         """Map command string to DuckyCommandType."""
         # Handle aliases
         aliases = {
-            'DEFAULTDELAY': 'DEFAULT_DELAY',
-            'WINDOWS': 'GUI',
-            'COMMAND': 'GUI',
-            'CONTROL': 'CTRL',
-            'BREAK': 'PAUSE',
-            'ESCAPE': 'ESC',
-            'DELETE': 'DELETE',
+            "DEFAULTDELAY": "DEFAULT_DELAY",
+            "WINDOWS": "GUI",
+            "COMMAND": "GUI",
+            "CONTROL": "CTRL",
+            "BREAK": "PAUSE",
+            "ESCAPE": "ESC",
+            "DELETE": "DELETE",
         }
 
         cmd = aliases.get(cmd_str, cmd_str)
@@ -378,10 +473,10 @@ class DuckyParser:
             line = lines[i].rstrip()
             stripped = line.strip()
 
-            if stripped.upper() == 'ENDFUNCTION':
+            if stripped.upper() == "ENDFUNCTION":
                 return body, i - start_idx
 
-            if stripped and not stripped.startswith(('#', 'REM')):
+            if stripped and not stripped.startswith(("#", "REM")):
                 cmd, _ = self._parse_line(line, i + 1, lines, i)
                 if cmd:
                     body.append(cmd)
@@ -419,7 +514,7 @@ class DuckyEncoder:
             reports.append(self._create_delay_report(delay_ms))
 
         elif cmd.type == DuckyCommandType.STRING:
-            text = ' '.join(cmd.args)
+            text = " ".join(cmd.args)
             reports.extend(self._encode_string(cmd.args))
 
         elif cmd.type in (DuckyCommandType.GUI, DuckyCommandType.WINDOWS, DuckyCommandType.COMMAND):
@@ -489,14 +584,33 @@ class DuckyEncoder:
         elif cmd.type == DuckyCommandType.ESC:
             reports.append(self._create_key_report(0x29))
 
-        elif cmd.type in (DuckyCommandType.F1, DuckyCommandType.F2, DuckyCommandType.F3,
-                          DuckyCommandType.F4, DuckyCommandType.F5, DuckyCommandType.F6,
-                          DuckyCommandType.F7, DuckyCommandType.F8, DuckyCommandType.F9,
-                          DuckyCommandType.F10, DuckyCommandType.F11, DuckyCommandType.F12):
+        elif cmd.type in (
+            DuckyCommandType.F1,
+            DuckyCommandType.F2,
+            DuckyCommandType.F3,
+            DuckyCommandType.F4,
+            DuckyCommandType.F5,
+            DuckyCommandType.F6,
+            DuckyCommandType.F7,
+            DuckyCommandType.F8,
+            DuckyCommandType.F9,
+            DuckyCommandType.F10,
+            DuckyCommandType.F11,
+            DuckyCommandType.F12,
+        ):
             fkey_map = {
-                'F1': 0x3A, 'F2': 0x3B, 'F3': 0x3C, 'F4': 0x3D,
-                'F5': 0x3E, 'F6': 0x3F, 'F7': 0x40, 'F8': 0x41,
-                'F9': 0x42, 'F10': 0x43, 'F11': 0x44, 'F12': 0x45,
+                "F1": 0x3A,
+                "F2": 0x3B,
+                "F3": 0x3C,
+                "F4": 0x3D,
+                "F5": 0x3E,
+                "F6": 0x3F,
+                "F7": 0x40,
+                "F8": 0x41,
+                "F9": 0x42,
+                "F10": 0x43,
+                "F11": 0x44,
+                "F12": 0x45,
             }
             reports.append(self._create_key_report(fkey_map[cmd.type.value]))
 
@@ -509,7 +623,7 @@ class DuckyEncoder:
     def _encode_string(self, args: list[str]) -> list[bytes]:
         """Encode string arguments to key reports."""
         reports = []
-        text = ' '.join(args)
+        text = " ".join(args)
 
         for keycode, modifier in self.mapper.string_to_keycodes(text):
             if modifier:
@@ -546,7 +660,7 @@ class DuckyCompiler:
 
     def compile_file(self, filepath: str | Path) -> ParsedScript:
         """Compile DuckyScript from file."""
-        with open(filepath, encoding='utf-8') as f:
+        with open(filepath, encoding="utf-8") as f:
             content = f.read()
         return self.compile_string(content)
 
@@ -561,24 +675,33 @@ class DuckyCompiler:
     def save_compiled(self, script: ParsedScript, output_path: str | Path):
         """Save compiled script to binary format."""
         import json
-        with open(output_path, 'w') as f:
-            json.dump({
-                'commands': [cmd.__dict__ for cmd in script.commands],
-                'variables': script.variables,
-                'functions': {k: [cmd.__dict__ for cmd in v] for k, v in script.functions.items()},
-                'default_delay': script.default_delay,
-            }, f)
+
+        with open(output_path, "w") as f:
+            json.dump(
+                {
+                    "commands": [cmd.__dict__ for cmd in script.commands],
+                    "variables": script.variables,
+                    "functions": {
+                        k: [cmd.__dict__ for cmd in v] for k, v in script.functions.items()
+                    },
+                    "default_delay": script.default_delay,
+                },
+                f,
+            )
 
     def load_compiled(self, input_path: str | Path) -> ParsedScript:
         """Load compiled script from binary format."""
         import json
+
         with open(input_path) as f:
             data = json.load(f)
         script = ParsedScript()
-        script.commands = [DuckyCommand(**cmd) for cmd in data.get('commands', [])]
-        script.variables = data.get('variables', {})
-        script.functions = {k: [DuckyCommand(**cmd) for cmd in v] for k, v in data.get('functions', {}).items()}
-        script.default_delay = data.get('default_delay', 0)
+        script.commands = [DuckyCommand(**cmd) for cmd in data.get("commands", [])]
+        script.variables = data.get("variables", {})
+        script.functions = {
+            k: [DuckyCommand(**cmd) for cmd in v] for k, v in data.get("functions", {}).items()
+        }
+        script.default_delay = data.get("default_delay", 0)
         return script
 
 
@@ -597,7 +720,9 @@ def create_compiler(layout: KeyboardLayout = KeyboardLayout.US) -> DuckyCompiler
     return DuckyCompiler(layout)
 
 
-def load_ducky_file(filepath: str | Path, layout: KeyboardLayout = KeyboardLayout.US) -> ParsedScript:
+def load_ducky_file(
+    filepath: str | Path, layout: KeyboardLayout = KeyboardLayout.US
+) -> ParsedScript:
     """Convenience function to load and parse a DuckyScript file."""
     compiler = DuckyCompiler(layout)
     return compiler.compile_file(filepath)
@@ -608,13 +733,18 @@ def main():
     """Command-line interface for DuckyScript compilation."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='DuckyScript Compiler')
-    parser.add_argument('input', help='Input DuckyScript file')
-    parser.add_argument('-o', '--output', help='Output compiled file')
-    parser.add_argument('-l', '--layout', choices=[l.value for l in KeyboardLayout],
-                        default='us', help='Keyboard layout')
-    parser.add_argument('--encode', action='store_true', help='Encode to HID reports')
-    parser.add_argument('--encode-output', help='Output encoded HID reports')
+    parser = argparse.ArgumentParser(description="DuckyScript Compiler")
+    parser.add_argument("input", help="Input DuckyScript file")
+    parser.add_argument("-o", "--output", help="Output compiled file")
+    parser.add_argument(
+        "-l",
+        "--layout",
+        choices=[l.value for l in KeyboardLayout],
+        default="us",
+        help="Keyboard layout",
+    )
+    parser.add_argument("--encode", action="store_true", help="Encode to HID reports")
+    parser.add_argument("--encode-output", help="Output encoded HID reports")
 
     args = parser.parse_args()
 
@@ -637,7 +767,7 @@ def main():
     if args.encode:
         reports = compiler.encode_to_hid(script)
         if args.encode_output:
-            with open(args.encode_output, 'wb') as f:
+            with open(args.encode_output, "wb") as f:
                 for report in reports:
                     f.write(report)
             print(f"Encoded {len(reports)} HID reports to {args.encode_output}")

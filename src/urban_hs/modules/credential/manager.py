@@ -30,35 +30,38 @@ logger = structlog.get_logger(__name__)
 
 class CredentialType(Enum):
     """Type of credential."""
-    PLAINTEXT = "plaintext"           # Username:password
-    HASH = "hash"                     # Hash only (NTLM, MD5, etc.)
-    WPA_HANDSHAKE = "wpa_handshake"   # WPA/WPA2 handshake
-    WPA_PMKID = "wpa_pmkid"           # WPA3 PMKID
-    WPS_PIN = "wps_pin"               # WPS PIN
-    SSH_KEY = "ssh_key"               # SSH private key
-    API_KEY = "api_key"               # API key/token
-    CERTIFICATE = "certificate"       # SSL/TLS certificate
-    COOKIE = "cookie"                 # Session cookie
-    TOKEN = "token"                   # OAuth/JWT token
+
+    PLAINTEXT = "plaintext"  # Username:password
+    HASH = "hash"  # Hash only (NTLM, MD5, etc.)
+    WPA_HANDSHAKE = "wpa_handshake"  # WPA/WPA2 handshake
+    WPA_PMKID = "wpa_pmkid"  # WPA3 PMKID
+    WPS_PIN = "wps_pin"  # WPS PIN
+    SSH_KEY = "ssh_key"  # SSH private key
+    API_KEY = "api_key"  # API key/token
+    CERTIFICATE = "certificate"  # SSL/TLS certificate
+    COOKIE = "cookie"  # Session cookie
+    TOKEN = "token"  # OAuth/JWT token
 
 
 class CredentialSource(Enum):
     """Source of credential."""
-    WIFI_CRACK = "wifi_crack"           # Handshake/PMKID cracking
-    WPS_ATTACK = "wps_attack"           # WPS PIN/brute force
-    SERVICE_BRUTE = "service_brute"     # SSH, FTP, HTTP, etc. brute force
-    DEFAULT_CREDS = "default_creds"     # Default credential lists
-    EXPLOIT = "exploit"                 # Post-exploitation gathering
-    METASPLOIT = "metasploit"           # Metasploit session dumping
-    WEB_APP = "web_app"                 # Web application login
-    CONFIG_DUMP = "config_dump"         # Configuration file extraction
-    MEMORY_DUMP = "memory_dump"         # Memory analysis
-    NETWORK_SNIFF = "network_sniff"     # Network traffic capture
-    SEARCHSPLOIT = "searchsploit"       # SearchSploit exploit results
+
+    WIFI_CRACK = "wifi_crack"  # Handshake/PMKID cracking
+    WPS_ATTACK = "wps_attack"  # WPS PIN/brute force
+    SERVICE_BRUTE = "service_brute"  # SSH, FTP, HTTP, etc. brute force
+    DEFAULT_CREDS = "default_creds"  # Default credential lists
+    EXPLOIT = "exploit"  # Post-exploitation gathering
+    METASPLOIT = "metasploit"  # Metasploit session dumping
+    WEB_APP = "web_app"  # Web application login
+    CONFIG_DUMP = "config_dump"  # Configuration file extraction
+    MEMORY_DUMP = "memory_dump"  # Memory analysis
+    NETWORK_SNIFF = "network_sniff"  # Network traffic capture
+    SEARCHSPLOIT = "searchsploit"  # SearchSploit exploit results
 
 
 class HashType(Enum):
     """Supported hash types for cracking."""
+
     MD5 = "md5"
     SHA1 = "sha1"
     SHA256 = "sha256"
@@ -66,8 +69,8 @@ class HashType(Enum):
     NTLM = "ntlm"
     NETNTLMv1 = "netntlmv1"
     NETNTLMv2 = "netntlmv2"
-    WPA_PBKDF2 = "wpa_pbkdf2"       # hashcat mode 2500
-    WPA_PMKID = "wpa_pmkid"         # hashcat mode 22000
+    WPA_PBKDF2 = "wpa_pbkdf2"  # hashcat mode 2500
+    WPA_PMKID = "wpa_pmkid"  # hashcat mode 22000
     KERBEROS = "kerberos"
     BCRYPT = "bcrypt"
     SCRYPT = "scrypt"
@@ -77,6 +80,7 @@ class HashType(Enum):
 @dataclass
 class Credential:
     """Normalized credential entry."""
+
     id: str = field(default_factory=lambda: str(uuid4()))
     username: str | None = None
     password: str | None = None
@@ -97,7 +101,12 @@ class Credential:
 
     def to_hashcat_line(self) -> str | None:
         """Convert to hashcat-compatible line."""
-        if self.credential_type == CredentialType.WPA_HANDSHAKE and self.hash or self.credential_type == CredentialType.WPA_PMKID and self.hash:
+        if (
+            self.credential_type == CredentialType.WPA_HANDSHAKE
+            and self.hash
+            or self.credential_type == CredentialType.WPA_PMKID
+            and self.hash
+        ):
             return self.hash  # Already in hashcat format
         if self.hash and self.hash_type:
             if self.username:
@@ -131,7 +140,12 @@ class Credential:
         }
 
     @classmethod
-    def from_hashcat_line(cls, line: str, hash_type: HashType, source: CredentialSource = CredentialSource.SERVICE_BRUTE) -> "Credential":
+    def from_hashcat_line(
+        cls,
+        line: str,
+        hash_type: HashType,
+        source: CredentialSource = CredentialSource.SERVICE_BRUTE,
+    ) -> "Credential":
         """Create credential from hashcat output line."""
         parts = line.split(":", 1)
         if len(parts) == 2:
@@ -143,16 +157,14 @@ class Credential:
                 source=source,
             )
         return cls(
-            hash=line,
-            hash_type=hash_type,
-            credential_type=CredentialType.HASH,
-            source=source,
+            hash=line, hash_type=hash_type, credential_type=CredentialType.HASH, source=source
         )
 
 
 @dataclass
 class CredentialSet:
     """Collection of related credentials."""
+
     id: str = field(default_factory=lambda: str(uuid4()))
     name: str = ""
     credentials: list[Credential] = field(default_factory=list)
@@ -190,7 +202,7 @@ class CredentialSet:
 class CredentialManager:
     """
     Central credential management system.
-    
+
     Features:
     - Credential normalization from multiple sources
     - Deduplication with configurable matching
@@ -209,6 +221,7 @@ class CredentialManager:
     ):
         if storage_path is None:
             from urban_hs.core.config import get_config
+
             storage_path = get_config().storage.resolve_credentials_dir()
         self.storage_path = Path(storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
@@ -315,10 +328,10 @@ class CredentialManager:
             with open(potfile_path) as f:
                 for line in f:
                     line = line.strip()
-                    if not line or ':' not in line:
+                    if not line or ":" not in line:
                         continue
 
-                    parts = line.split(':', 1)
+                    parts = line.split(":", 1)
                     if len(parts) != 2:
                         continue
 
@@ -352,7 +365,9 @@ class CredentialManager:
                 password=cred_data.get("pass"),
                 hash=cred_data.get("hash"),
                 hash_type=HashType(cred_data.get("type")) if cred_data.get("type") else None,
-                credential_type=CredentialType.PLAINTEXT if cred_data.get("pass") else CredentialType.HASH,
+                credential_type=CredentialType.PLAINTEXT
+                if cred_data.get("pass")
+                else CredentialType.HASH,
                 source=CredentialSource.METASPLOIT,
                 target_address=cred_data.get("host"),
                 target_port=cred_data.get("port"),
@@ -446,6 +461,7 @@ class CredentialManager:
     def _validate_ssh(self, credential: Credential, target: str, port: int | None) -> bool:
         """Validate SSH credential using sshpass."""
         import shutil
+
         sshpass = shutil.which("sshpass")
         if not sshpass:
             logger.warning("sshpass not found, cannot validate SSH credential")
@@ -453,24 +469,31 @@ class CredentialManager:
 
         port = port or 22
         cmd = [
-            sshpass, "-p", credential.password or "",
-            "ssh", "-o", "StrictHostKeyChecking=no",
-            "-o", "ConnectTimeout=5",
-            "-p", str(port),
+            sshpass,
+            "-p",
+            credential.password or "",
+            "ssh",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "ConnectTimeout=5",
+            "-p",
+            str(port),
             f"{credential.username or 'root'}@{target}",
             "echo connected",
         ]
         try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=15,
-            )
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             return result.returncode == 0 and "connected" in result.stdout
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
 
-    def _validate_http(self, credential: Credential, target: str, port: int | None, scheme: str) -> bool:
+    def _validate_http(
+        self, credential: Credential, target: str, port: int | None, scheme: str
+    ) -> bool:
         """Validate HTTP credential using curl."""
         import shutil
+
         curl = shutil.which("curl")
         if not curl:
             logger.warning("curl not found, cannot validate HTTP credential")
@@ -479,16 +502,22 @@ class CredentialManager:
         port = port or (443 if scheme == "https" else 80)
         url = f"{scheme}://{target}:{port}/"
         cmd = [
-            curl, "-s", "-o", "/dev/null", "-w", "%{http_code}",
-            "--connect-timeout", "5",
-            "--max-time", "10",
-            "-u", f"{credential.username or ''}:{credential.password or ''}",
+            curl,
+            "-s",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{http_code}",
+            "--connect-timeout",
+            "5",
+            "--max-time",
+            "10",
+            "-u",
+            f"{credential.username or ''}:{credential.password or ''}",
             url,
         ]
         try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=15,
-            )
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             status = result.stdout.strip()
             # 200 = valid creds, 401/403 = invalid, anything else = uncertain
             return status == "200"
@@ -498,22 +527,29 @@ class CredentialManager:
     def _validate_ftp(self, credential: Credential, target: str, port: int | None) -> bool:
         """Validate FTP credential using curl."""
         import shutil
+
         curl = shutil.which("curl")
         if not curl:
             return False
 
         port = port or 21
         cmd = [
-            curl, "-s", "-o", "/dev/null", "-w", "%{http_code}",
-            "--connect-timeout", "5",
-            "--max-time", "10",
-            "-u", f"{credential.username or 'anonymous'}:{credential.password or ''}",
+            curl,
+            "-s",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{http_code}",
+            "--connect-timeout",
+            "5",
+            "--max-time",
+            "10",
+            "-u",
+            f"{credential.username or 'anonymous'}:{credential.password or ''}",
             f"ftp://{target}:{port}/",
         ]
         try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=15,
-            )
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             return result.returncode == 0
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
@@ -521,6 +557,7 @@ class CredentialManager:
     def _validate_smb(self, credential: Credential, target: str, port: int | None) -> bool:
         """Validate SMB credential using smbclient."""
         import shutil
+
         smbclient = shutil.which("smbclient")
         if not smbclient:
             logger.warning("smbclient not found, cannot validate SMB credential")
@@ -528,22 +565,27 @@ class CredentialManager:
 
         port = port or 445
         cmd = [
-            smbclient, f"//{target}/IPC$",
-            "-U", f"{credential.username or ''}%{credential.password or ''}",
-            "-p", str(port),
-            "-c", "quit",
+            smbclient,
+            f"//{target}/IPC$",
+            "-U",
+            f"{credential.username or ''}%{credential.password or ''}",
+            "-p",
+            str(port),
+            "-c",
+            "quit",
         ]
         try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=15,
-            )
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             return result.returncode == 0
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
 
-    def _validate_hydra(self, credential: Credential, target: str, port: int | None, service: str) -> bool:
+    def _validate_hydra(
+        self, credential: Credential, target: str, port: int | None, service: str
+    ) -> bool:
         """Validate credential using hydra for arbitrary services."""
         import shutil
+
         hydra = shutil.which("hydra")
         if not hydra:
             logger.warning("hydra not found, cannot validate credential")
@@ -552,6 +594,7 @@ class CredentialManager:
         port = port or 22
         # Write temp files for hydra
         import tempfile
+
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as user_f:
             user_f.write(f"{credential.username or 'root'}\n")
             user_file = user_f.name
@@ -561,13 +604,20 @@ class CredentialManager:
 
         try:
             cmd = [
-                hydra, "-L", user_file, "-P", pass_file,
-                "-s", str(port), "-f", "-t", "1",
-                target, service,
+                hydra,
+                "-L",
+                user_file,
+                "-P",
+                pass_file,
+                "-s",
+                str(port),
+                "-f",
+                "-t",
+                "1",
+                target,
+                service,
             ]
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=30,
-            )
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             return result.returncode == 0 and "login:" in result.stdout.lower()
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
@@ -587,7 +637,7 @@ class CredentialManager:
     ) -> dict[str, Any]:
         """
         Run hashcat to crack hashes.
-        
+
         Args:
             hashes_file: Path to file containing hashes (one per line or hashcat format)
             hash_type: Type of hashes
@@ -596,7 +646,7 @@ class CredentialManager:
             attack_mode: hashcat attack mode (0=straight, 3=brute)
             extra_args: Additional hashcat arguments
             progress_callback: Callback for progress updates
-        
+
         Returns:
             Dict with cracking results
         """
@@ -622,12 +672,17 @@ class CredentialManager:
 
         cmd = [
             self.hashcat_path,
-            "-m", str(mode),
-            "-a", str(attack_mode),
-            "-w", "3",
-            "--potfile-path", str(potfile),
+            "-m",
+            str(mode),
+            "-a",
+            str(attack_mode),
+            "-w",
+            "3",
+            "--potfile-path",
+            str(potfile),
             "--status",
-            "--status-timer", "10",
+            "--status-timer",
+            "10",
         ]
 
         if attack_mode == 0:
@@ -685,14 +740,11 @@ class CredentialManager:
             return {"success": False, "error": str(e)}
 
     def create_hash_file(
-        self,
-        hash_type: HashType,
-        credentials: list[Credential],
-        output_path: str,
+        self, hash_type: HashType, credentials: list[Credential], output_path: str
     ) -> int:
         """Create hash file for hashcat from credentials."""
         count = 0
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             for cred in credentials:
                 if cred.hash and cred.hash_type == hash_type:
                     line = cred.to_hashcat_line()
@@ -702,9 +754,7 @@ class CredentialManager:
         return count
 
     def export_to_hashcat(
-        self,
-        hash_type: HashType | None = None,
-        source: CredentialSource | None = None,
+        self, hash_type: HashType | None = None, source: CredentialSource | None = None
     ) -> str:
         """Export credentials to hashcat format file."""
         timestamp = int(time.time())
@@ -713,7 +763,7 @@ class CredentialManager:
         path.parent.mkdir(parents=True, exist_ok=True)
 
         count = 0
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             for cred in self._credentials.values():
                 if hash_type and cred.hash_type != hash_type:
                     continue
@@ -731,32 +781,54 @@ class CredentialManager:
     def export_to_csv(self, path: str) -> int:
         """Export all credentials to CSV."""
         import csv
+
         count = 0
-        with open(path, 'w', newline='') as f:
+        with open(path, "w", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow([
-                "id", "username", "password", "hash", "hash_type",
-                "credential_type", "source", "target_address",
-                "target_port", "target_service", "captured_at",
-                "validated", "validity_status", "tags"
-            ])
+            writer.writerow(
+                [
+                    "id",
+                    "username",
+                    "password",
+                    "hash",
+                    "hash_type",
+                    "credential_type",
+                    "source",
+                    "target_address",
+                    "target_port",
+                    "target_service",
+                    "captured_at",
+                    "validated",
+                    "validity_status",
+                    "tags",
+                ]
+            )
             for cred in self._credentials.values():
-                writer.writerow([
-                    cred.id, cred.username or "", cred.password or "",
-                    cred.hash or "", cred.hash_type.value if cred.hash_type else "",
-                    cred.credential_type.value, cred.source.value,
-                    cred.target_address or "", cred.target_port or "",
-                    cred.target_service or "", cred.captured_at.isoformat(),
-                    cred.validated, cred.validity_status,
-                    ",".join(cred.tags),
-                ])
+                writer.writerow(
+                    [
+                        cred.id,
+                        cred.username or "",
+                        cred.password or "",
+                        cred.hash or "",
+                        cred.hash_type.value if cred.hash_type else "",
+                        cred.credential_type.value,
+                        cred.source.value,
+                        cred.target_address or "",
+                        cred.target_port or "",
+                        cred.target_service or "",
+                        cred.captured_at.isoformat(),
+                        cred.validated,
+                        cred.validity_status,
+                        ",".join(cred.tags),
+                    ]
+                )
                 count += 1
         return count
 
     def export_to_json(self, path: str) -> int:
         """Export all credentials to JSON."""
         data = [c.to_dict() for c in self._credentials.values()]
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             json.dump(data, f, indent=2, default=str)
         return len(data)
 
@@ -773,7 +845,9 @@ class CredentialManager:
         }
 
         for cred in self._credentials.values():
-            stats["by_type"][cred.credential_type.value] = stats["by_type"].get(cred.credential_type.value, 0) + 1
+            stats["by_type"][cred.credential_type.value] = (
+                stats["by_type"].get(cred.credential_type.value, 0) + 1
+            )
             stats["by_source"][cred.source.value] = stats["by_source"].get(cred.source.value, 0) + 1
 
             if cred.validated:
@@ -781,7 +855,9 @@ class CredentialManager:
             if cred.hash:
                 stats["with_hash"] += 1
                 if cred.hash_type:
-                    stats["by_hash_type"][cred.hash_type.value] = stats["by_hash_type"].get(cred.hash_type.value, 0) + 1
+                    stats["by_hash_type"][cred.hash_type.value] = (
+                        stats["by_hash_type"].get(cred.hash_type.value, 0) + 1
+                    )
             if cred.password:
                 stats["with_password"] += 1
 
@@ -839,9 +915,9 @@ class CredentialManager:
                 "saved_at": datetime.utcnow().isoformat(),
                 "version": "1.0",
                 "total": len(self._credentials),
-            }
+            },
         }
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             json.dump(data, f, indent=2, default=str)
 
     def load_state(self, path: str) -> int:
@@ -869,7 +945,9 @@ class CredentialManager:
                 target_service=cred_data.get("target_service"),
                 captured_at=datetime.fromisoformat(cred_data["captured_at"]),
                 validated=cred_data.get("validated", False),
-                validated_at=datetime.fromisoformat(cred_data["validated_at"]) if cred_data.get("validated_at") else None,
+                validated_at=datetime.fromisoformat(cred_data["validated_at"])
+                if cred_data.get("validated_at")
+                else None,
                 validity_status=cred_data.get("validity_status", "unknown"),
                 metadata=cred_data.get("metadata", {}),
                 tags=cred_data.get("tags", []),

@@ -22,35 +22,38 @@ logger = structlog.get_logger(__name__)
 
 class GadgetFunction(Enum):
     """USB gadget function types."""
-    HID = "hid"                    # Human Interface Device
+
+    HID = "hid"  # Human Interface Device
     MASS_STORAGE = "mass_storage"  # Mass Storage
-    RNDIS = "rndis"                # USB Ethernet/RNDIS
-    ECM = "ecm"                    # Ethernet Control Model
-    ACM = "acm"                    # Abstract Control Model (Serial)
-    NCM = "ncm"                    # Network Control Model
-    MIDI = "midi"                  # MIDI
-    PRINTER = "printer"            # Printer
+    RNDIS = "rndis"  # USB Ethernet/RNDIS
+    ECM = "ecm"  # Ethernet Control Model
+    ACM = "acm"  # Abstract Control Model (Serial)
+    NCM = "ncm"  # Network Control Model
+    MIDI = "midi"  # MIDI
+    PRINTER = "printer"  # Printer
     AUDIO_SOURCE = "audio_source"  # Audio Source
-    AUDIO_SINK = "audio_sink"      # Audio Sink
+    AUDIO_SINK = "audio_sink"  # Audio Sink
 
 
 class GadgetSpeed(Enum):
     """USB speeds."""
-    LOW = "low"           # 1.5 Mbps
-    FULL = "full"         # 12 Mbps
-    HIGH = "high"         # 480 Mbps
-    SUPER = "super"       # 5 Gbps
+
+    LOW = "low"  # 1.5 Mbps
+    FULL = "full"  # 12 Mbps
+    HIGH = "high"  # 480 Mbps
+    SUPER = "super"  # 5 Gbps
     SUPER_PLUS = "super_plus"  # 10 Gbps
 
 
 @dataclass
 class GadgetConfig:
     """USB Gadget configuration."""
+
     # Device identification
-    vendor_id: str = "0x1d6b"       # Linux Foundation
-    product_id: str = "0x0104"      # Gadget
+    vendor_id: str = "0x1d6b"  # Linux Foundation
+    product_id: str = "0x0104"  # Gadget
     device_version: str = "0x0100"  # v1.00
-    usb_version: str = "0x0200"     # USB 2.0
+    usb_version: str = "0x0200"  # USB 2.0
 
     # Strings
     manufacturer: str = "Urban Hack Sentinel"
@@ -73,29 +76,32 @@ class GadgetConfig:
 @dataclass
 class HIDConfig:
     """HID function configuration."""
-    protocol: int = 1           # 1=Keyboard, 2=Mouse
-    subclass: int = 1           # 1=Boot interface
-    report_length: int = 8      # Report length
+
+    protocol: int = 1  # 1=Keyboard, 2=Mouse
+    subclass: int = 1  # 1=Boot interface
+    report_length: int = 8  # Report length
     report_desc: bytes | None = None  # Custom report descriptor
 
 
 @dataclass
 class MassStorageConfig:
     """Mass Storage function configuration."""
-    file_path: str = ""         # Backing file path
-    block_size: int = 512       # Block size
-    num_blocks: int = 0         # Number of blocks (0 = auto)
-    read_only: bool = False     # Read only
-    removable: bool = True      # Removable media
-    cdrom: bool = False         # CD-ROM emulation
-    stall: bool = False         # Stall support
+
+    file_path: str = ""  # Backing file path
+    block_size: int = 512  # Block size
+    num_blocks: int = 0  # Number of blocks (0 = auto)
+    read_only: bool = False  # Read only
+    removable: bool = True  # Removable media
+    cdrom: bool = False  # CD-ROM emulation
+    stall: bool = False  # Stall support
 
 
 @dataclass
 class NetworkConfig:
     """Network function (RNDIS/ECM/NCM) configuration."""
+
     host_addr: str = "00:11:22:33:44:55"  # Host MAC
-    dev_addr: str = "00:11:22:33:44:56"   # Device MAC
+    dev_addr: str = "00:11:22:33:44:56"  # Device MAC
     host_ip: str = "192.168.7.1"
     dev_ip: str = "192.168.7.2"
     netmask: str = "255.255.255.0"
@@ -104,13 +110,14 @@ class NetworkConfig:
 @dataclass
 class SerialConfig:
     """Serial (ACM) function configuration."""
+
     port: int = 0  # 0 = auto
 
 
 class USBGadgetManager:
     """
     Manages Linux USB gadget subsystem via ConfigFS.
-    
+
     Features:
     - Create/destroy gadgets
     - Add/remove functions (HID, Mass Storage, Network, Serial)
@@ -128,10 +135,7 @@ class USBGadgetManager:
 
     def is_available(self) -> bool:
         """Check if USB gadget subsystem is available."""
-        return (
-            Path("/sys/kernel/config/usb_gadget").exists() and
-            Path("/sys/class/udc").exists()
-        )
+        return Path("/sys/kernel/config/usb_gadget").exists() and Path("/sys/class/udc").exists()
 
     def get_udc_controllers(self) -> list[str]:
         """Get available UDC (USB Device Controller) controllers."""
@@ -259,7 +263,9 @@ class USBGadgetManager:
             logger.error("Failed to add Mass Storage function", error=str(e))
             return False
 
-    def add_network_function(self, function_type: GadgetFunction, config: NetworkConfig, instance: int = 0) -> bool:
+    def add_network_function(
+        self, function_type: GadgetFunction, config: NetworkConfig, instance: int = 0
+    ) -> bool:
         """Add network function (RNDIS/ECM/NCM) to gadget."""
         if function_type not in (GadgetFunction.RNDIS, GadgetFunction.ECM, GadgetFunction.NCM):
             logger.error("Invalid network function type", type=function_type.value)
@@ -401,6 +407,7 @@ class USBGadgetManager:
             if func_path.exists():
                 # Remove function (will fail if still linked)
                 import shutil
+
                 shutil.rmtree(func_path)
 
             self._functions_loaded.pop(func_type, None)
@@ -426,10 +433,12 @@ class USBGadgetManager:
             for config_dir in (self.gadget_path / "configs").iterdir():
                 if config_dir.is_dir():
                     import shutil
+
                     shutil.rmtree(config_dir)
 
             # Remove strings
             import shutil
+
             strings_dir = self.gadget_path / "strings"
             if strings_dir.exists():
                 shutil.rmtree(strings_dir)
@@ -457,12 +466,14 @@ class USBGadgetManager:
         if not self.ensure_gadget():
             return False
 
-        success = self.add_hid_function(HIDConfig(
-            protocol=1,  # Keyboard
-            subclass=1,
-            report_length=8,
-            report_desc=report_desc
-        ))
+        success = self.add_hid_function(
+            HIDConfig(
+                protocol=1,  # Keyboard
+                subclass=1,
+                report_length=8,
+                report_desc=report_desc,
+            )
+        )
 
         if success:
             self.add_function_to_config(GadgetFunction.HID)
@@ -474,11 +485,13 @@ class USBGadgetManager:
         if not self.ensure_gadget():
             return False
 
-        success = self.add_hid_function(HIDConfig(
-            protocol=2,  # Mouse
-            subclass=1,
-            report_length=4,
-        ))
+        success = self.add_hid_function(
+            HIDConfig(
+                protocol=2,  # Mouse
+                subclass=1,
+                report_length=4,
+            )
+        )
 
         if success:
             self.add_function_to_config(GadgetFunction.HID)
@@ -490,10 +503,9 @@ class USBGadgetManager:
         if not self.ensure_gadget():
             return False
 
-        success = self.add_mass_storage_function(MassStorageConfig(
-            file_path=file_path,
-            read_only=read_only,
-        ))
+        success = self.add_mass_storage_function(
+            MassStorageConfig(file_path=file_path, read_only=read_only)
+        )
 
         if success:
             self.add_function_to_config(GadgetFunction.MASS_STORAGE)
@@ -505,10 +517,9 @@ class USBGadgetManager:
         if not self.ensure_gadget():
             return False
 
-        success = self.add_network_function(GadgetFunction.RNDIS, NetworkConfig(
-            host_ip=host_ip,
-            dev_ip=dev_ip,
-        ))
+        success = self.add_network_function(
+            GadgetFunction.RNDIS, NetworkConfig(host_ip=host_ip, dev_ip=dev_ip)
+        )
 
         if success:
             self.add_function_to_config(GadgetFunction.RNDIS)
@@ -520,10 +531,9 @@ class USBGadgetManager:
         if not self.ensure_gadget():
             return False
 
-        success = self.add_network_function(GadgetFunction.ECM, NetworkConfig(
-            host_ip=host_ip,
-            dev_ip=dev_ip,
-        ))
+        success = self.add_network_function(
+            GadgetFunction.ECM, NetworkConfig(host_ip=host_ip, dev_ip=dev_ip)
+        )
 
         if success:
             self.add_function_to_config(GadgetFunction.ECM)
@@ -548,70 +558,129 @@ class HIDReportDescriptors:
     """Pre-defined HID report descriptors."""
 
     # Standard keyboard (8 bytes)
-    KEYBOARD = bytes([
-        0x05, 0x01,        # Usage Page (Generic Desktop Ctrls)
-        0x09, 0x06,        # Usage (Keyboard)
-        0xA1, 0x01,        # Collection (Application)
-        0x05, 0x07,        #   Usage Page (Kbrd/Keypad)
-        0x19, 0xE0,        #   Usage Minimum (0xE0)
-        0x29, 0xE7,        #   Usage Maximum (0xE7)
-        0x15, 0x00,        #   Logical Minimum (0)
-        0x25, 0x01,        #   Logical Maximum (1)
-        0x75, 0x01,        #   Report Size (1)
-        0x95, 0x08,        #   Report Count (8)
-        0x81, 0x02,        #   Input (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Pos)
-        0x95, 0x01,        #   Report Count (1)
-        0x75, 0x08,        #   Report Size (8)
-        0x81, 0x03,        #   Input (Const,Var,Abs,No Wrap,Linear,Preferred State,No Null Pos)
-        0x95, 0x05,        #   Report Count (5)
-        0x75, 0x01,        #   Report Size (1)
-        0x05, 0x08,        #   Usage Page (LEDs)
-        0x19, 0x01,        #   Usage Minimum (Num Lock)
-        0x29, 0x05,        #   Usage Maximum (Kana)
-        0x91, 0x02,        #   Output (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Pos,Non-volatile)
-        0x95, 0x01,        #   Report Count (1)
-        0x75, 0x03,        #   Report Size (3)
-        0x91, 0x03,        #   Output (Const,Var,Abs,No Wrap,Linear,Preferred State,No Null Pos,Non-volatile)
-        0x95, 0x06,        #   Report Count (6)
-        0x75, 0x08,        #   Report Size (8)
-        0x15, 0x00,        #   Logical Minimum (0)
-        0x25, 0x65,        #   Logical Maximum (101)
-        0x05, 0x07,        #   Usage Page (Kbrd/Keypad)
-        0x19, 0x00,        #   Usage Minimum (0x00)
-        0x29, 0x65,        #   Usage Maximum (101)
-        0x81, 0x00,        #   Input (Data,Array,Abs,No Wrap,Linear,Preferred State,No Null Pos)
-        0xC0,              # End Collection
-    ])
+    KEYBOARD = bytes(
+        [
+            0x05,
+            0x01,  # Usage Page (Generic Desktop Ctrls)
+            0x09,
+            0x06,  # Usage (Keyboard)
+            0xA1,
+            0x01,  # Collection (Application)
+            0x05,
+            0x07,  #   Usage Page (Kbrd/Keypad)
+            0x19,
+            0xE0,  #   Usage Minimum (0xE0)
+            0x29,
+            0xE7,  #   Usage Maximum (0xE7)
+            0x15,
+            0x00,  #   Logical Minimum (0)
+            0x25,
+            0x01,  #   Logical Maximum (1)
+            0x75,
+            0x01,  #   Report Size (1)
+            0x95,
+            0x08,  #   Report Count (8)
+            0x81,
+            0x02,  #   Input (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Pos)
+            0x95,
+            0x01,  #   Report Count (1)
+            0x75,
+            0x08,  #   Report Size (8)
+            0x81,
+            0x03,  #   Input (Const,Var,Abs,No Wrap,Linear,Preferred State,No Null Pos)
+            0x95,
+            0x05,  #   Report Count (5)
+            0x75,
+            0x01,  #   Report Size (1)
+            0x05,
+            0x08,  #   Usage Page (LEDs)
+            0x19,
+            0x01,  #   Usage Minimum (Num Lock)
+            0x29,
+            0x05,  #   Usage Maximum (Kana)
+            0x91,
+            0x02,  #   Output (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Pos,Non-volatile)
+            0x95,
+            0x01,  #   Report Count (1)
+            0x75,
+            0x03,  #   Report Size (3)
+            0x91,
+            0x03,  #   Output (Const,Var,Abs,No Wrap,Linear,Preferred State,No Null Pos,Non-volatile)
+            0x95,
+            0x06,  #   Report Count (6)
+            0x75,
+            0x08,  #   Report Size (8)
+            0x15,
+            0x00,  #   Logical Minimum (0)
+            0x25,
+            0x65,  #   Logical Maximum (101)
+            0x05,
+            0x07,  #   Usage Page (Kbrd/Keypad)
+            0x19,
+            0x00,  #   Usage Minimum (0x00)
+            0x29,
+            0x65,  #   Usage Maximum (101)
+            0x81,
+            0x00,  #   Input (Data,Array,Abs,No Wrap,Linear,Preferred State,No Null Pos)
+            0xC0,  # End Collection
+        ]
+    )
 
     # Standard mouse (4 bytes)
-    MOUSE = bytes([
-        0x05, 0x01,        # Usage Page (Generic Desktop Ctrls)
-        0x09, 0x02,        # Usage (Mouse)
-        0xA1, 0x01,        # Collection (Application)
-        0x09, 0x01,        #   Usage (Pointer)
-        0xA1, 0x00,        #   Collection (Physical)
-        0x05, 0x09,        #   Usage Page (Button)
-        0x19, 0x01,        #   Usage Minimum (0x01)
-        0x29, 0x03,        #   Usage Maximum (0x03)
-        0x15, 0x00,        #   Logical Minimum (0)
-        0x25, 0x01,        #   Logical Maximum (1)
-        0x95, 0x03,        #   Report Count (3)
-        0x75, 0x01,        #   Report Size (1)
-        0x81, 0x02,        #   Input (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Pos)
-        0x95, 0x01,        #   Report Count (1)
-        0x75, 0x05,        #   Report Size (5)
-        0x81, 0x03,        #   Input (Const,Var,Abs,No Wrap,Linear,Preferred State,No Null Pos)
-        0x05, 0x01,        #   Usage Page (Generic Desktop Ctrls)
-        0x09, 0x30,        #   Usage (X)
-        0x09, 0x31,        #   Usage (Y)
-        0x15, 0x81,        #   Logical Minimum (-127)
-        0x25, 0x7F,        #   Logical Maximum (127)
-        0x75, 0x08,        #   Report Size (8)
-        0x95, 0x02,        #   Report Count (2)
-        0x81, 0x06,        #   Input (Data,Var,Rel,No Wrap,Linear,Preferred State,No Null Pos)
-        0xC0,              # End Collection
-        0xC0,              # End Collection
-    ])
+    MOUSE = bytes(
+        [
+            0x05,
+            0x01,  # Usage Page (Generic Desktop Ctrls)
+            0x09,
+            0x02,  # Usage (Mouse)
+            0xA1,
+            0x01,  # Collection (Application)
+            0x09,
+            0x01,  #   Usage (Pointer)
+            0xA1,
+            0x00,  #   Collection (Physical)
+            0x05,
+            0x09,  #   Usage Page (Button)
+            0x19,
+            0x01,  #   Usage Minimum (0x01)
+            0x29,
+            0x03,  #   Usage Maximum (0x03)
+            0x15,
+            0x00,  #   Logical Minimum (0)
+            0x25,
+            0x01,  #   Logical Maximum (1)
+            0x95,
+            0x03,  #   Report Count (3)
+            0x75,
+            0x01,  #   Report Size (1)
+            0x81,
+            0x02,  #   Input (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Pos)
+            0x95,
+            0x01,  #   Report Count (1)
+            0x75,
+            0x05,  #   Report Size (5)
+            0x81,
+            0x03,  #   Input (Const,Var,Abs,No Wrap,Linear,Preferred State,No Null Pos)
+            0x05,
+            0x01,  #   Usage Page (Generic Desktop Ctrls)
+            0x09,
+            0x30,  #   Usage (X)
+            0x09,
+            0x31,  #   Usage (Y)
+            0x15,
+            0x81,  #   Logical Minimum (-127)
+            0x25,
+            0x7F,  #   Logical Maximum (127)
+            0x75,
+            0x08,  #   Report Size (8)
+            0x95,
+            0x02,  #   Report Count (2)
+            0x81,
+            0x06,  #   Input (Data,Var,Rel,No Wrap,Linear,Preferred State,No Null Pos)
+            0xC0,  # End Collection
+            0xC0,  # End Collection
+        ]
+    )
 
 
 # Export all public classes

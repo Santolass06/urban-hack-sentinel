@@ -18,6 +18,7 @@ import structlog
 
 try:
     import uinput
+
     UINPUT_AVAILABLE = True
 except ImportError:
     UINPUT_AVAILABLE = False
@@ -27,12 +28,14 @@ logger = structlog.get_logger(__name__)
 
 class InjectionMode(Enum):
     """HID injection mode."""
-    UINPUT = "uinput"           # Local uinput (requires /dev/uinput)
-    USB_GADGET = "usb_gadget"   # USB Gadget HID (configfs)
+
+    UINPUT = "uinput"  # Local uinput (requires /dev/uinput)
+    USB_GADGET = "usb_gadget"  # USB Gadget HID (configfs)
 
 
 class InjectionStatus(Enum):
     """Injection status."""
+
     IDLE = "idle"
     RUNNING = "running"
     PAUSED = "paused"
@@ -43,6 +46,7 @@ class InjectionStatus(Enum):
 @dataclass
 class InjectionConfig:
     """Configuration for HID injection."""
+
     mode: InjectionMode = InjectionMode.UINPUT
     uinput_device_name: str = "Urban Hack Sentinel HID"
     usb_gadget_name: str = "urban_hs"
@@ -54,6 +58,7 @@ class InjectionConfig:
 @dataclass
 class InjectionEvent:
     """Single injection event."""
+
     timestamp: datetime = field(default_factory=datetime.utcnow)
     event_type: str = ""  # key_down, key_up, key_press, mouse_move, mouse_click, delay
     keycode: int | None = None
@@ -67,6 +72,7 @@ class InjectionEvent:
 @dataclass
 class InjectionReport:
     """Report of an injection run."""
+
     start_time: datetime
     end_time: datetime
     total_keys: int = 0
@@ -79,20 +85,81 @@ class InjectionReport:
 # Linux input-event keycodes (input-event-codes.h) for the US layout.
 _KEY_LEFTSHIFT_CODE = 42
 _BASE_KEYCODES = {
-    "a": 30, "b": 48, "c": 46, "d": 32, "e": 18, "f": 33, "g": 34, "h": 35,
-    "i": 23, "j": 36, "k": 37, "l": 38, "m": 50, "n": 49, "o": 24, "p": 25,
-    "q": 16, "r": 19, "s": 31, "t": 20, "u": 22, "v": 47, "w": 17, "x": 45,
-    "y": 21, "z": 44,
-    "1": 2, "2": 3, "3": 4, "4": 5, "5": 6, "6": 7, "7": 8, "8": 9, "9": 10, "0": 11,
-    "-": 12, "=": 13, "[": 26, "]": 27, ";": 39, "'": 40, "`": 41, "\\": 43,
-    ",": 51, ".": 52, "/": 53,
-    " ": 57, "\n": 28, "\t": 15, "\r": 28,
+    "a": 30,
+    "b": 48,
+    "c": 46,
+    "d": 32,
+    "e": 18,
+    "f": 33,
+    "g": 34,
+    "h": 35,
+    "i": 23,
+    "j": 36,
+    "k": 37,
+    "l": 38,
+    "m": 50,
+    "n": 49,
+    "o": 24,
+    "p": 25,
+    "q": 16,
+    "r": 19,
+    "s": 31,
+    "t": 20,
+    "u": 22,
+    "v": 47,
+    "w": 17,
+    "x": 45,
+    "y": 21,
+    "z": 44,
+    "1": 2,
+    "2": 3,
+    "3": 4,
+    "4": 5,
+    "5": 6,
+    "6": 7,
+    "7": 8,
+    "8": 9,
+    "9": 10,
+    "0": 11,
+    "-": 12,
+    "=": 13,
+    "[": 26,
+    "]": 27,
+    ";": 39,
+    "'": 40,
+    "`": 41,
+    "\\": 43,
+    ",": 51,
+    ".": 52,
+    "/": 53,
+    " ": 57,
+    "\n": 28,
+    "\t": 15,
+    "\r": 28,
 }
 # Shifted printable char -> its unshifted base key.
 _SHIFTED_CHARS = {
-    "!": "1", "@": "2", "#": "3", "$": "4", "%": "5", "^": "6", "&": "7",
-    "*": "8", "(": "9", ")": "0", "_": "-", "+": "=", "{": "[", "}": "]",
-    ":": ";", '"': "'", "~": "`", "|": "\\", "<": ",", ">": ".", "?": "/",
+    "!": "1",
+    "@": "2",
+    "#": "3",
+    "$": "4",
+    "%": "5",
+    "^": "6",
+    "&": "7",
+    "*": "8",
+    "(": "9",
+    ")": "0",
+    "_": "-",
+    "+": "=",
+    "{": "[",
+    "}": "]",
+    ":": ";",
+    '"': "'",
+    "~": "`",
+    "|": "\\",
+    "<": ",",
+    ">": ".",
+    "?": "/",
 }
 
 
@@ -116,39 +183,101 @@ class UInputInjector:
 
         try:
             # Define device capabilities
-            events = (
-                uinput.EV_KEY,
-                uinput.EV_REL,
-                uinput.EV_ABS,
-                uinput.EV_SYN,
-            )
+            events = (uinput.EV_KEY, uinput.EV_REL, uinput.EV_ABS, uinput.EV_SYN)
 
             # Common keys
             keys = [
-                uinput.KEY_A, uinput.KEY_B, uinput.KEY_C, uinput.KEY_D, uinput.KEY_E,
-                uinput.KEY_F, uinput.KEY_G, uinput.KEY_H, uinput.KEY_I, uinput.KEY_J,
-                uinput.KEY_K, uinput.KEY_L, uinput.KEY_M, uinput.KEY_N, uinput.KEY_O,
-                uinput.KEY_P, uinput.KEY_Q, uinput.KEY_R, uinput.KEY_S, uinput.KEY_T,
-                uinput.KEY_U, uinput.KEY_V, uinput.KEY_W, uinput.KEY_X, uinput.KEY_Y,
+                uinput.KEY_A,
+                uinput.KEY_B,
+                uinput.KEY_C,
+                uinput.KEY_D,
+                uinput.KEY_E,
+                uinput.KEY_F,
+                uinput.KEY_G,
+                uinput.KEY_H,
+                uinput.KEY_I,
+                uinput.KEY_J,
+                uinput.KEY_K,
+                uinput.KEY_L,
+                uinput.KEY_M,
+                uinput.KEY_N,
+                uinput.KEY_O,
+                uinput.KEY_P,
+                uinput.KEY_Q,
+                uinput.KEY_R,
+                uinput.KEY_S,
+                uinput.KEY_T,
+                uinput.KEY_U,
+                uinput.KEY_V,
+                uinput.KEY_W,
+                uinput.KEY_X,
+                uinput.KEY_Y,
                 uinput.KEY_Z,
-                uinput.KEY_1, uinput.KEY_2, uinput.KEY_3, uinput.KEY_4, uinput.KEY_5,
-                uinput.KEY_6, uinput.KEY_7, uinput.KEY_8, uinput.KEY_9, uinput.KEY_0,
-                uinput.KEY_ENTER, uinput.KEY_ESC, uinput.KEY_BACKSPACE, uinput.KEY_TAB,
+                uinput.KEY_1,
+                uinput.KEY_2,
+                uinput.KEY_3,
+                uinput.KEY_4,
+                uinput.KEY_5,
+                uinput.KEY_6,
+                uinput.KEY_7,
+                uinput.KEY_8,
+                uinput.KEY_9,
+                uinput.KEY_0,
+                uinput.KEY_ENTER,
+                uinput.KEY_ESC,
+                uinput.KEY_BACKSPACE,
+                uinput.KEY_TAB,
                 # Punctuation keys required to type symbols / shifted characters.
-                uinput.KEY_MINUS, uinput.KEY_EQUAL, uinput.KEY_LEFTBRACE, uinput.KEY_RIGHTBRACE,
-                uinput.KEY_SEMICOLON, uinput.KEY_APOSTROPHE, uinput.KEY_GRAVE, uinput.KEY_BACKSLASH,
-                uinput.KEY_COMMA, uinput.KEY_DOT, uinput.KEY_SLASH,
-                uinput.KEY_SPACE, uinput.KEY_LEFTSHIFT, uinput.KEY_RIGHTSHIFT,
-                uinput.KEY_LEFTCTRL, uinput.KEY_RIGHTCTRL, uinput.KEY_LEFTALT, uinput.KEY_RIGHTALT,
-                uinput.KEY_LEFTMETA, uinput.KEY_RIGHTMETA,  # GUI/Windows key
-                uinput.KEY_UP, uinput.KEY_DOWN, uinput.KEY_LEFT, uinput.KEY_RIGHT,
-                uinput.KEY_TAB, uinput.KEY_ENTER, uinput.KEY_ESC, uinput.KEY_BACKSPACE,
-                uinput.KEY_F1, uinput.KEY_F2, uinput.KEY_F3, uinput.KEY_F4,
-                uinput.KEY_F5, uinput.KEY_F6, uinput.KEY_F7, uinput.KEY_F8,
-                uinput.KEY_F9, uinput.KEY_F10, uinput.KEY_F11, uinput.KEY_F12,
-                uinput.KEY_DELETE, uinput.KEY_HOME, uinput.KEY_END, uinput.KEY_PAGEUP, uinput.KEY_PAGEDOWN,
-                uinput.KEY_INSERT, uinput.KEY_DELETE,
-                uinput.BTN_LEFT, uinput.BTN_RIGHT, uinput.BTN_MIDDLE,
+                uinput.KEY_MINUS,
+                uinput.KEY_EQUAL,
+                uinput.KEY_LEFTBRACE,
+                uinput.KEY_RIGHTBRACE,
+                uinput.KEY_SEMICOLON,
+                uinput.KEY_APOSTROPHE,
+                uinput.KEY_GRAVE,
+                uinput.KEY_BACKSLASH,
+                uinput.KEY_COMMA,
+                uinput.KEY_DOT,
+                uinput.KEY_SLASH,
+                uinput.KEY_SPACE,
+                uinput.KEY_LEFTSHIFT,
+                uinput.KEY_RIGHTSHIFT,
+                uinput.KEY_LEFTCTRL,
+                uinput.KEY_RIGHTCTRL,
+                uinput.KEY_LEFTALT,
+                uinput.KEY_RIGHTALT,
+                uinput.KEY_LEFTMETA,
+                uinput.KEY_RIGHTMETA,  # GUI/Windows key
+                uinput.KEY_UP,
+                uinput.KEY_DOWN,
+                uinput.KEY_LEFT,
+                uinput.KEY_RIGHT,
+                uinput.KEY_TAB,
+                uinput.KEY_ENTER,
+                uinput.KEY_ESC,
+                uinput.KEY_BACKSPACE,
+                uinput.KEY_F1,
+                uinput.KEY_F2,
+                uinput.KEY_F3,
+                uinput.KEY_F4,
+                uinput.KEY_F5,
+                uinput.KEY_F6,
+                uinput.KEY_F7,
+                uinput.KEY_F8,
+                uinput.KEY_F9,
+                uinput.KEY_F10,
+                uinput.KEY_F11,
+                uinput.KEY_F12,
+                uinput.KEY_DELETE,
+                uinput.KEY_HOME,
+                uinput.KEY_END,
+                uinput.KEY_PAGEUP,
+                uinput.KEY_PAGEDOWN,
+                uinput.KEY_INSERT,
+                uinput.KEY_DELETE,
+                uinput.BTN_LEFT,
+                uinput.BTN_RIGHT,
+                uinput.BTN_MIDDLE,
             ]
 
             rel_axes = [uinput.REL_X, uinput.REL_Y, uinput.REL_WHEEL]
@@ -195,11 +324,9 @@ class UInputInjector:
 
         try:
             self._device.emit_click(keycode)
-            self._log_event(InjectionEvent(
-                event_type="key_down",
-                keycode=keycode,
-                modifier=modifier,
-            ))
+            self._log_event(
+                InjectionEvent(event_type="key_down", keycode=keycode, modifier=modifier)
+            )
             return True
         except Exception as e:
             logger.error("Key down failed", keycode=keycode, error=str(e))
@@ -214,11 +341,7 @@ class UInputInjector:
             # uinput emits key up automatically on emit_click
             # For explicit key up, we can emit with value 0
             self._device.emit(keycode, 0)
-            self._log_event(InjectionEvent(
-                event_type="key_up",
-                keycode=keycode,
-                modifier=modifier,
-            ))
+            self._log_event(InjectionEvent(event_type="key_up", keycode=keycode, modifier=modifier))
             return True
         except Exception as e:
             logger.error("Key up failed", keycode=keycode, error=str(e))
@@ -231,11 +354,9 @@ class UInputInjector:
 
         try:
             self._device.emit_click(keycode)
-            self._log_event(InjectionEvent(
-                event_type="key_press",
-                keycode=keycode,
-                modifier=modifier,
-            ))
+            self._log_event(
+                InjectionEvent(event_type="key_press", keycode=keycode, modifier=modifier)
+            )
 
             delay = delay_ms or self.config.default_delay
             if delay > 0:
@@ -296,10 +417,7 @@ class UInputInjector:
             self._device.emit(uinput.REL_Y, y)
             self._device.emit(uinput.EV_SYN, uinput.SYN_REPORT, 0)
 
-            self._log_event(InjectionEvent(
-                event_type="mouse_move",
-                x=x, y=y,
-            ))
+            self._log_event(InjectionEvent(event_type="mouse_move", x=x, y=y))
             return True
         except Exception as e:
             logger.error("Mouse move failed", error=str(e))
@@ -311,12 +429,13 @@ class UInputInjector:
             return False
 
         try:
-            btn = {1: uinput.BTN_LEFT, 2: uinput.BTN_RIGHT, 3: uinput.BTN_MIDDLE}.get(button, uinput.BTN_LEFT)
+            btn = {1: uinput.BTN_LEFT, 2: uinput.BTN_RIGHT, 3: uinput.BTN_MIDDLE}.get(
+                button, uinput.BTN_LEFT
+            )
             self._device.emit_click(btn)
-            self._log_event(InjectionEvent(
-                event_type="mouse_click",
-                description=f"button_{button}",
-            ))
+            self._log_event(
+                InjectionEvent(event_type="mouse_click", description=f"button_{button}")
+            )
             return True
         except Exception as e:
             logger.error("Mouse click failed", error=str(e))
@@ -324,10 +443,7 @@ class UInputInjector:
 
     async def delay(self, ms: int):
         """Add delay."""
-        self._log_event(InjectionEvent(
-            event_type="delay",
-            delay_ms=ms,
-        ))
+        self._log_event(InjectionEvent(event_type="delay", delay_ms=ms))
         await asyncio.sleep(ms / 1000.0)
 
     def get_events(self) -> list[InjectionEvent]:
@@ -383,6 +499,7 @@ class USBGadgetInjector:
     async def _find_hid_report(self) -> str | None:
         """Find the HID report endpoint in /dev/hidg*."""
         import glob
+
         for path in glob.glob("/dev/hidg*"):
             return path
         # Also check /dev/hidraw*
@@ -408,7 +525,7 @@ class USBGadgetInjector:
 class HIDInjector:
     """
     Main HID Injector - supports both uinput and USB Gadget modes.
-    
+
     Usage:
         injector = HIDInjector()
         await injector.start(InjectionMode.UINPUT)
@@ -472,7 +589,7 @@ class HIDInjector:
         if not self._active_injector:
             return False
 
-        if hasattr(self._active_injector, 'type_string'):
+        if hasattr(self._active_injector, "type_string"):
             return await self._active_injector.type_string(text, delay_ms)
         # Fallback: type character by character
         for char in text:
@@ -480,12 +597,14 @@ class HIDInjector:
                 return False
         return True
 
-    async def key_press(self, key: str | int, modifier: int = 0, delay_ms: int | None = None) -> bool:
+    async def key_press(
+        self, key: str | int, modifier: int = 0, delay_ms: int | None = None
+    ) -> bool:
         """Press a key."""
         if not self._active_injector:
             return False
 
-        if hasattr(self._active_injector, 'key_press'):
+        if hasattr(self._active_injector, "key_press"):
             if isinstance(key, str):
                 return await self._active_injector.type_string(key)
             return await self._active_injector.key_press(key, modifier, delay_ms)
@@ -493,31 +612,31 @@ class HIDInjector:
 
     async def key_down(self, keycode: int, modifier: int = 0) -> bool:
         """Press key down."""
-        if not self._active_injector or not hasattr(self._active_injector, 'key_down'):
+        if not self._active_injector or not hasattr(self._active_injector, "key_down"):
             return False
         return self._active_injector.key_down(keycode, modifier)
 
     async def key_up(self, keycode: int, modifier: int = 0) -> bool:
         """Release key."""
-        if not self._active_injector or not hasattr(self._active_injector, 'key_up'):
+        if not self._active_injector or not hasattr(self._active_injector, "key_up"):
             return False
         return self._active_injector.key_up(keycode, modifier)
 
     def mouse_move(self, x: int, y: int) -> bool:
         """Move mouse relatively."""
-        if not self._active_injector or not hasattr(self._active_injector, 'mouse_move'):
+        if not self._active_injector or not hasattr(self._active_injector, "mouse_move"):
             return False
         return self._active_injector.mouse_move(x, y)
 
     def mouse_click(self, button: int = 1) -> bool:
         """Click mouse button."""
-        if not self._active_injector or not hasattr(self._active_injector, 'mouse_click'):
+        if not self._active_injector or not hasattr(self._active_injector, "mouse_click"):
             return False
         return self._active_injector.mouse_click(button)
 
     async def delay(self, ms: int):
         """Add delay."""
-        if self._active_injector and hasattr(self._active_injector, 'delay'):
+        if self._active_injector and hasattr(self._active_injector, "delay"):
             await self._active_injector.delay(ms)
         else:
             await asyncio.sleep(ms / 1000.0)
@@ -526,6 +645,7 @@ class HIDInjector:
         """Execute DuckyScript file."""
         try:
             from urban_hs.modules.hid import DuckyCompiler, KeyboardLayout
+
             compiler = DuckyCompiler(KeyboardLayout(layout))
             script = compiler.compile_file(script_path)
 
@@ -545,8 +665,8 @@ class HIDInjector:
                     continue
 
                 # Inject report bytes
-                if hasattr(self._active_injector, '_report') and self._active_injector._report:
-                    with open(self._active_injector._report, 'wb') as f:
+                if hasattr(self._active_injector, "_report") and self._active_injector._report:
+                    with open(self._active_injector._report, "wb") as f:
                         f.write(report)
                 else:
                     logger.warning("No HID report endpoint for ducky execution")
@@ -567,7 +687,9 @@ class HIDInjector:
 
 
 # Convenience functions
-async def quick_type(text: str, mode: InjectionMode = InjectionMode.UINPUT, layout: str = "us") -> bool:
+async def quick_type(
+    text: str, mode: InjectionMode = InjectionMode.UINPUT, layout: str = "us"
+) -> bool:
     """Quick helper to type a string."""
     injector = HIDInjector(InjectionConfig(mode=mode, layout=layout))
     if await injector.start(mode):
@@ -577,7 +699,9 @@ async def quick_type(text: str, mode: InjectionMode = InjectionMode.UINPUT, layo
     return False
 
 
-async def quick_ducky(script_path: str, mode: InjectionMode = InjectionMode.UINPUT, layout: str = "us") -> bool:
+async def quick_ducky(
+    script_path: str, mode: InjectionMode = InjectionMode.UINPUT, layout: str = "us"
+) -> bool:
     """Quick helper to execute DuckyScript."""
     injector = HIDInjector(InjectionConfig(mode=mode, layout=layout))
     if await injector.start(mode):

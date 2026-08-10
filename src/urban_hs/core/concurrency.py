@@ -24,18 +24,20 @@ logger = structlog.get_logger(__name__)
 
 class ResourceType(Enum):
     """Types of managed resources."""
-    RADIO = "radio"              # WiFi/Bluetooth radio (exclusive access)
-    CHROOT = "chroot"            # Alpine chroot environment
-    GPU = "gpu"                  # GPU compute resources
-    STORAGE = "storage"          # Disk I/O bandwidth
-    NETWORK = "network"          # Network bandwidth
-    MEMORY = "memory"            # Memory allocation
-    CPU = "cpu"                  # CPU cores
-    CUSTOM = "custom"            # User-defined resources
+
+    RADIO = "radio"  # WiFi/Bluetooth radio (exclusive access)
+    CHROOT = "chroot"  # Alpine chroot environment
+    GPU = "gpu"  # GPU compute resources
+    STORAGE = "storage"  # Disk I/O bandwidth
+    NETWORK = "network"  # Network bandwidth
+    MEMORY = "memory"  # Memory allocation
+    CPU = "cpu"  # CPU cores
+    CUSTOM = "custom"  # User-defined resources
 
 
 class ResourcePriority(Enum):
     """Priority levels for resource acquisition."""
+
     LOW = 0
     NORMAL = 50
     HIGH = 100
@@ -45,6 +47,7 @@ class ResourcePriority(Enum):
 @dataclass
 class ResourceConfig:
     """Configuration for a managed resource."""
+
     resource_type: ResourceType
     max_concurrent: int = 1
     max_wait_time: float = 30.0  # seconds
@@ -60,6 +63,7 @@ class ResourceConfig:
 @dataclass
 class ResourceRequest:
     """A request to acquire a resource."""
+
     request_id: str
     resource_type: ResourceType
     priority: ResourcePriority = ResourcePriority.NORMAL
@@ -74,6 +78,7 @@ class ResourceRequest:
 @dataclass
 class ResourceUsage:
     """Current usage statistics for a resource."""
+
     resource_type: ResourceType
     current_holders: int
     max_concurrent: int
@@ -94,18 +99,18 @@ class ResourcePool:
     """
 
     def __init__(self, configs: list[ResourceConfig]):
-        self._resources: dict[ResourceType, ResourceConfig] = {
-            c.resource_type: c for c in configs
-        }
+        self._resources: dict[ResourceType, ResourceConfig] = {c.resource_type: c for c in configs}
         self._holders: dict[ResourceType, set[str]] = defaultdict(set)
         self._queues: dict[ResourceType, asyncio.PriorityQueue] = defaultdict(asyncio.PriorityQueue)
         self._waiting: dict[ResourceType, dict[str, ResourceRequest]] = defaultdict(dict)
-        self._stats: dict[ResourceType, dict] = defaultdict(lambda: {
-            "total_acquisitions": 0,
-            "total_releases": 0,
-            "total_wait_time": 0.0,
-            "peak_concurrent": 0,
-        })
+        self._stats: dict[ResourceType, dict] = defaultdict(
+            lambda: {
+                "total_acquisitions": 0,
+                "total_releases": 0,
+                "total_wait_time": 0.0,
+                "peak_concurrent": 0,
+            }
+        )
         self._locks: dict[ResourceType, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._request_counter = 0
 
@@ -123,7 +128,7 @@ class ResourcePool:
     ) -> bool:
         """
         Acquire a resource with priority and timeout.
-        
+
         Returns True if acquired, False if timeout.
         """
         config = self._resources.get(resource_type)
@@ -150,11 +155,11 @@ class ResourcePool:
                 request.acquired_at = time.time()
                 self._stats[resource_type]["total_acquisitions"] += 1
                 self._stats[resource_type]["peak_concurrent"] = max(
-                    self._stats[resource_type]["peak_concurrent"],
-                    len(self._holders[resource_type])
+                    self._stats[resource_type]["peak_concurrent"], len(self._holders[resource_type])
                 )
-                logger.debug("Resource acquired immediately",
-                           resource=resource_type.value, holder=holder_id)
+                logger.debug(
+                    "Resource acquired immediately", resource=resource_type.value, holder=holder_id
+                )
                 return True
 
             # Queue the request
@@ -162,9 +167,9 @@ class ResourcePool:
             self._waiting[resource_type][request_id] = request
 
             # Priority queue: (negative priority, wait_start, request_id, request)
-            await self._queues[resource_type].put((
-                -priority.value, wait_start, request_id, request
-            ))
+            await self._queues[resource_type].put(
+                (-priority.value, wait_start, request_id, request)
+            )
 
         # Wait for acquisition or timeout
         try:
@@ -173,8 +178,12 @@ class ResourcePool:
         except TimeoutError:
             async with self._locks[resource_type]:
                 self._waiting[resource_type].pop(request_id, None)
-            logger.warning("Resource acquisition timeout",
-                         resource=resource_type.value, holder=holder_id, wait=max_wait)
+            logger.warning(
+                "Resource acquisition timeout",
+                resource=resource_type.value,
+                holder=holder_id,
+                wait=max_wait,
+            )
             return False
 
     async def release(self, resource_type: ResourceType, holder_id: str) -> bool:
@@ -185,8 +194,11 @@ class ResourcePool:
 
         async with self._locks[resource_type]:
             if holder_id not in self._holders[resource_type]:
-                logger.warning("Attempted to release unheld resource",
-                             resource=resource_type.value, holder=holder_id)
+                logger.warning(
+                    "Attempted to release unheld resource",
+                    resource=resource_type.value,
+                    holder=holder_id,
+                )
                 return False
 
             self._holders[resource_type].discard(holder_id)
@@ -222,8 +234,7 @@ class ResourcePool:
                 request.future.set_result(True)
                 self._stats[resource_type]["total_acquisitions"] += 1
                 self._stats[resource_type]["peak_concurrent"] = max(
-                    self._stats[resource_type]["peak_concurrent"],
-                    len(self._holders[resource_type])
+                    self._stats[resource_type]["peak_concurrent"], len(self._holders[resource_type])
                 )
                 break
             # Put back in queue
@@ -256,7 +267,9 @@ class ResourcePool:
             total_wait_time=stats["total_wait_time"],
             avg_wait_time=avg_wait,
             peak_concurrent=stats["peak_concurrent"],
-            utilization_percent=(holders / config.max_concurrent * 100) if config.max_concurrent > 0 else 0,
+            utilization_percent=(holders / config.max_concurrent * 100)
+            if config.max_concurrent > 0
+            else 0,
             last_updated=datetime.utcnow(),
         )
 
@@ -322,9 +335,7 @@ class ResourceManager:
         """
         acquired = []
         for resource_type, priority in resources.items():
-            acquired_success = await self.pool.acquire(
-                resource_type, holder_id, priority, max_wait
-            )
+            acquired_success = await self.pool.acquire(resource_type, holder_id, priority, max_wait)
             if acquired_success:
                 acquired.append(resource_type)
                 self._holder_resources[holder_id].add(resource_type)

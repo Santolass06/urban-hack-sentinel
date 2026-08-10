@@ -110,7 +110,11 @@ def test_tui_event_handler_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
 
     fake_terminal = FakeTerminal()
     fake_log = FakeLog()
-    monkeypatch.setattr(app, "query_one", lambda sel, cls, *args, **kwargs: fake_terminal if "terminal" in str(sel) else fake_log)
+    monkeypatch.setattr(
+        app,
+        "query_one",
+        lambda sel, cls, *args, **kwargs: fake_terminal if "terminal" in str(sel) else fake_log,
+    )
     message = EventMessage(event_type="attack.started", payload={"attack": "x"})
     app.on_event_message(message)
     assert any("[yellow]START[/yellow]" in line for line in app._attack_log)

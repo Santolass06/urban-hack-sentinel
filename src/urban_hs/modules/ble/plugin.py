@@ -9,15 +9,10 @@ from typing import Any
 
 import structlog
 
-from urban_hs.core import Event, get_event_bus, get_storage
+from urban_hs.core import get_event_bus, get_storage
 from urban_hs.core.event_bus import Event, EventHandler
 from urban_hs.core.session_scope import get_active_scope
-from urban_hs.modules.ble import (
-    BLEDevice,
-    FastPairScanner,
-    WhisperPairExploit,
-    WhisperPairTester,
-)
+from urban_hs.modules.ble import BLEDevice, FastPairScanner, WhisperPairExploit, WhisperPairTester
 
 logger = structlog.get_logger(__name__)
 
@@ -25,6 +20,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class BLEModuleConfig:
     """Configuration for BLE module."""
+
     enabled: bool = True
     adapter: str = "hci0"
     scan_interval: int = 30
@@ -39,7 +35,7 @@ class BLEModuleConfig:
 class BLEPlugin:
     """
     BLE Module Plugin for Urban Hack Sentinel.
-    
+
     Provides:
     - Fast Pair device discovery (Service UUID 0xFE2C)
     - WhisperPair (CVE-2025-36911) vulnerability testing
@@ -60,9 +56,7 @@ class BLEPlugin:
         """Initialize BLE module components."""
         logger.info("Initializing BLE plugin", adapter=self.config.adapter)
 
-        self.scanner = FastPairScanner(
-            adapter=self.config.adapter,
-        )
+        self.scanner = FastPairScanner(adapter=self.config.adapter)
 
         self.tester = WhisperPairTester(adapter=self.config.adapter)
         self.exploit = WhisperPairExploit(adapter=self.config.adapter)
@@ -115,11 +109,13 @@ class BLEPlugin:
                     devices = self.scanner.get_fast_pair_devices()
                     if devices:
                         bus = get_event_bus()
-                        await get_event_bus().publish(Event(
-                            type="ble.devices_updated",
-                            payload={"devices": [d.to_dict() for d in devices]},
-                            source="ble_scanner",
-                        ))
+                        await get_event_bus().publish(
+                            Event(
+                                type="ble.devices_updated",
+                                payload={"devices": [d.to_dict() for d in devices]},
+                                source="ble_scanner",
+                            )
+                        )
 
                         # Save to storage
                         await self._save_devices(devices)
@@ -133,21 +129,21 @@ class BLEPlugin:
         """Save discovered devices to storage."""
         storage = get_storage()
         for device in devices:
-            await storage.upsert_device({
-                "id": f"ble_{device.address.replace(':', '_')}",
-                "first_seen": device.last_seen,
-                "last_seen": device.last_seen,
-                "type": "ble_device",
-                "mac": device.address,
-                "vendor": None,
-                "labels": ["ble", "fast_pair"] if device.is_fast_pair else ["ble"],
-                "meta": device.to_dict(),
-            })
+            await storage.upsert_device(
+                {
+                    "id": f"ble_{device.address.replace(':', '_')}",
+                    "first_seen": device.last_seen,
+                    "last_seen": device.last_seen,
+                    "type": "ble_device",
+                    "mac": device.address,
+                    "vendor": None,
+                    "labels": ["ble", "fast_pair"] if device.is_fast_pair else ["ble"],
+                    "meta": device.to_dict(),
+                }
+            )
 
     async def test_vulnerability(
-        self,
-        address: str,
-        progress_callback: Callable[[str], None] | None = None,
+        self, address: str, progress_callback: Callable[[str], None] | None = None
     ) -> dict[str, Any]:
         """Test a device for WhisperPair vulnerability."""
         if not self.config.whisperpair_test_enabled:
@@ -172,7 +168,13 @@ class BLEEventHandler(EventHandler):
 
     @property
     def event_types(self) -> set[str]:
-        return {"config.loaded", "config.reloaded", "ble.scan_request", "ble.test_request", "ble.exploit_request"}
+        return {
+            "config.loaded",
+            "config.reloaded",
+            "ble.scan_request",
+            "ble.test_request",
+            "ble.exploit_request",
+        }
 
     async def handle(self, event: Event) -> None:
         if event.type == "config.loaded" or event.type == "config.reloaded":
@@ -205,12 +207,14 @@ class BLEEventHandler(EventHandler):
             networks = self.plugin.scanner.get_devices()
 
             bus = get_event_bus()
-            await bus.publish(Event(
-                type="ble.scan_complete",
-                payload={"devices": [n.to_dict() for n in networks]},
-                source="ble.plugin",
-                correlation_id=event.correlation_id,
-            ))
+            await bus.publish(
+                Event(
+                    type="ble.scan_complete",
+                    payload={"devices": [n.to_dict() for n in networks]},
+                    source="ble.plugin",
+                    correlation_id=event.correlation_id,
+                )
+            )
 
     async def _handle_test_request(self, event: Event) -> None:
         """Handle vulnerability test request."""
@@ -228,34 +232,40 @@ class BLEEventHandler(EventHandler):
             get_active_scope().validate(address, "ble")
         except PermissionError as exc:
             bus = get_event_bus()
-            await bus.publish(Event(
-                type="ble.attack_denied",
-                payload={"address": address, "reason": str(exc)},
-                source="ble.plugin",
-                correlation_id=event.correlation_id,
-            ))
+            await bus.publish(
+                Event(
+                    type="ble.attack_denied",
+                    payload={"address": address, "reason": str(exc)},
+                    source="ble.plugin",
+                    correlation_id=event.correlation_id,
+                )
+            )
             return
 
         result = await self.plugin.test_vulnerability(address)
 
         bus = get_event_bus()
-        await bus.publish(Event(
-            type="ble.test_complete",
-            payload={"result": result},
-            source="ble.plugin",
-            correlation_id=event.correlation_id,
-        ))
+        await bus.publish(
+            Event(
+                type="ble.test_complete",
+                payload={"result": result},
+                source="ble.plugin",
+                correlation_id=event.correlation_id,
+            )
+        )
 
     async def _handle_exploit_request(self, event: Event) -> None:
         """Handle exploit request (requires explicit enable)."""
         if not self.plugin.config.whisperpair_exploit_enabled:
             bus = get_event_bus()
-            await bus.publish(Event(
-                type="ble.exploit_failed",
-                payload={"error": "Exploit not enabled in config"},
-                source="ble.plugin",
-                correlation_id=event.correlation_id,
-            ))
+            await bus.publish(
+                Event(
+                    type="ble.exploit_failed",
+                    payload={"error": "Exploit not enabled in config"},
+                    source="ble.plugin",
+                    correlation_id=event.correlation_id,
+                )
+            )
             return
 
         payload = event.payload
@@ -269,12 +279,14 @@ class BLEEventHandler(EventHandler):
             get_active_scope().validate(address, "ble")
         except PermissionError as exc:
             bus = get_event_bus()
-            await bus.publish(Event(
-                type="ble.attack_denied",
-                payload={"address": address, "reason": str(exc)},
-                source="ble.plugin",
-                correlation_id=event.correlation_id,
-            ))
+            await bus.publish(
+                Event(
+                    type="ble.attack_denied",
+                    payload={"address": address, "reason": str(exc)},
+                    source="ble.plugin",
+                    correlation_id=event.correlation_id,
+                )
+            )
             return
 
         # Run the real WhisperPair (CVE-2025-36911) multi-strategy KBP chain.
@@ -295,12 +307,14 @@ class BLEEventHandler(EventHandler):
             event_type = "ble.exploit_failed"
 
         bus = get_event_bus()
-        await bus.publish(Event(
-            type=event_type,
-            payload={"result": result},
-            source="ble.plugin",
-            correlation_id=event.correlation_id,
-        ))
+        await bus.publish(
+            Event(
+                type=event_type,
+                payload={"result": result},
+                source="ble.plugin",
+                correlation_id=event.correlation_id,
+            )
+        )
 
 
 # Plugin entry point
@@ -312,9 +326,4 @@ async def create_ble_plugin(config: BLEModuleConfig | None = None) -> "BLEPlugin
 
 
 # Module exports
-__all__ = [
-    "BLEPlugin",
-    "BLEModuleConfig",
-    "BLEEventHandler",
-    "create_ble_plugin",
-]
+__all__ = ["BLEPlugin", "BLEModuleConfig", "BLEEventHandler", "create_ble_plugin"]

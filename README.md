@@ -39,6 +39,7 @@ O **Urban Hack Sentinel v3** transforma o teu Raspberry Pi ou computador Linux n
 | **Wardriving + GPS** | Suporte `gpsd`, exportação WiGLE/Kismet e modo `--wardrive` dedicado |
 | **BLE & Fast Pair** | FastPair scanner, teste de vulnerabilidade WhisperPair (CVE-2025-36911) |
 | **Network & Exploits** | Wrapper Nmap, scanner Nuclei, integração SearchSploit e ExploitRunner |
+| **⚡ Attack All (paralelo)** | Dispara todos os alvos Wi-Fi + BLE descobertos contra todas as variantes de ataque em simultâneo (`asyncio.gather`), com semáforo configurável (`max_parallel_attacks`) e gates de segurança preservados |
 | **Dashboard TUI & Web** | TUI em terminal (`urban-hs-tui`), Web UI com Mapa Leaflet.js e streaming SSE |
 | **Integridade de Evidências** | Selagem de sessões (`urban-hs seal`), verificação GPG e hashes SHA256/BLAKE2b |
 
@@ -90,6 +91,11 @@ Para testares a **Textual TUI** nos teus dispositivos e controladores wireless:
 
 # 🚗 Modo Wardrive Dedicado (Passivo + GPS logging, sem ataques ativos)
 ./.venv/bin/urban-hs run --wardrive
+
+# ⚡ Attack All — fan-out paralelo contra todos os alvos descobertos (Wi-Fi + BLE)
+#    --active também envia deauth; --ble-exploit encadeia o exploit WhisperPair (opt-in)
+./.venv/bin/urban-hs attack-all --active
+#    (também exposto no botão "⚡ Attack All" da TUI e no endpoint POST /api/v1/attacks/attack-all)
 
 # 📄 Gerar Relatório Executivo de Auditoria (HTML / Markdown)
 ./.venv/bin/urban-hs report --session default --format html

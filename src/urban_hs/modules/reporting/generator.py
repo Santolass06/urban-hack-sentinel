@@ -26,18 +26,21 @@ import structlog
 
 try:
     from jinja2 import Environment, FileSystemLoader, select_autoescape
+
     JINJA2_AVAILABLE = True
 except ImportError:
     JINJA2_AVAILABLE = False
 
 try:
-    from weasyprint import CSS, HTML
+    from weasyprint import CSS, HTML  # noqa: F401
+
     WEASYPRINT_AVAILABLE = True
 except ImportError:
     WEASYPRINT_AVAILABLE = False
 
 try:
-    import gnupg as gpg
+    import gnupg as gpg  # noqa: F401
+
     GPG_AVAILABLE = True
 except ImportError:
     GPG_AVAILABLE = False
@@ -47,6 +50,7 @@ logger = structlog.get_logger(__name__)
 
 class ReportFormat(Enum):
     """Output format for reports."""
+
     MARKDOWN = "markdown"
     HTML = "html"
     PDF = "pdf"
@@ -55,6 +59,7 @@ class ReportFormat(Enum):
 
 class FindingSeverity(Enum):
     """Finding severity levels."""
+
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
@@ -65,6 +70,7 @@ class FindingSeverity(Enum):
 
 class FindingStatus(Enum):
     """Finding status."""
+
     OPEN = "open"
     CONFIRMED = "confirmed"
     FIXED = "fixed"
@@ -75,6 +81,7 @@ class FindingStatus(Enum):
 @dataclass
 class Evidence:
     """Evidence artifact."""
+
     id: str = field(default_factory=lambda: str(uuid4()))
     finding_id: str = ""
     type: str = ""  # screenshot, log, capture, file, command_output
@@ -90,8 +97,8 @@ class Evidence:
         """Compute SHA256 hash of evidence file."""
         if os.path.exists(self.path):
             sha256 = hashlib.sha256()
-            with open(self.path, 'rb') as f:
-                for chunk in iter(lambda: f.read(4096), b''):
+            with open(self.path, "rb") as f:
+                for chunk in iter(lambda: f.read(4096), b""):
                     sha256.update(chunk)
             self.hash_sha256 = sha256.hexdigest()
         return self.hash_sha256
@@ -100,6 +107,7 @@ class Evidence:
 @dataclass
 class Finding:
     """Security finding."""
+
     id: str = field(default_factory=lambda: str(uuid4()))
     title: str = ""
     description: str = ""
@@ -138,6 +146,7 @@ class Finding:
 @dataclass
 class AuditSession:
     """Audit session metadata."""
+
     id: str = field(default_factory=lambda: str(uuid4()))
     name: str = ""
     scope: list[str] = field(default_factory=list)  # IP ranges, domains, etc.
@@ -189,6 +198,7 @@ class AuditSession:
 @dataclass
 class ReportConfig:
     """Report generation configuration."""
+
     output_dir: str | None = None
     template_dir: str = "/opt/urban-hs/templates/reports"
     gpg_key_id: str | None = None
@@ -214,7 +224,7 @@ class ReportConfig:
 class ReportGenerator:
     """
     Generates professional penetration testing reports.
-    
+
     Features:
     - Multiple output formats (Markdown, HTML, PDF)
     - Jinja2 templating with customizable templates
@@ -228,6 +238,7 @@ class ReportGenerator:
         self.config = config or ReportConfig()
         if self.config.output_dir is None:
             from urban_hs.core.config import get_config
+
             self.config.output_dir = get_config().storage.resolve_reports_dir()
         self.report_dir = Path(self.config.output_dir)
         self.report_dir.mkdir(parents=True, exist_ok=True)
@@ -241,14 +252,14 @@ class ReportGenerator:
             ]
             self.jinja_env = Environment(
                 loader=FileSystemLoader(template_dirs),
-                autoescape=select_autoescape(['html', 'xml']),
+                autoescape=select_autoescape(["html", "xml"]),
                 trim_blocks=True,
                 lstrip_blocks=True,
             )
             # Add custom filters
-            self.jinja_env.filters['datetime'] = self._format_datetime
-            self.jinja_env.filters['severity_badge'] = self._severity_badge
-            self.jinja_env.filters['severity_color'] = self._severity_color
+            self.jinja_env.filters["datetime"] = self._format_datetime
+            self.jinja_env.filters["severity_badge"] = self._severity_badge
+            self.jinja_env.filters["severity_color"] = self._severity_color
         else:
             logger.warning("Jinja2 not available, using built-in templates")
 
@@ -268,7 +279,10 @@ class ReportGenerator:
             FindingSeverity.INFO: '<span class="badge badge-info">INFO</span>',
             FindingSeverity.UNKNOWN: '<span class="badge badge-unknown">UNKNOWN</span>',
         }
-        return badges.get(FindingSeverity(severity) if isinstance(severity, str) else severity, '<span class="badge badge-unknown">UNKNOWN</span>')
+        return badges.get(
+            FindingSeverity(severity) if isinstance(severity, str) else severity,
+            '<span class="badge badge-unknown">UNKNOWN</span>',
+        )
 
     def _severity_color(self, severity: FindingSeverity) -> str:
         """Get CSS color for severity."""
@@ -280,7 +294,9 @@ class ReportGenerator:
             FindingSeverity.INFO: "#17a2b8",
             FindingSeverity.UNKNOWN: "#6c757d",
         }
-        return colors.get(FindingSeverity(severity) if isinstance(severity, str) else severity, "#6c757d")
+        return colors.get(
+            FindingSeverity(severity) if isinstance(severity, str) else severity, "#6c757d"
+        )
 
     async def generate(
         self,
@@ -290,12 +306,12 @@ class ReportGenerator:
     ) -> str:
         """
         Generate report from audit session.
-        
+
         Args:
             session: Audit session with findings and evidence
             format: Output format
             custom_template: Optional custom template name
-        
+
         Returns:
             Path to generated report
         """
@@ -345,8 +361,12 @@ class ReportGenerator:
 
         # Executive Summary
         md.append("## Executive Summary\n")
-        md.append(f"This report details the findings of a penetration test conducted against **{session.name}**.\n")
-        md.append(f"The assessment was conducted from {self._format_datetime(session.start_time)} to {self._format_datetime(session.end_time or datetime.utcnow())}.\n\n")
+        md.append(
+            f"This report details the findings of a penetration test conducted against **{session.name}**.\n"
+        )
+        md.append(
+            f"The assessment was conducted from {self._format_datetime(session.start_time)} to {self._format_datetime(session.end_time or datetime.utcnow())}.\n\n"
+        )
 
         md.append("### Risk Summary\n")
         md.append(f"- **Critical:** {session.critical_count}")
@@ -428,12 +448,14 @@ class ReportGenerator:
 
         content = "\n".join(md)
 
-        with open(self.report_dir / f"report_{session.id}_{int(time.time())}.md", 'w') as f:
+        with open(self.report_dir / f"report_{session.id}_{int(time.time())}.md", "w") as f:
             f.write(content)
 
         return str(self.report_dir / f"report_{session.id}_{int(time.time())}.md")
 
-    async def _generate_html(self, session: AuditSession, custom_template: str | None = None) -> str:
+    async def _generate_html(
+        self, session: AuditSession, custom_template: str | None = None
+    ) -> str:
         """Generate HTML report using Jinja2."""
         if not self.jinja_env:
             raise RuntimeError("Jinja2 not available for HTML generation")
@@ -460,7 +482,7 @@ class ReportGenerator:
         output_path = self.report_dir / f"report_{session.id}_{int(time.time())}.html"
         self.report_dir.mkdir(parents=True, exist_ok=True)
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             f.write(html_content)
 
         return str(output_path)
@@ -690,12 +712,12 @@ class ReportGenerator:
                 "generator": "Urban Hack Sentinel",
                 "version": "1.0",
                 "classification": self.config.classification,
-            }
+            },
         }
 
         # Fix serialization of nested objects
         def serialize_obj(obj):
-            if hasattr(obj, '__dict__'):
+            if hasattr(obj, "__dict__"):
                 result = {}
                 for k, v in obj.__dict__.items():
                     if isinstance(v, datetime):
@@ -719,10 +741,10 @@ class ReportGenerator:
                 "generator": "Urban Hack Sentinel",
                 "version": "1.0",
                 "classification": self.config.classification,
-            }
+            },
         }
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(json_data, f, indent=2, default=str)
 
         return str(output_path)
@@ -739,9 +761,10 @@ class ReportGenerator:
 
         try:
             import gnupg as gnupg_module
+
             gpg_obj = gnupg_module.GPG()
 
-            with open(report_path, 'rb') as f:
+            with open(report_path, "rb") as f:
                 report_data = f.read()
 
             signature = gpg_obj.sign(
@@ -754,7 +777,7 @@ class ReportGenerator:
 
             if signature:
                 sig_path = report_path + ".asc"
-                with open(sig_path, 'w') as f:
+                with open(sig_path, "w") as f:
                     f.write(str(signature))
                 logger.info("Report signed", signature_path=sig_path)
                 return True
@@ -765,7 +788,9 @@ class ReportGenerator:
             logger.error("GPG signing error", error=str(e))
             return False
 
-    async def sign_and_verify(self, session: AuditSession, format: ReportFormat = ReportFormat.PDF) -> dict[str, Any]:
+    async def sign_and_verify(
+        self, session: AuditSession, format: ReportFormat = ReportFormat.PDF
+    ) -> dict[str, Any]:
         """Generate, sign, and verify report."""
         result = {"signed": False, "verified": False, "report_path": "", "signature_path": ""}
 
@@ -840,10 +865,7 @@ class FindingTemplates:
             tags=["bluetooth", "knob", "decryption"],
             proof_of_concept="Force entropy reduction during pairing, brute-force session key",
             remediation="Use Bluetooth devices with Secure Connections Only mode; update firmware",
-            references=[
-                "https://knobattack.com/",
-                "https://francozappa.github.io/knob/",
-            ],
+            references=["https://knobattack.com/", "https://francozappa.github.io/knob/"],
         )
 
     @staticmethod
@@ -861,7 +883,7 @@ class FindingTemplates:
             proof_of_concept="Send KBP request to device not in pairing mode; device accepts and bonds",
             remediation="Update Bluetooth firmware; disable Fast Pair when not needed",
             references=[
-                "https://www.securityweek.com/whisperpair-attack-leaves-millions-of-bluetooth-accessories-open-to-hijacking/",
+                "https://www.securityweek.com/whisperpair-attack-leaves-millions-of-bluetooth-accessories-open-to-hijacking/"
             ],
         )
 
@@ -879,9 +901,7 @@ class FindingTemplates:
             tags=["wifi", "ssid-confusion", "mitm"],
             proof_of_concept="Create rogue AP with same SSID but different security; client connects unaware",
             remediation="Vendor firmware updates; use WPA3 with SAE; enable PMF",
-            references=[
-                "https://papers.mathyvanhoef.com/wisec2024.pdf",
-            ],
+            references=["https://papers.mathyvanhoef.com/wisec2024.pdf"],
         )
 
     @staticmethod

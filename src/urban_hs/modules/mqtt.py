@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 
 try:
     import paho.mqtt.client as mqtt
+
     PAHO_AVAILABLE = True
 except ImportError:
     PAHO_AVAILABLE = False
@@ -38,6 +39,7 @@ logger = structlog.get_logger(__name__)
 
 class MQTTAttackType(Enum):
     """Types of MQTT attacks."""
+
     BROKER_DISCOVERY = "broker_discovery"
     UNAUTH_ACCESS = "unauth_access"
     TOPIC_ENUMERATION = "topic_enumeration"
@@ -52,6 +54,7 @@ class MQTTAttackType(Enum):
 @dataclass
 class MQTTTarget:
     """MQTT broker target information."""
+
     host: str
     port: int = 1883
     use_tls: bool = False
@@ -66,6 +69,7 @@ class MQTTTarget:
 @dataclass
 class MQTTAttackResult:
     """Result of MQTT attack."""
+
     attack_type: str
     success: bool
     target: MQTTTarget
@@ -78,7 +82,7 @@ class MQTTAttackResult:
 class MQTTAttackSuite:
     """
     MQTT Attack Suite for broker security testing.
-    
+
     Performs comprehensive security testing on MQTT brokers:
     - Discovery via port scanning and DNS-SD/mDNS
     - Unauthenticated access testing
@@ -88,14 +92,10 @@ class MQTTAttackSuite:
     - DoS via topic flooding
     """
 
-    def __init__(
-        self,
-        output_dir: str | None = None,
-        timeout: int = 30,
-        scan_timeout: int = 60,
-    ):
+    def __init__(self, output_dir: str | None = None, timeout: int = 30, scan_timeout: int = 60):
         if output_dir is None:
             from urban_hs.core.config import get_config
+
             output_dir = get_config().storage.resolve_mqtt_attacks_dir()
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -116,8 +116,8 @@ class MQTTAttackSuite:
     ) -> list[MQTTTarget]:
         """
         Discover MQTT brokers via port scanning.
-        
-        Scans standard MQTT ports: 1883 (plain), 8883 (TLS), 8884 (TLS), 
+
+        Scans standard MQTT ports: 1883 (plain), 8883 (TLS), 8884 (TLS),
         8885 (TLS), 8000, 8080
         """
         if not targets:
@@ -136,20 +136,16 @@ class MQTTAttackSuite:
             port_str = ",".join(str(p) for p in ports)
 
             try:
-                hosts = await self.nmap.scan(
-                    target,
-                    ScanType.PORT_SCAN,
-                    timeout=self.scan_timeout
-                )
+                hosts = await self.nmap.scan(target, ScanType.PORT_SCAN, timeout=self.scan_timeout)
             except Exception as e:
                 logger.warning("Nmap scan failed", target=target, error=str(e))
                 continue
 
             # Look for open MQTT ports
             for host in hosts:
-                for port_info in getattr(host, 'ports', []):
+                for port_info in getattr(host, "ports", []):
                     if port_info.port in ports:
-                        if port_info.state == 'open':
+                        if port_info.state == "open":
                             broker = MQTTTarget(
                                 host=host.ip,
                                 port=port_info.port,
@@ -158,14 +154,16 @@ class MQTTAttackSuite:
 
                             # Try to identify the broker
                             broker_info = await self._probe_broker(broker)
-                            broker.auth_required = broker_info.get('auth_required', False)
-                            broker.version = broker_info.get('version', '3.1.1')
+                            broker.auth_required = broker_info.get("auth_required", False)
+                            broker.version = broker_info.get("version", "3.1.1")
 
                             brokers.append(broker)
                             self.discovered_brokers.append(broker)
 
                             if callback:
-                                callback(f"Found MQTT broker: {broker.host}:{broker.port} (TLS: {broker.use_tls})")
+                                callback(
+                                    f"Found MQTT broker: {broker.host}:{broker.port} (TLS: {broker.use_tls})"
+                                )
 
         return brokers
 
@@ -178,8 +176,7 @@ class MQTTAttackSuite:
 
         try:
             client = mqtt.Client(
-                client_id=f"urban_hs_probe_{random.randint(1000,9999)}",
-                protocol=mqtt.MQTTv311,
+                client_id=f"urban_hs_probe_{random.randint(1000, 9999)}", protocol=mqtt.MQTTv311
             )
 
             if broker.use_tls:
@@ -189,7 +186,7 @@ class MQTTAttackSuite:
 
             def on_connect(c, u, f, rc):
                 nonlocal connected
-                connected = (rc == 0)
+                connected = rc == 0
 
             client.on_connect = on_connect
 
@@ -210,9 +207,7 @@ class MQTTAttackSuite:
         return result
 
     async def test_unauthenticated_access(
-        self,
-        broker: MQTTTarget,
-        callback: Callable[[str], None] | None = None,
+        self, broker: MQTTTarget, callback: Callable[[str], None] | None = None
     ) -> MQTTAttackResult:
         """Test if broker allows unauthenticated access."""
         if not PAHO_AVAILABLE or mqtt is None:
@@ -227,12 +222,11 @@ class MQTTAttackSuite:
 
         def on_connect(c, u, f, rc):
             nonlocal connected
-            connected = (rc == 0)
+            connected = rc == 0
 
         try:
             client = mqtt.Client(
-                client_id=f"urban_hs_test_{random.randint(10000,99999)}",
-                protocol=mqtt.MQTTv311,
+                client_id=f"urban_hs_test_{random.randint(10000, 99999)}", protocol=mqtt.MQTTv311
             )
 
             if broker.use_tls:
@@ -265,16 +259,11 @@ class MQTTAttackSuite:
 
         except Exception as e:
             return MQTTAttackResult(
-                attack_type="unauth_access",
-                success=False,
-                target=broker,
-                error=str(e),
+                attack_type="unauth_access", success=False, target=broker, error=str(e)
             )
 
     async def enumerate_topics(
-        self,
-        broker: MQTTTarget,
-        callback: Callable[[str], None] | None = None,
+        self, broker: MQTTTarget, callback: Callable[[str], None] | None = None
     ) -> MQTTAttackResult:
         """Enumerate topics using # wildcard subscriptions."""
         if not PAHO_AVAILABLE:
@@ -311,8 +300,7 @@ class MQTTAttackSuite:
 
         try:
             client = mqtt.Client(
-                client_id=f"urban_hs_enum_{random.randint(10000,99999)}",
-                protocol=mqtt.MQTTv311,
+                client_id=f"urban_hs_enum_{random.randint(10000, 99999)}", protocol=mqtt.MQTTv311
             )
 
             if broker.use_tls:
@@ -348,10 +336,7 @@ class MQTTAttackSuite:
 
         except Exception as e:
             return MQTTAttackResult(
-                attack_type="topic_enumeration",
-                success=False,
-                target=broker,
-                error=str(e),
+                attack_type="topic_enumeration", success=False, target=broker, error=str(e)
             )
 
     async def brute_force_credentials(
@@ -380,13 +365,36 @@ class MQTTAttackSuite:
             )
 
         if not usernames:
-            usernames = ["admin", "mqtt", "user", "guest", "root", "supervisor", "service", "iot", "device"]
+            usernames = [
+                "admin",
+                "mqtt",
+                "user",
+                "guest",
+                "root",
+                "supervisor",
+                "service",
+                "iot",
+                "device",
+            ]
 
         if not passwords:
             passwords = [
-                "admin", "password", "123456", "mqtt", "public", "guest", ""
-                "admin123", "mqtt123", "12345", "12345678", "changeme",
-                "secret", "iot", "device", "sensor", "gateway",
+                "admin",
+                "password",
+                "123456",
+                "mqtt",
+                "public",
+                "guest",
+                "admin123",
+                "mqtt123",
+                "12345",
+                "12345678",
+                "changeme",
+                "secret",
+                "iot",
+                "device",
+                "sensor",
+                "gateway",
             ]
 
         found_creds = []
@@ -401,10 +409,10 @@ class MQTTAttackSuite:
 
                     def on_connect(c, u, f, rc):
                         nonlocal connected
-                        connected = (rc == 0)
+                        connected = rc == 0
 
                     client = mqtt.Client(
-                        client_id=f"urban_hs_bf_{random.randint(10000,99999)}",
+                        client_id=f"urban_hs_bf_{random.randint(10000, 99999)}",
                         protocol=mqtt.MQTTv311,
                     )
 
@@ -468,12 +476,11 @@ class MQTTAttackSuite:
 
         def on_connect(c, u, f, rc):
             nonlocal connected
-            connected = (rc == 0)
+            connected = rc == 0
 
         try:
             client = mqtt.Client(
-                client_id=f"urban_hs_inject_{random.randint(10000,99999)}",
-                protocol=mqtt.MQTTv311,
+                client_id=f"urban_hs_inject_{random.randint(10000, 99999)}", protocol=mqtt.MQTTv311
             )
 
             if broker.use_tls:
@@ -518,10 +525,7 @@ class MQTTAttackSuite:
 
         except Exception as e:
             return MQTTAttackResult(
-                attack_type="message_injection",
-                success=False,
-                target=broker,
-                error=str(e),
+                attack_type="message_injection", success=False, target=broker, error=str(e)
             )
 
     async def flood_topics(
@@ -544,12 +548,11 @@ class MQTTAttackSuite:
 
         def on_connect(c, u, f, rc):
             nonlocal connected
-            connected = (rc == 0)
+            connected = rc == 0
 
         try:
             client = mqtt.Client(
-                client_id=f"urban_hs_flood_{random.randint(10000,99999)}",
-                protocol=mqtt.MQTTv311,
+                client_id=f"urban_hs_flood_{random.randint(10000, 99999)}", protocol=mqtt.MQTTv311
             )
 
             if broker.use_tls:
@@ -596,16 +599,11 @@ class MQTTAttackSuite:
 
         except Exception as e:
             return MQTTAttackResult(
-                attack_type="topic_flooding",
-                success=False,
-                target=broker,
-                error=str(e),
+                attack_type="topic_flooding", success=False, target=broker, error=str(e)
             )
 
     async def run_full_assessment(
-        self,
-        target_network: str = "192.168.1.0/24",
-        callback: Callable[[str], None] | None = None,
+        self, target_network: str = "192.168.1.0/24", callback: Callable[[str], None] | None = None
     ) -> dict[str, Any]:
         """Run full MQTT security assessment."""
         if callback:
@@ -615,11 +613,7 @@ class MQTTAttackSuite:
         brokers = await self.discover_brokers([target_network], callback=callback)
 
         if not brokers:
-            return {
-                "brokers_found": 0,
-                "overall": "No MQTT brokers discovered",
-                "details": [],
-            }
+            return {"brokers_found": 0, "overall": "No MQTT brokers discovered", "details": []}
 
         assessment = {
             "brokers_found": len(brokers),
@@ -662,9 +656,7 @@ class MQTTAttackSuite:
             if callback:
                 callback("  Testing message injection...")
             result = await self.inject_message(
-                broker,
-                "test/urban_hs",
-                "test payload from Urban Hack Sentinel"
+                broker, "test/urban_hs", "test payload from Urban Hack Sentinel"
             )
             broker_result["tests"]["message_injection"] = result.__dict__
 
@@ -682,9 +674,9 @@ class MQTTAttackSuite:
 # Convenience Functions
 # ============================================================
 
+
 async def scan_mqtt_brokers(
-    target: str = "192.168.1.0/24",
-    ports: list[int] = None,
+    target: str = "192.168.1.0/24", ports: list[int] = None
 ) -> list[MQTTTarget]:
     """Convenience function to scan for MQTT brokers."""
     suite = MQTTAttackSuite()
@@ -692,10 +684,7 @@ async def scan_mqtt_brokers(
 
 
 async def test_mqtt_broker(
-    host: str,
-    port: int = 1883,
-    use_tls: bool = False,
-    test_all: bool = True,
+    host: str, port: int = 1883, use_tls: bool = False, test_all: bool = True
 ) -> dict[str, Any]:
     """Convenience function to test a single MQTT broker."""
     broker = MQTTTarget(host=host, port=port, use_tls=use_tls)
@@ -717,8 +706,7 @@ async def test_mqtt_broker(
 
 
 async def scan_and_assess_mqtt(
-    target: str = "192.168.1.0/24",
-    callback: Callable[[str], None] | None = None,
+    target: str = "192.168.1.0/24", callback: Callable[[str], None] | None = None
 ) -> dict[str, Any]:
     """Full MQTT scan and assessment."""
     suite = MQTTAttackSuite()
