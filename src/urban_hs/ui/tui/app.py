@@ -22,6 +22,7 @@ from textual.widgets import (
     Header,
     Label,
     RichLog,
+    Select,
     Static,
     TabbedContent,
     TabPane,
@@ -111,6 +112,8 @@ class TUIApp(App):
                 with TabPane("WiFi", id="tab-wifi"):
                     yield Vertical(
                         Horizontal(
+                            Label("Interface:", classes="select-label"),
+                            Select([("wlo1", "wlo1"), ("wlx00c0cab7625f", "wlx00c0cab7625f")], id="select-wifi-iface", value="wlx00c0cab7625f"),
                             Button("Scan", id="btn-wifi-scan"),
                             Button("Interfaces", id="btn-wifi-interfaces"),
                             Button("Deauth", id="btn-wifi-deauth"),
@@ -147,8 +150,8 @@ class TUIApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.theme = "monokai"
         asyncio.create_task(self._listen_event_bus())
+        asyncio.create_task(self._wifi_interfaces())
         wifi_table = self.query_one("#wifi-table", DataTable)
         wifi_table.add_columns("BSSID", "SSID", "Encryption", "Signal", "Channel")
         wifi_table.cursor_type = "row"
@@ -185,6 +188,20 @@ class TUIApp(App):
         elif message.event_type in ("wifi.scan.completed", "wifi.scan_complete"):
             self._wifi_networks = message.payload.get("networks", [])
             self._refresh_wifi_table()
+        elif message.event_type in ("wifi.interfaces.listed",):
+            ifaces = message.payload.get("interfaces", [])
+            if ifaces:
+                try:
+                    select = self.query_one("#select-wifi-iface", Select)
+                    options = [(iface, iface) for iface in ifaces]
+                    select.set_options(options)
+                    # Pick disconnected Alfa or first available
+                    for iface in ifaces:
+                        if iface.startswith("wlx") or "alfa" in iface.lower():
+                            select.value = iface
+                            break
+                except Exception:
+                    pass
         elif message.event_type in ("ble.scan.completed", "ble.scan_complete"):
             self._ble_devices = message.payload.get("devices", [])
             self._refresh_ble_table()
@@ -271,6 +288,15 @@ class TUIApp(App):
             return self._wifi_networks[0].get("bssid", "FF:FF:FF:FF:FF:FF")
         return "FF:FF:FF:FF:FF:FF"
 
+    def _get_selected_wifi_interface(self) -> str:
+        try:
+            select = self.query_one("#select-wifi-iface", Select)
+            if select.value and isinstance(select.value, str) and select.value != Select.BLANK:
+                return select.value
+        except Exception:
+            pass
+        return "wlx00c0cab7625f"
+
     async def _wifi_deauth(self) -> None:
         self._publish_wifi_attack("deauth", {"count": 10})
 
@@ -296,9 +322,11 @@ class TUIApp(App):
         from urban_hs.core.event_bus import Event, EventPriority
 
         bssid = self._get_selected_wifi_bssid()
+        iface = self._get_selected_wifi_interface()
         payload = {
             "type": attack_type,
             "bssid": bssid,
+            "interface": iface,
             **(extra_params or {}),
         }
         bus = get_event_bus()
@@ -314,7 +342,7 @@ class TUIApp(App):
         asyncio.create_task(bus.publish(event))
         try:
             logs = self.query_one("#app-log", RichLog)
-            logs.write(f"[bold green]Dispatched WiFi attack '{attack_type}' to target {bssid}[/bold green]")
+            logs.write(f"[bold green]Dispatched WiFi attack '{attack_type}' to target {bssid} on {iface}[/bold green]")
         except Exception:
             pass
 
@@ -342,7 +370,11 @@ class TUIApp(App):
         try:
             from urban_hs.modules.wifi import ScanStrategy, WiFiScanner
 
-            scanner = WiFiScanner(interface="wlan1", strategy=ScanStrategy.PASSIVE_ONLY)
+            iface = self._get_selected_wifi_interface()
+            logs = self.query_one("#app-log", RichLog)
+            logs.write(f"[yellow]Scanning on interface: {iface}…[/yellow]")
+
+            scanner = WiFiScanner(interface=iface, strategy=ScanStrategy.PASSIVE_ONLY)
             nets = await scanner.scan(duration=30)
             self._wifi_networks = [n.to_dict() for n in nets]
             self._refresh_wifi_table()
@@ -413,7 +445,7 @@ class TUIApp(App):
             self.post_message(EventMessage("network.scan.error", {"error": str(exc)}))
 
     def action_toggle_dark(self) -> None:
-        self.theme = "monokai" if self.theme == "default" else "default"
+        pass
 
 
 def run() -> None:
