@@ -43,14 +43,23 @@ class EventMessage:
         self.payload = payload
 
 
-class SystemStatus(Static):
-    """Header widget showing architecture + version."""
-
     def render(self) -> str:
         import platform
+        import subprocess
+
+        connected_info = "Not connected"
+        try:
+            res = subprocess.run(["iwgetid", "-r"], capture_output=True, text=True, timeout=2)
+            ssid = res.stdout.strip()
+            if ssid:
+                res_iface = subprocess.run(["iwgetid"], capture_output=True, text=True, timeout=2)
+                iface = res_iface.stdout.split()[0] if res_iface.stdout else "wifi"
+                connected_info = f"Connected to [bold yellow]{ssid}[/bold yellow] ({iface})"
+        except Exception:
+            pass
 
         return (
-            f"[bold cyan]Urban Hack Sentinel[/bold cyan] [green]v{__version__}[/green]\n"
+            f"[bold cyan]Urban Hack Sentinel[/bold cyan] [green]v{__version__}[/green] • {connected_info}\n"
             f"[dim]{platform.system()} {platform.release()} ({platform.machine()}) • "
             f"Python {platform.python_version()}[/dim]"
         )
@@ -167,6 +176,8 @@ class TUIApp(App):
     def on_mount(self) -> None:
         asyncio.create_task(self._listen_event_bus())
         asyncio.create_task(self._wifi_interfaces())
+        asyncio.create_task(self._wifi_scan())
+        asyncio.create_task(self._ble_scan())
         wifi_table = self.query_one("#wifi-table", DataTable)
         wifi_table.add_columns("BSSID", "SSID", "Encryption", "Signal", "Channel")
         wifi_table.cursor_type = "row"
@@ -198,6 +209,9 @@ class TUIApp(App):
             self._attack_log.append(f"[blue]PROGRESS[/blue] {message.payload}")
         elif message.event_type == "attack.completed":
             self._attack_log.append(f"[green]DONE[/green] {message.payload}")
+            if "results" in message.payload:
+                res_static = self.query_one("#net-results", Static)
+                res_static.update(str(message.payload["results"]))
         elif message.event_type == "attack.error":
             self._attack_log.append(f"[red]ERROR[/red] {message.payload}")
         elif message.event_type in ("wifi.scan.completed", "wifi.scan_complete"):
@@ -210,7 +224,6 @@ class TUIApp(App):
                     select = self.query_one("#select-wifi-iface", Select)
                     options = [(iface, iface) for iface in ifaces]
                     select.set_options(options)
-                    # Pick disconnected Alfa or first available
                     for iface in ifaces:
                         if iface.startswith("wlx") or "alfa" in iface.lower():
                             select.value = iface
@@ -227,7 +240,7 @@ class TUIApp(App):
                 lines = [f"{h.get('ip', '?')} — {h.get('hostname', '')} ({h.get('os_guess', '')})" for h in hosts]
                 results.update("\n".join(lines))
             else:
-                results.update("(no hosts found)")
+                results.update("(no hosts found on LAN)")
 
     def _refresh_wifi_table(self) -> None:
         table = self.query_one("#wifi-table", DataTable)
@@ -364,22 +377,83 @@ class TUIApp(App):
         self._publish_attack("wifi_gps_wardrive", {"interface": iface, "wardrive": True})
 
     async def _ble_whisperpair(self) -> None:
-        self._publish_attack("ble_whisperpair", {})
+        try:
+            from urban_hs.modules.ble import WhisperPairScanner
+            scanner = WhisperPairScanner()
+            res = await scanner.scan(duration=5)
+            devs = [d.to_dict() if hasattr(d, "to_dict") else vars(d) for d in res]
+            self.query_one("#net-results", Static).update(f"WhisperPair scan found {len(devs)} devices")
+        except Exception as exc:
+            self.query_one("#net-results", Static).update(f"WhisperPair scan failed: {exc}")
 
     async def _ble_hid(self) -> None:
-        self._publish_attack("ble_hid_injection", {})
+        try:
+            from urban_hs.modules.bt_hid import BTHIDModule
+            mod = BTHIDModule()
+            res = await mod.scan_vulnerable_devices()
+            self.query_one("#net-results", Static).update(f"BT HID scan found {len(res)} vulnerable targets")
+        except Exception as exc:
+            self.query_one("#net-results", Static).update(f"BT HID scan failed: {exc}")
 
     async def _net_nuclei(self) -> None:
-        self._publish_attack("network_nuclei_scan", {"target": "192.168.1.0/24"})
+        results = self.query_one("#net-results", Static)
+        results.update("[yellow]Running Nuclei vulnerability scan on LAN...[/yellow]")
+        try:
+            from urban_hs.modules.network import NucleiRunner
+            runner = NucleiRunner()
+            vulns = await runner.scan_target("192.168.1.1")
+            if vulns:
+                lines = [f"[{v.severity.upper()}] {v.name} ({v.matched_at})" for v in vulns]
+                results.update("\n".join(lines))
+            else:
+                results.update("Nuclei scan completed: No critical vulnerabilities found on target.")
+        except Exception as exc:
+            results.update(f"Nuclei scan error: {exc}")
 
     async def _net_camera(self) -> None:
-        self._publish_attack("network_camera_discovery", {})
+        results = self.query_one("#net-results", Static)
+        results.update("[yellow]Discovering IP Cameras (ONVIF/RTSP/mDNS)...[/yellow]")
+        try:
+            from urban_hs.modules.network import CameraDiscovery
+            disc = CameraDiscovery()
+            cams = await disc.discover_cameras(subnet="192.168.1.0/24")
+            if cams:
+                lines = [f"Camera: {c.ip}:{c.port} ({c.brand}) - RTSP: {c.rtsp_url}" for c in cams]
+                results.update("\n".join(lines))
+            else:
+                results.update("Camera Discovery completed: No unauthenticated IP cameras found.")
+        except Exception as exc:
+            results.update(f"Camera Discovery error: {exc}")
 
     async def _net_esp32(self) -> None:
-        self._publish_attack("network_esp32_probe", {})
+        results = self.query_one("#net-results", Static)
+        results.update("[yellow]Probing ESP32 vulnerabilities (CVE-2025-27840)...[/yellow]")
+        try:
+            from urban_hs.modules.esp32 import ESP32Module
+            mod = ESP32Module()
+            found = await mod.scan_esp32_devices(subnet="192.168.1.0/24")
+            if found:
+                lines = [f"ESP32 Device: {d.get('ip')} - MAC: {d.get('mac')} (Vuln: {d.get('vulnerable')})" for d in found]
+                results.update("\n".join(lines))
+            else:
+                results.update("ESP32 Probe completed: No vulnerable ESP32 microcontrollers detected.")
+        except Exception as exc:
+            results.update(f"ESP32 Probe error: {exc}")
 
     async def _net_mqtt(self) -> None:
-        self._publish_attack("network_mqtt_brute", {})
+        results = self.query_one("#net-results", Static)
+        results.update("[yellow]Searching MQTT Brokers & Enumerating Topics...[/yellow]")
+        try:
+            from urban_hs.modules.mqtt import MQTTModule
+            mod = MQTTModule()
+            brokers = await mod.discover_brokers(subnet="192.168.1.0/24")
+            if brokers:
+                lines = [f"MQTT Broker: {b.get('ip')}:{b.get('port')} - Auth Required: {b.get('auth')}" for b in brokers]
+                results.update("\n".join(lines))
+            else:
+                results.update("MQTT Scan completed: No open MQTT brokers found.")
+        except Exception as exc:
+            results.update(f"MQTT Scan error: {exc}")
 
     def _publish_wifi_attack(self, attack_type: str, extra_params: Optional[dict[str, Any]] = None) -> None:
         import uuid
