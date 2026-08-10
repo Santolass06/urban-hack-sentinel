@@ -48,8 +48,7 @@ class CoAPFuzzer:
         try:
             loop = asyncio.get_running_loop()
             transport, proto = await loop.create_datagram_endpoint(
-                asyncio.DatagramProtocol,
-                remote_addr=(self.target, self.port),
+                asyncio.DatagramProtocol, remote_addr=(self.target, self.port)
             )
         except OSError as exc:
             result.anomalies.append(f"connect failed: {exc}")

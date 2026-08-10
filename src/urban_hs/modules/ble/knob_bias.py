@@ -71,7 +71,9 @@ class KNOBBiasTester:
             props = dbus.Interface(dev, "org.freedesktop.DBus.Properties")
             uuids = props.Get("org.bluez.Device1", "UUIDs") or []
             # Classic SDP + absence of Secure Connections hint → BIAS-relevant
-            classic = any(u.startswith("0000") and u.endswith("-0000-1000-8000-00805f9b34fb") for u in uuids)
+            classic = any(
+                u.startswith("0000") and u.endswith("-0000-1000-8000-00805f9b34fb") for u in uuids
+            )
             if classic:
                 result.bias = VulnStatus.UNKNOWN
                 result.notes.append("Classic SDP present; verify pairing role enforcement")

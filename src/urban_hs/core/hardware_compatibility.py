@@ -93,7 +93,9 @@ class HardwareCompatibilityChecker:
             return False
         return Path(path).exists()
 
-    def check_command(self, capability: Capability, command: str, *, remediation: str = "") -> CompatibilityResult:
+    def check_command(
+        self, capability: Capability, command: str, *, remediation: str = ""
+    ) -> CompatibilityResult:
         path = self._which(command)
         supported = path is not None
         return CompatibilityResult(
@@ -104,7 +106,9 @@ class HardwareCompatibilityChecker:
             detail=path or None,
         )
 
-    def check_interface(self, capability: Capability = Capability.WIFI_INTERFACE, *, remediation: str = "") -> CompatibilityResult:
+    def check_interface(
+        self, capability: Capability = Capability.WIFI_INTERFACE, *, remediation: str = ""
+    ) -> CompatibilityResult:
         path = Path(f"/sys/class/net/{self.interface}")
         supported = path.exists()
         return CompatibilityResult(
@@ -165,9 +169,7 @@ class HardwareCompatibilityChecker:
 
         if supported:
             return CompatibilityResult(
-                capability=Capability.WIFI_MONITOR_MODE,
-                supported=True,
-                detail=detail,
+                capability=Capability.WIFI_MONITOR_MODE, supported=True, detail=detail
             )
 
         # Try alternative check via airmon-ng
@@ -234,7 +236,7 @@ class HardwareCompatibilityChecker:
 
     def check_ble_adapter(self) -> CompatibilityResult:
         """Check if a Bluetooth LE adapter is present and powered."""
-        adapter = getattr(self, 'ble_adapter', 'hci0')
+        adapter = getattr(self, "ble_adapter", "hci0")
         hci_path = Path(f"/sys/class/bluetooth/{adapter}")
 
         if not hci_path.exists():
@@ -268,10 +270,7 @@ class HardwareCompatibilityChecker:
         # Check via bluetoothctl
         try:
             proc = subprocess.run(
-                ["bluetoothctl", "show", adapter],
-                capture_output=True,
-                text=True,
-                timeout=5,
+                ["bluetoothctl", "show", adapter], capture_output=True, text=True, timeout=5
             )
             if proc.returncode == 0:
                 powered = "Powered: yes" in proc.stdout
@@ -296,9 +295,7 @@ class HardwareCompatibilityChecker:
             )
 
         return CompatibilityResult(
-            capability=Capability.BLE_ADAPTER,
-            supported=True,
-            detail=f"Adapter {adapter} present.",
+            capability=Capability.BLE_ADAPTER, supported=True, detail=f"Adapter {adapter} present."
         )
 
     def check_cypress_chipset(self) -> CompatibilityResult:
@@ -320,7 +317,17 @@ class HardwareCompatibilityChecker:
             )
 
         output_lower = output.lower()
-        indicators = ["cypress", "cyw43438", "cyw43455", "cyw43456", "cyw4354", "cyw4356", "cyw4345", "cyw4349", "brcmfmac"]
+        indicators = [
+            "cypress",
+            "cyw43438",
+            "cyw43455",
+            "cyw43456",
+            "cyw4354",
+            "cyw4356",
+            "cyw4345",
+            "cyw4349",
+            "brcmfmac",
+        ]
 
         if any(indicator in output_lower for indicator in indicators):
             return CompatibilityResult(
@@ -345,15 +352,21 @@ class HardwareCompatibilityChecker:
         )
 
     def _run_iw_info(self) -> str:
-        return subprocess.check_output(["iw", "dev", self.interface, "info"], text=True, stderr=subprocess.STDOUT)
+        return subprocess.check_output(
+            ["iw", "dev", self.interface, "info"], text=True, stderr=subprocess.STDOUT
+        )
 
     def fragattacks_requirements(self) -> ModuleCompatibilityReport:
         return ModuleCompatibilityReport(
             module="wifi.fragattacks",
             results=[
                 self.check_command(Capability.WIFI_AIRODUMP, "airodump-ng"),
-                self.check_command(Capability.WIFI_HCXD_TOOL, "hcxdumptool", remediation="Install hcxtools."),
-                self.check_command(Capability.WIFI_REAVER, "reaver", remediation="Install reaver-wps-fork."),
+                self.check_command(
+                    Capability.WIFI_HCXD_TOOL, "hcxdumptool", remediation="Install hcxtools."
+                ),
+                self.check_command(
+                    Capability.WIFI_REAVER, "reaver", remediation="Install reaver-wps-fork."
+                ),
                 self.check_interface(),
                 self.check_cypress_chipset(),
                 self.check_monitor_mode(),
@@ -365,8 +378,12 @@ class HardwareCompatibilityChecker:
         return ModuleCompatibilityReport(
             module="ble",
             results=[
-                self.check_command(Capability.BLE_BLUEZ, "bluetoothctl", remediation="Install BlueZ utils."),
-                self.check_command(Capability.BLE_BETTERCAP, "bettercap", remediation="Install bettercap."),
+                self.check_command(
+                    Capability.BLE_BLUEZ, "bluetoothctl", remediation="Install BlueZ utils."
+                ),
+                self.check_command(
+                    Capability.BLE_BETTERCAP, "bettercap", remediation="Install bettercap."
+                ),
                 self.check_ble_adapter(),
             ],
         )

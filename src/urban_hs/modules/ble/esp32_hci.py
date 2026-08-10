@@ -65,22 +65,16 @@ class ESP32HCIExploit:
     async def _send_hci(self, ocf: int, params: bytes) -> ESPCmdResult:
         """Send a vendor HCI command via ``hcitool cmd`` (OGF 0x3F)."""
         # hcitool cmd <ogf> <ocf> <params...>  (each byte as hex)
-        cmd = [
-            "hcitool",
-            "cmd",
-            "0x3F",
-            f"0x{ocf:03X}",
-            *(f"{b:02X}" for b in params),
-        ]
+        cmd = ["hcitool", "cmd", "0x3F", f"0x{ocf:03X}", *(f"{b:02X}" for b in params)]
         try:
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             out, err = await proc.communicate()
             if proc.returncode != 0:
-                return ESPCmdResult(ok=False, error=err.decode(errors="ignore").strip() or "hcitool failed")
+                return ESPCmdResult(
+                    ok=False, error=err.decode(errors="ignore").strip() or "hcitool failed"
+                )
             return ESPCmdResult(ok=True, data=out)
         except (OSError, ValueError) as exc:
             return ESPCmdResult(ok=False, error=str(exc))
@@ -103,7 +97,11 @@ class ESP32HCIExploit:
         res = await self.read_nvram(station_nvram_block, length=256)
         if not res.ok:
             return {"ok": False, "error": res.error}
-        return {"ok": True, "raw": res.data.hex(), "note": "parse ESP wifi config struct from raw NVRAM"}
+        return {
+            "ok": True,
+            "raw": res.data.hex(),
+            "note": "parse ESP wifi config struct from raw NVRAM",
+        }
 
     async def enumerate_commands(self) -> list[str]:
         """Probe which undocumented commands the target answers (lab use)."""

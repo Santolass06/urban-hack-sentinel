@@ -56,17 +56,20 @@ def _rule_based_chain(findings: list[dict[str, Any]]) -> ExploitChain:
         module = f.get("module", "network")
         action = f.get("suggested_action", "recon")
         steps.append(
-            ChainStep(order=order, module=module, action=action,
-                      target_field=f.get("target_field", "target"), rationale="rule-based")
+            ChainStep(
+                order=order,
+                module=module,
+                action=action,
+                target_field=f.get("target_field", "target"),
+                rationale="rule-based",
+            )
         )
         order += 1
     return ExploitChain(model="rule-based", steps=steps, fallback=True)
 
 
 async def build_chain(
-    findings: list[dict[str, Any]],
-    model: str = "llama3",
-    ollama_url: str = DEFAULT_OLLAMA_URL,
+    findings: list[dict[str, Any]], model: str = "llama3", ollama_url: str = DEFAULT_OLLAMA_URL
 ) -> ExploitChain:
     """Ask Ollama to order the detected findings into an exploit chain."""
     import aiohttp  # already a project dependency

@@ -33,10 +33,7 @@ class APCluster:
         return (self.lat_sum / self.count, self.lon_sum / self.count)
 
 
-def cluster_grid(
-    observations: list[dict[str, Any]],
-    cell_meters: float = 25.0,
-) -> list[APCluster]:
+def cluster_grid(observations: list[dict[str, Any]], cell_meters: float = 25.0) -> list[APCluster]:
     """Bin observations of (bssid, lat, lon) into a coverage map.
 
     ``observations`` are dicts with keys ``bssid``, ``ssid``, ``lat``, ``lon``.
@@ -65,7 +62,9 @@ def cluster_grid(
     return list(bins.values())
 
 
-def coverage_report(observations: list[dict[str, Any]], cell_meters: float = 25.0) -> dict[str, Any]:
+def coverage_report(
+    observations: list[dict[str, Any]], cell_meters: float = 25.0
+) -> dict[str, Any]:
     clusters = cluster_grid(observations, cell_meters=cell_meters)
     return {
         "cells": len(clusters),

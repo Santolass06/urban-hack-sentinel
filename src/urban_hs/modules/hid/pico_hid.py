@@ -57,7 +57,9 @@ class PicoHIDInjector:
             )
             _, err = await proc.communicate()
             if proc.returncode != 0:
-                return PicoHIDResult(port=self.port, error=err.decode(errors="ignore") or "serial send failed")
+                return PicoHIDResult(
+                    port=self.port, error=err.decode(errors="ignore") or "serial send failed"
+                )
             return PicoHIDResult(port=self.port, sent=len(keys))
         except (OSError, ValueError) as exc:
             return PicoHIDResult(port=self.port, error=str(exc))
