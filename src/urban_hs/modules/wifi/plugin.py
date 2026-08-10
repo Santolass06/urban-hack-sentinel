@@ -128,7 +128,7 @@ class WiFiPlugin:
         self.geo_mapper = GeoMapper()
 
         # Save original MAC
-        self.mac_changer.save_original_mac()
+        await self.mac_changer.save_original_mac()
 
         # Initialize attack classes
         self._handshake_attack = HandshakeAttack(
@@ -194,7 +194,7 @@ class WiFiPlugin:
         await self.geo_mapper.stop()
 
         # Restore original MAC
-        self.mac_changer.restore_original_mac()
+        await self.mac_changer.restore_original_mac()
 
         logger.info("WiFi module stopped")
 
@@ -265,7 +265,7 @@ class WiFiPlugin:
         while self._running:
             await asyncio.sleep(interval)
             if self._running and self.mac_changer:
-                new_mac = self.mac_changer.randomize_mac("random")
+                new_mac = await self.mac_changer.randomize_mac("random")
                 if new_mac:
                     logger.info("MAC randomized", new_mac=new_mac)
 
