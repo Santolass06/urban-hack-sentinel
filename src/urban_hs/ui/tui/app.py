@@ -220,6 +220,7 @@ class TUIApp(App):
                             Button("802.11r FT", id="btn-wifi-ft"),
                             Button("SSID Confusion", id="btn-wifi-ssid-confusion"),
                             Button("FragAttacks", id="btn-wifi-fragattacks"),
+                            Button("Coverage", id="btn-wifi-coverage"),
                             classes="btn-row",
                         ),
                         Label("Discovered Networks:"),
@@ -234,6 +235,8 @@ class TUIApp(App):
                             Button("WhisperPair Test", id="btn-ble-whisperpair"),
                             Button("WhisperPair Exploit", id="btn-ble-exploit"),
                             Button("Bluetooth HID", id="btn-ble-hid"),
+                            Button("ESP32 HCI", id="btn-ble-esp32-hci"),
+                            Button("KNOB/BIAS", id="btn-ble-knob"),
                             classes="btn-row",
                         ),
                         Label("BLE Devices:"),
@@ -255,6 +258,7 @@ class TUIApp(App):
                             Button("ESP32 Probe", id="btn-net-esp32"),
                             Button("MQTT Brute", id="btn-net-mqtt"),
                             Button("Router Brute", id="btn-net-router"),
+                            Button("CoAP Fuzz", id="btn-net-coap"),
                             classes="btn-row",
                         ),
                         Label("Results:"),
@@ -268,12 +272,14 @@ class TUIApp(App):
                             Input(placeholder="e.g. apache 2.4", id="exploit-query"),
                             Button("Search", id="btn-exploit-search", variant="primary"),
                             Button("Metasploit RPC", id="btn-exploit-msf"),
+                            Button("LLM Chain", id="btn-llm-chain"),
                             classes="btn-row",
                         ),
                         Horizontal(
-                            Label("Local HID:", classes="row-label"),
-                            Input(placeholder="text to inject via uinput", id="hid-text"),
-                            Button("Inject", id="btn-hid-local"),
+                            Label("HID text:", classes="row-label"),
+                            Input(placeholder="text to inject (uinput / Pico)", id="hid-text"),
+                            Button("Inject (uinput)", id="btn-hid-local"),
+                            Button("Inject (Pico)", id="btn-pico-hid"),
                             classes="btn-row",
                         ),
                         Label("Results:"),
@@ -517,6 +523,22 @@ class TUIApp(App):
             asyncio.create_task(self._exploit_msf())
         elif bid == "btn-hid-local":
             self._confirm("Inject keystrokes via local HID (uinput)?", self._hid_local)
+        elif bid == "btn-wifi-coverage":
+            logs.write("[yellow]Building wardrive coverage map…[/yellow]")
+            asyncio.create_task(self._wifi_coverage())
+        elif bid == "btn-ble-esp32-hci":
+            self._confirm(
+                "Probe ESP32 undocumented HCI commands (CVE-2025-27840)?", self._ble_esp32_hci
+            )
+        elif bid == "btn-ble-knob":
+            self._confirm("Run KNOB/BIAS check on selected BT device?", self._ble_knob_bias)
+        elif bid == "btn-net-coap":
+            self._confirm("Fuzz CoAP on the gateway?", self._net_coap)
+        elif bid == "btn-pico-hid":
+            self._confirm("Inject keystrokes via the Pi Pico HID bridge?", self._pico_hid)
+        elif bid == "btn-llm-chain":
+            logs.write("[yellow]Building exploit chain…[/yellow]")
+            asyncio.create_task(self._llm_chain())
         else:
             logs.write(f"[yellow]Button:[/yellow] {bid}")
 
@@ -679,6 +701,118 @@ class TUIApp(App):
             results.update("\n".join(lines))
         except Exception as exc:
             results.update(f"Compat check failed: {exc}")
+
+    async def _ble_esp32_hci(self) -> None:
+        results = self.query_one("#ble-results", Static)
+        results.update(
+            "[yellow]Probing ESP32 undocumented HCI commands (CVE-2025-27840)...[/yellow]"
+        )
+        try:
+            from urban_hs.modules.ble import ESP32HCIExploit
+
+            answered = await ESP32HCIExploit().enumerate_commands()
+            results.update(
+                f"ESP32 HCI: {len(answered)} vendor command(s) answered: "
+                f"{', '.join(answered) or 'none (not an ESP32 controller / hcitool absent)'}"
+            )
+        except Exception as exc:
+            results.update(f"ESP32 HCI probe failed: {exc}")
+
+    async def _ble_knob_bias(self) -> None:
+        results = self.query_one("#ble-results", Static)
+        address = self._get_selected_ble_address()
+        if not address:
+            results.update("KNOB/BIAS: scan + select a BLE/Classic target first.")
+            return
+        results.update(f"[yellow]Checking KNOB/BIAS on {address}...[/yellow]")
+        try:
+            from urban_hs.modules.ble import KNOBBiasTester
+
+            vuln = await asyncio.to_thread(KNOBBiasTester().check_security_properties, address)
+            results.update(
+                f"KNOB/BIAS {address}: knob={vuln.knob.value} bias={vuln.bias.value}"
+                + (f" — {'; '.join(vuln.notes)}" if vuln.notes else "")
+            )
+        except Exception as exc:
+            results.update(f"KNOB/BIAS check failed: {exc}")
+
+    async def _net_coap(self) -> None:
+        results = self.query_one("#net-results", Static)
+        target = self._get_subnet_target().split("/")[0].rsplit(".", 1)[0] + ".1"
+        results.update(f"[yellow]Fuzzing CoAP on {target}:5683...[/yellow]")
+        try:
+            from urban_hs.modules.network import CoAPFuzzer
+
+            res = await CoAPFuzzer(target).fuzz(count=50)
+            results.update(
+                f"CoAP fuzz {res.target}: sent={res.sent} responses={res.responses} "
+                f"anomalies={len(res.anomalies)}"
+            )
+        except Exception as exc:
+            results.update(f"CoAP fuzz failed: {exc}")
+
+    async def _pico_hid(self) -> None:
+        results = self.query_one("#exploit-results", Static)
+        text = self.query_one("#hid-text", Input).value
+        if not text:
+            results.update("Enter text to inject via the Pi Pico HID bridge.")
+            return
+        results.update(
+            f"[yellow]Injecting {len(text)} chars via Pi Pico (/dev/ttyACM0)...[/yellow]"
+        )
+        try:
+            from urban_hs.modules.hid import PicoHIDInjector
+
+            res = await PicoHIDInjector().type_text(text)
+            results.update(
+                f"Pico HID: sent {res.sent} event(s)"
+                + (f" — error: {res.error}" if res.error else " OK")
+            )
+        except Exception as exc:
+            results.update(f"Pico HID failed: {exc}")
+
+    async def _llm_chain(self) -> None:
+        results = self.query_one("#exploit-results", Static)
+        results.update("[yellow]Building exploit chain (Ollama, rule-based fallback)...[/yellow]")
+        try:
+            from urban_hs.modules import build_chain
+
+            findings = [
+                {"type": "wifi", "bssid": n.get("bssid"), "encryption": n.get("encryption")}
+                for n in self._wifi_networks[:5]
+            ] or [{"type": "wifi", "cve": "CVE-2020-24586"}]
+            chain = await build_chain(findings)
+            lines = [f"{s.order}. {s.module}:{s.action}" for s in chain.steps]
+            tag = f"{chain.model}{' (fallback)' if chain.fallback else ''}"
+            results.update(f"Chain [{tag}]:\n" + ("\n".join(lines) or "no steps"))
+        except Exception as exc:
+            results.update(f"LLM chain failed: {exc}")
+
+    async def _wifi_coverage(self) -> None:
+        results = self.query_one("#wifi-results", Static)
+        obs = [
+            {
+                "bssid": n.get("bssid"),
+                "ssid": n.get("ssid"),
+                "lat": n.get("gps_lat"),
+                "lon": n.get("gps_lon"),
+            }
+            for n in self._wifi_networks
+            if n.get("gps_lat") is not None and n.get("gps_lon") is not None
+        ]
+        if not obs:
+            results.update("Coverage: scan with a GPS fix first (no geo-tagged networks yet).")
+            return
+        try:
+            from urban_hs.modules.wifi import coverage_report
+
+            rep = coverage_report(obs)
+            results.update(
+                f"Coverage: {rep.get('cells', '?')} cells from "
+                f"{rep.get('total_observations', len(obs))} geo-tagged observations"
+            )
+        except Exception as exc:
+            results.update(f"Coverage failed: {exc}")
 
     async def _ssid_confusion(self) -> None:
         results = self.query_one("#wifi-results", Static)
